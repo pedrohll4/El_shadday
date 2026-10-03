@@ -1,0 +1,89 @@
+[
+  {
+    "orderId": "ES-1042",
+    "customerId": "system_demo_user_1",
+    "createdAt": "2026-10-01T17:05:00.000Z",
+    "customerName": "Carlos Eduardo Santos",
+    "deliveryType": "delivery",
+    "district": "Setor 05",
+    "address": "Av. Tancredo Neves",
+    "number": "1420",
+    "reference": "Próximo à Panificadora Central",
+    "subtotal": 75,
+    "deliveryFee": 8,
+    "total": 83,
+    "paymentMethod": "PIX Instantâneo (Aprovado)",
+    "paymentStatus": "PAGO_APROVADO",
+    "orderStatus": "SAIU_ENTREGA",
+    "items": [
+      {
+        "id": "combo-gg-acai",
+        "name": "1 Pizza Gigante + 1 Barca de Açaí",
+        "quantity": 1,
+        "price": 75,
+        "notes": "Massa bem crocante e açaí com bastante leite condensado"
+      }
+    ]
+  },
+  {
+    "orderId": "ES-1043",
+    "customerId": "system_demo_user_2",
+    "createdAt": "2026-10-01T17:35:00.000Z",
+    "customerName": "Mariana Alencar",
+    "deliveryType": "delivery",
+    "district": "Jardim das Palmeiras",
+    "address": "Rua dos Ipês",
+    "number": "310",
+    "reference": "Casa de esquina, muro cinza",
+    "subtotal": 55,
+    "deliveryFee": 8,
+    "total": 63,
+    "paymentMethod": "Cartão de Crédito (final 8821)",
+    "paymentStatus": "PAGO_APROVADO",
+    "orderStatus": "SAIU_ENTREGA",
+    "items": [
+      {
+        "id": "caixa-40-esfirras",
+        "name": "Caixa com 40 Esfirras Personalizada",
+        "quantity": 1,
+        "price": 55,
+        "isCustomBox": true,
+        "salgadasDetails": {
+          "Calabresa": 15,
+          "Carne": 10,
+          "Bacon": 8
+        },
+        "docesDetails": {
+          "Brigadeiro": 4,
+          "Banana com Canela": 3
+        }
+      }
+    ]
+  },
+  {
+    "orderId": "ES-1044",
+    "customerId": "system_demo_user_3",
+    "createdAt": "2026-10-01T17:44:00.000Z",
+    "customerName": "Roberto Lima",
+    "deliveryType": "retirada",
+    "district": "Setor 03",
+    "address": "R. Maceió",
+    "number": "2333",
+    "reference": "Retirada no balcão",
+    "subtotal": 65,
+    "deliveryFee": 0,
+    "total": 65,
+    "paymentMethod": "Dinheiro (Troco p/ R$ 100,00)",
+    "paymentStatus": "PENDENTE_COBRANCA",
+    "orderStatus": "EM_PREPARO",
+    "items": [
+      {
+        "id": "combo-1-fm-10esf",
+        "name": "1 Pizza Família + 10 Esfirras Sortidas",
+        "quantity": 1,
+        "price": 65,
+        "notes": "Pizza metade Frango com Catupiry e metade Calabresa"
+      }
+    ]
+  }
+]
