@@ -1,15 +1,25 @@
 import React from 'react';
 import { Plus, Check, Sparkles, Package, Pizza as PizzaIcon, Info } from 'lucide-react';
 
-export function ProductCard({ product, onAddToCart, onOpenBoxBuilder, onOpenPizzaCustomizer, cartQuantity }) {
+export function ProductCard({ 
+  product, 
+  onAddToCart, 
+  onOpenBoxBuilder, 
+  onOpenPizzaCustomizer, 
+  onOpenComboCustomizer,
+  cartQuantity 
+}) {
   const isBox = product.isBox;
   const isPizza = product.isPizzaCustomizer;
+  const isCombo = product.categoryId === 'combos';
 
   const handleAction = () => {
     if (isBox) {
       onOpenBoxBuilder(product);
     } else if (isPizza) {
       onOpenPizzaCustomizer(product);
+    } else if (isCombo && onOpenComboCustomizer) {
+      onOpenComboCustomizer(product);
     } else {
       onAddToCart(product);
     }
@@ -103,7 +113,7 @@ export function ProductCard({ product, onAddToCart, onOpenBoxBuilder, onOpenPizz
           {isBox ? (
             <button
               onClick={handleAction}
-              className="flex items-center gap-1.5 bg-brand-gold hover:bg-amber-400 text-dark-950 text-xs font-bold px-3.5 py-2.5 rounded-xl shadow-glow-gold transition-all duration-200 active:scale-95"
+              className="flex items-center gap-1.5 bg-brand-gold hover:bg-amber-400 text-dark-950 text-xs font-bold px-3.5 py-2.5 rounded-xl shadow-glow-gold transition-all duration-200 active:scale-95 cursor-pointer"
             >
               <Package className="w-4 h-4" />
               <span>Montar Caixa</span>
@@ -111,10 +121,18 @@ export function ProductCard({ product, onAddToCart, onOpenBoxBuilder, onOpenPizz
           ) : isPizza ? (
             <button
               onClick={handleAction}
-              className="flex items-center gap-1.5 bg-brand-gold hover:bg-amber-400 text-dark-950 text-xs font-bold px-3.5 py-2.5 rounded-xl shadow-glow-gold transition-all duration-200 active:scale-95"
+              className="flex items-center gap-1.5 bg-brand-gold hover:bg-amber-400 text-dark-950 text-xs font-bold px-3.5 py-2.5 rounded-xl shadow-glow-gold transition-all duration-200 active:scale-95 cursor-pointer"
             >
               <PizzaIcon className="w-4 h-4" />
               <span>Escolher Sabores</span>
+            </button>
+          ) : isCombo ? (
+            <button
+              onClick={handleAction}
+              className="flex items-center gap-1.5 bg-brand-gold hover:bg-amber-400 text-dark-950 text-xs font-bold px-3.5 py-2.5 rounded-xl shadow-glow-gold transition-all duration-200 active:scale-95 cursor-pointer"
+            >
+              <Sparkles className="w-4 h-4" />
+              <span>Pedir Combo</span>
             </button>
           ) : (
             <button
