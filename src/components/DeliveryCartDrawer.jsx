@@ -94,8 +94,18 @@ export function DeliveryCartDrawer({
         if (item.notes) {
           desc += ` - Obs: ${item.notes}`;
         }
+      } else if (item.isCustomBox) {
+        const salgText = Object.entries(item.salgadasDetails || {}).map(([f, q]) => `${q}x ${f}`).join(', ');
+        const docesText = Object.entries(item.docesDetails || {}).map(([f, q]) => `${q}x ${f}`).join(', ');
+        desc = `\n   ↳ 🥟 Salgadas: ${salgText}\n   ↳ 🍫 Doces: ${docesText}`;
+        if (item.semSuinos) {
+          desc += `\n   ↳ 🚫 *SEM SUÍNOS:* Sim (Sem porco / bacon / calabresa)`;
+        }
       } else if (item.description && (item.isBox || item.isCombo)) {
         desc = `\n   ↳ ${item.description}`;
+        if (item.semSuinos || item.semSuinosEsfirras) {
+          desc += `\n   ↳ 🚫 *SEM SUÍNOS:* Sim (Sem porco / bacon / calabresa)`;
+        }
       }
       return `${idx + 1}. *${item.quantity}x ${item.name}* - R$ ${(item.price * item.quantity).toFixed(2).replace('.', ',')}${desc}`;
     }).join('\n');
@@ -308,6 +318,23 @@ Pedido gerado via Cardápio Digital El Shadday.`;
                             </p>
                           )}
                         </>
+                      )}
+
+                      {/* Sem Suinos Badge */}
+                      {(item.semSuinos || item.semSuinosEsfirras) && (
+                        <div className="mt-1">
+                          <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-red-500/20 text-red-300 font-bold border border-red-500/30">
+                            🚫 Opção Sem Carne Suína
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Box Flavors Details */}
+                      {item.isCustomBox && item.salgadasDetails && (
+                        <div className="mt-1 text-[10px] text-slate-400 space-y-0.5 bg-dark-950 p-2 rounded-lg border border-dark-800">
+                          <p><strong className="text-white">Salgadas:</strong> {Object.entries(item.salgadasDetails).map(([f, q]) => `${q}x ${f}`).join(', ')}</p>
+                          <p><strong className="text-white">Doces:</strong> {Object.entries(item.docesDetails || {}).map(([f, q]) => `${q}x ${f}`).join(', ')}</p>
+                        </div>
                       )}
 
                       {/* Quantity & Price */}

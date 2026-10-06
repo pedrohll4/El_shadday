@@ -109,6 +109,18 @@ export function DesktopSidebarCart({
                         {Object.entries(item.boxFlavors).map(([f, q]) => `${q}x ${f}`).join(', ')}
                       </p>
                     )}
+
+                    {item.salgadasDetails && (
+                      <p className="text-[10px] text-slate-400 mt-0.5 line-clamp-1">
+                        Salg: {Object.entries(item.salgadasDetails).map(([f, q]) => `${q}x ${f}`).join(', ')}
+                      </p>
+                    )}
+
+                    {(item.semSuinos || item.semSuinosEsfirras) && (
+                      <span className="inline-block mt-1 px-1.5 py-0.2 rounded text-[9px] bg-red-500/20 text-red-300 font-bold border border-red-500/30">
+                        🚫 Sem Carne Suína
+                      </span>
+                    )}
                   </div>
 
                   <span className="text-xs font-black text-white whitespace-nowrap">

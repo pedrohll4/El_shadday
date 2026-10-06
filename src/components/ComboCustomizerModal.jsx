@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   X, Flame, Check, Sparkles, AlertCircle, Copy, 
-  ChevronRight, ArrowRight, Pizza as PizzaIcon, CheckCircle2 
+  ChevronRight, ArrowRight, Pizza as PizzaIcon, CheckCircle2, Package 
 } from 'lucide-react';
 import { PIZZA_FLAVORS } from '../data/menuData';
 
@@ -86,6 +86,13 @@ export function ComboCustomizerModal({
   const [pizzaSelections, setPizzaSelections] = useState({});
   const [notes, setNotes] = useState('');
   const [validationError, setValidationError] = useState('');
+  const [semSuinosEsfirras, setSemSuinosEsfirras] = useState(false);
+
+  // Check if this combo contains esfirras
+  const hasEsfirrasInCombo = useMemo(() => {
+    const text = `${comboProduct?.name || ''} ${comboProduct?.description || ''}`.toLowerCase();
+    return text.includes('esfirra');
+  }, [comboProduct]);
 
   // Get configuration of pizzas for this combo
   const pizzasConfig = useMemo(() => {
@@ -98,6 +105,7 @@ export function ComboCustomizerModal({
       setActivePizzaIndex(0);
       setNotes('');
       setValidationError('');
+      setSemSuinosEsfirras(false);
 
       // Initialize empty selection for each pizza in the combo
       const initial = {};
@@ -177,6 +185,7 @@ export function ComboCustomizerModal({
       name: comboProduct.name,
       price: comboProduct.price,
       isCombo: true,
+      semSuinosEsfirras: hasEsfirrasInCombo ? semSuinosEsfirras : false,
       pizzaSelections: pizzasConfig.map(p => ({
         pizzaTitle: p.title,
         flavors: pizzaSelections[p.id] || []
@@ -184,7 +193,7 @@ export function ComboCustomizerModal({
       notes: notes.trim(),
       image: comboProduct.image,
       bordaGratis: comboProduct.bordaGratis,
-      description: `${breakdown}. Acompanha borda de Catupiry grátis.${notes ? ` Obs: ${notes}` : ''}`
+      description: `${breakdown}. Acompanha borda de Catupiry grátis.${hasEsfirrasInCombo ? (semSuinosEsfirras ? ' • 10 Esfirras: SORTIDAS SEM CARNE SUÍNA' : ' • 10 Esfirras Sortidas') : ''}${notes ? ` Obs: ${notes}` : ''}`
     };
 
     onAddComboToCart(customCombo);
@@ -388,6 +397,37 @@ export function ComboCustomizerModal({
               })}
             </div>
           </div>
+
+          {/* Esfirras Acompanhamento & Opção Sem Suínos */}
+          {hasEsfirrasInCombo && (
+            <div className="p-3.5 rounded-2xl bg-dark-950 border border-brand-gold/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-brand-gold/15 text-brand-gold flex items-center justify-center flex-shrink-0">
+                  <Package className="w-4 h-4" />
+                </div>
+                <div>
+                  <span className="text-xs font-bold text-white block">
+                    Acompanha 10 Esfirras Sortidas Artesanais
+                  </span>
+                  <span className="text-[11px] text-slate-400">
+                    Massa fresca e macia da El Shadday
+                  </span>
+                </div>
+              </div>
+
+              <label className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-dark-900 border border-dark-800 hover:border-brand-gold/40 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={semSuinosEsfirras}
+                  onChange={(e) => setSemSuinosEsfirras(e.target.checked)}
+                  className="w-4 h-4 rounded text-brand-gold accent-brand-gold cursor-pointer"
+                />
+                <span className={`text-xs font-black ${semSuinosEsfirras ? 'text-brand-gold' : 'text-slate-400'}`}>
+                  🚫 Opção Sem Suínos
+                </span>
+              </label>
+            </div>
+          )}
 
           {/* Optional Notes */}
           <div>

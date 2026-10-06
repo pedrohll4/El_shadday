@@ -540,6 +540,12 @@ export function AdminDashboard({ orders, onUpdateOrderStatus, onUpdatePaymentSta
                                 </div>
                               )}
 
+                              {(it.semSuinos || it.semSuinosEsfirras) && (
+                                <div className="text-[11px] text-red-400 font-extrabold pl-2 bg-red-950/40 p-1 rounded border border-red-500/40 mt-0.5">
+                                  🚫 ATENÇÃO COZINHA: SEM CARNE SUÍNA (SEM CALABRESA / BACON)
+                                </div>
+                              )}
+
                               {it.notes && (
                                 <div className="text-[11px] text-amber-300 font-semibold pl-2">
                                   ⚠️ OBS: {it.notes}
