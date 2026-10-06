@@ -5,6 +5,7 @@ import {
   CreditCard, Banknote, QrCode, MessageCircle, Sparkles, Building2
 } from 'lucide-react';
 import { ARIQUEMES_DISTRICTS, RESTAURANT_INFO } from '../data/menuData';
+import { dispatchOrderToKitchen } from '../services/ordersSyncService';
 
 export function DeliveryCartDrawer({ 
   isOpen, 
@@ -159,14 +160,26 @@ Pedido gerado via Cardápio Digital El Shadday.`;
 
     const orderData = {
       orderId,
+      createdAt: new Date().toISOString(),
       customerName: customerName.trim(),
       customerPhone: customerPhone.trim(),
       deliveryType,
+      district: deliveryType === 'delivery' ? currentDistrict.name : 'Balcão',
       address: deliveryType === 'delivery' 
-        ? `${streetAddress.trim()}${addressNumber.trim() ? `, Nº ${addressNumber.trim()}` : ''} - ${currentDistrict.name}`
-        : 'Retirada no Balcão',
-      paymentMethod,
+        ? `${streetAddress.trim()}${addressNumber.trim() ? `, Nº ${addressNumber.trim()}` : ''}`
+        : 'Rua Maceió, 2333 - Setor 03, Ariquemes - RO',
+      number: addressNumber.trim(),
+      reference: reference.trim(),
+      subtotal,
+      deliveryFee,
       total,
+      paymentMethod: paymentMethod === 'pix' 
+        ? 'PIX Instantâneo' 
+        : paymentMethod === 'cartao' 
+        ? 'Cartão de Crédito/Débito' 
+        : `Dinheiro ${cashChange ? `(Troco p/ R$ ${cashChange})` : ''}`,
+      paymentStatus: paymentMethod === 'pix' ? 'PAGO_APROVADO' : 'PENDENTE_COBRANCA',
+      orderStatus: 'RECEBIDO_COZINHA',
       pixKey,
       whatsappUrl,
       items: cartItems
@@ -178,11 +191,18 @@ Pedido gerado via Cardápio Digital El Shadday.`;
       localStorage.setItem('el_shadday_orders_history', JSON.stringify([orderData, ...history]));
     } catch (e) {}
 
-    // Open WhatsApp
-    window.open(whatsappUrl, '_blank');
+    // Dispatch directly to Kitchen (Cloud Pub/Sub + local)
+    try {
+      dispatchOrderToKitchen(orderData);
+    } catch (e) {
+      console.warn('Direct kitchen dispatch failed:', e);
+    }
 
     // Notify parent to open OrderSuccessModal
     onOrderFinished(orderData);
+
+    // Open WhatsApp
+    window.open(whatsappUrl, '_blank');
   };
 
   return (

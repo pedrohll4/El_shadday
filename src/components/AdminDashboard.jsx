@@ -13,38 +13,76 @@ export function AdminDashboard({ orders, onUpdateOrderStatus, onUpdatePaymentSta
   const [now, setNow] = useState(Date.now());
   const [newOrderAlert, setNewOrderAlert] = useState(null);
 
-  const prevOrdersCountRef = useRef(orders.length);
+  const audioCtxRef = useRef(null);
+  const [isAudioUnlocked, setIsAudioUnlocked] = useState(false);
+  const knownOrderIdsRef = useRef(new Set(orders.map(o => o.orderId)));
 
-  // Sound chime helper using Web Audio API
-  const playChime = () => {
+  // Sound chime helper using Web Audio API + Speech Synthesis
+  const playChime = (isTest = false) => {
     try {
-      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
+      if (!audioCtxRef.current) {
+        audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      const ctx = audioCtxRef.current;
+      if (ctx.state === 'suspended') {
+        ctx.resume();
+      }
+
+      // Three-tone bright restaurant order bell
+      const t = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
       osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(587.33, audioCtx.currentTime); // D5
-      osc.frequency.setValueAtTime(880, audioCtx.currentTime + 0.15); // A5
-      gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.7);
-      osc.start();
-      osc.stop(audioCtx.currentTime + 0.7);
-    } catch (e) {}
+      gain.connect(ctx.destination);
+
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(659.25, t); // E5
+      osc.frequency.setValueAtTime(830.61, t + 0.12); // G#5
+      osc.frequency.setValueAtTime(987.77, t + 0.25); // B5
+
+      gain.gain.setValueAtTime(0.7, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 1.2);
+
+      osc.start(t);
+      osc.stop(t + 1.2);
+
+      // Speak notification in Portuguese
+      if ('speechSynthesis' in window) {
+        try {
+          const phrase = isTest 
+            ? 'Som de alerta da cozinha ativado com sucesso!' 
+            : 'Atenção cozinha! Novo pedido recebido!';
+          const utterance = new SpeechSynthesisUtterance(phrase);
+          utterance.lang = 'pt-BR';
+          utterance.rate = 1.05;
+          window.speechSynthesis.speak(utterance);
+        } catch (e) {}
+      }
+    } catch (e) {
+      console.warn('Audio chime error:', e);
+    }
+  };
+
+  const handleUnlockAndTestAudio = () => {
+    setIsAudioUnlocked(true);
+    playChime(true);
   };
 
   // Watch for incoming new orders and sound the alarm
   useEffect(() => {
-    if (orders.length > prevOrdersCountRef.current) {
-      const newestOrder = orders[0];
+    const newOrders = orders.filter(o => o.orderId && !knownOrderIdsRef.current.has(o.orderId));
+    
+    if (newOrders.length > 0) {
+      newOrders.forEach(o => knownOrderIdsRef.current.add(o.orderId));
+      const newestOrder = newOrders[0];
       setNewOrderAlert(newestOrder);
-      playChime();
+      playChime(false);
+
       const timer = setTimeout(() => {
         setNewOrderAlert(null);
-      }, 7000);
+      }, 9000);
       return () => clearTimeout(timer);
     }
-    prevOrdersCountRef.current = orders.length;
   }, [orders]);
 
   // Update clock every 10 seconds to recalculate elapsed minutes and delay flags
@@ -214,6 +252,20 @@ export function AdminDashboard({ orders, onUpdateOrderStatus, onUpdatePaymentSta
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Audio activation and test button */}
+            <button
+              onClick={handleUnlockAndTestAudio}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                isAudioUnlocked
+                  ? 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/40'
+                  : 'bg-gradient-to-r from-brand-gold to-amber-400 text-dark-950 font-black animate-pulse shadow-glow-gold'
+              }`}
+              title="Clique para ativar e testar o aviso sonoro da cozinha"
+            >
+              <BellRing className="w-4 h-4" />
+              <span>{isAudioUnlocked ? '🔔 Som: Ativo (Testar)' : '🔔 ATIVAR SOM DO ALERTA'}</span>
+            </button>
+
             <button
               onClick={onBackToSite}
               className="px-3.5 py-2 rounded-xl bg-dark-800 hover:bg-dark-750 text-slate-300 font-semibold text-xs border border-dark-700 flex items-center gap-1.5 transition-colors cursor-pointer"

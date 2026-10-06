@@ -19,6 +19,12 @@ import { Footer } from './components/Footer';
 import { BuffetApp } from './buffet/BuffetApp';
 import { AdminDashboard } from './components/AdminDashboard';
 import { AdminLoginModal } from './components/AdminLoginModal';
+import { 
+  dispatchOrderToKitchen, 
+  dispatchOrderUpdateToKitchen, 
+  fetchCloudOrdersHistory, 
+  subscribeToKitchenEvents 
+} from './services/ordersSyncService';
 import { ShoppingBag, ArrowRight, Sparkles, ChevronRight, Phone, Search, ChefHat } from 'lucide-react';
 
 const getInitialOrders = () => {
@@ -96,29 +102,117 @@ export default function App() {
   });
   const [isAdminLoginModalOpen, setIsAdminLoginModalOpen] = useState(false);
 
-  // Fetch orders from server API and poll every 3 seconds
-  const fetchOrdersFromServer = useCallback(async () => {
-    try {
-      const res = await fetch('/api/orders');
-      if (res.ok) {
-        const data = await res.json();
-        if (Array.isArray(data)) {
-          setAllOrders(data);
-          try {
-            localStorage.setItem('el_shadday_all_orders', JSON.stringify(data));
-          } catch (e) {}
-        }
-      }
-    } catch (err) {
-      console.warn('Could not fetch /api/orders, using local orders cache');
-    }
-  }, []);
-
+  // Sync orders in real-time across devices (Cloud SSE + BroadcastChannel + API)
   useEffect(() => {
-    fetchOrdersFromServer();
-    const interval = setInterval(fetchOrdersFromServer, 3000);
-    return () => clearInterval(interval);
-  }, [fetchOrdersFromServer]);
+    // 1. Initial load from Cloud history (orders from last 24h across all phones/tablets)
+    const initSync = async () => {
+      try {
+        const cloudOrders = await fetchCloudOrdersHistory();
+        if (cloudOrders && cloudOrders.length > 0) {
+          setAllOrders(prev => {
+            const map = new Map();
+            // Start with current local orders
+            prev.forEach(o => { if (o?.orderId) map.set(o.orderId, o); });
+            // Merge cloud orders (cloud might have updates or newer orders)
+            cloudOrders.forEach(o => { if (o?.orderId) map.set(o.orderId, { ...(map.get(o.orderId) || {}), ...o }); });
+            const list = Array.from(map.values());
+            list.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+            try {
+              localStorage.setItem('el_shadday_all_orders', JSON.stringify(list));
+            } catch (e) {}
+            return list;
+          });
+        }
+      } catch (e) {
+        console.warn('Initial cloud history sync failed:', e);
+      }
+
+      // Also try local /api/orders if running on dev server
+      try {
+        const res = await fetch('/api/orders');
+        if (res.ok) {
+          const apiOrders = await res.json();
+          if (Array.isArray(apiOrders) && apiOrders.length > 0) {
+            setAllOrders(prev => {
+              const map = new Map();
+              prev.forEach(o => { if (o?.orderId) map.set(o.orderId, o); });
+              apiOrders.forEach(o => { if (o?.orderId) map.set(o.orderId, { ...(map.get(o.orderId) || {}), ...o }); });
+              const list = Array.from(map.values());
+              list.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+              try {
+                localStorage.setItem('el_shadday_all_orders', JSON.stringify(list));
+              } catch (e) {}
+              return list;
+            });
+          }
+        }
+      } catch (e) {}
+    };
+
+    initSync();
+
+    // 2. Subscribe to instant real-time events (SSE Cloud + BroadcastChannel local)
+    const unsubscribe = subscribeToKitchenEvents({
+      onNewOrder: (newOrder) => {
+        setAllOrders(prev => {
+          if (prev.some(o => o.orderId === newOrder.orderId)) {
+            return prev;
+          }
+          const updated = [newOrder, ...prev];
+          try {
+            localStorage.setItem('el_shadday_all_orders', JSON.stringify(updated));
+          } catch (e) {}
+          return updated;
+        });
+      },
+      onOrderUpdate: (orderId, updates) => {
+        setAllOrders(prev => {
+          const updated = prev.map(o => o.orderId === orderId ? { ...o, ...updates } : o);
+          try {
+            localStorage.setItem('el_shadday_all_orders', JSON.stringify(updated));
+          } catch (e) {}
+          return updated;
+        });
+      }
+    });
+
+    // 3. Fallback polling every 5 seconds for local API
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch('/api/orders');
+        if (res.ok) {
+          const apiOrders = await res.json();
+          if (Array.isArray(apiOrders) && apiOrders.length > 0) {
+            setAllOrders(prev => {
+              let hasNew = false;
+              const map = new Map();
+              prev.forEach(o => { if (o?.orderId) map.set(o.orderId, o); });
+              apiOrders.forEach(o => {
+                if (o?.orderId && !map.has(o.orderId)) {
+                  map.set(o.orderId, o);
+                  hasNew = true;
+                }
+              });
+              if (hasNew) {
+                const list = Array.from(map.values());
+                list.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+                try {
+                  localStorage.setItem('el_shadday_all_orders', JSON.stringify(list));
+                } catch (e) {}
+                return list;
+              }
+              return prev;
+            });
+          }
+        }
+      } catch (e) {}
+    }, 5000);
+
+    return () => {
+      unsubscribe();
+      clearInterval(interval);
+    };
+  }, []);
 
   // Handle URL hash changes (#/admin, #admin, #/cozinha)
   useEffect(() => {
@@ -230,17 +324,20 @@ export default function App() {
     setCartItems([]); // Clear cart upon successful order dispatch
 
     // Save optimistically to allOrders for the kitchen display
-    setAllOrders(prev => [orderData, ...prev]);
+    setAllOrders(prev => {
+      if (prev.some(o => o.orderId === orderData.orderId)) return prev;
+      const updated = [orderData, ...prev];
+      try {
+        localStorage.setItem('el_shadday_all_orders', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
 
-    // Send to /api/orders so kitchen sees it immediately
+    // Send to kitchen across all real-time channels (Cloud SSE + BroadcastChannel + API)
     try {
-      await fetch('/api/orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(orderData)
-      });
+      await dispatchOrderToKitchen(orderData);
     } catch (e) {
-      console.warn('Could not post order to server:', e);
+      console.warn('Could not dispatch order to kitchen:', e);
     }
   };
 
@@ -284,11 +381,7 @@ export default function App() {
     });
 
     try {
-      await fetch(`/api/orders/${orderId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderStatus: newStatus })
-      });
+      await dispatchOrderUpdateToKitchen(orderId, { orderStatus: newStatus });
     } catch (err) {
       console.error('Error updating order status:', err);
     }
@@ -304,11 +397,7 @@ export default function App() {
     });
 
     try {
-      await fetch(`/api/orders/${orderId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ paymentStatus: newPaymentStatus })
-      });
+      await dispatchOrderUpdateToKitchen(orderId, { paymentStatus: newPaymentStatus });
     } catch (err) {
       console.error('Error updating payment status:', err);
     }
