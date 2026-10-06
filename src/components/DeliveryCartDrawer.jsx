@@ -71,8 +71,22 @@ export function DeliveryCartDrawer({
     // Format Items list for WhatsApp
     const itemsFormatted = cartItems.map((item, idx) => {
       let desc = '';
-      if (item.flavors && item.flavors.length > 0) {
+      if (item.pizzaSelections && item.pizzaSelections.length > 0) {
+        desc = item.pizzaSelections.map(p => `\n   ↳ 🍕 *${p.pizzaTitle}:* ${p.flavors.join(' / ')}`).join('');
+        if (item.bordaGratis) {
+          desc += `\n   ↳ 🧀 Borda de Catupiry Grátis`;
+        }
+        if (item.notes) {
+          desc += `\n   ↳ 📝 Obs: ${item.notes}`;
+        }
+      } else if (item.flavors && item.flavors.length > 0) {
         desc = `\n   ↳ Sabores: ${item.flavors.join(' / ')}`;
+        if (item.bordaGratis) {
+          desc += ` (Borda Catupiry Grátis)`;
+        }
+        if (item.notes) {
+          desc += ` - Obs: ${item.notes}`;
+        }
       } else if (item.description && (item.isBox || item.isCombo)) {
         desc = `\n   ↳ ${item.description}`;
       }
@@ -261,15 +275,32 @@ Pedido gerado via Cardápio Digital El Shadday.`;
                       </div>
 
                       {/* Flavors / details description */}
-                      {item.flavors && item.flavors.length > 0 && (
-                        <p className="text-[11px] text-brand-gold/90 mt-0.5 font-medium">
-                          Sabores: {item.flavors.join(' / ')}
-                        </p>
-                      )}
-                      {item.notes && (
-                        <p className="text-[11px] text-slate-400 mt-0.5 italic">
-                          Obs: {item.notes}
-                        </p>
+                      {item.pizzaSelections && item.pizzaSelections.length > 0 ? (
+                        <div className="mt-1 space-y-0.5 bg-dark-950/70 p-2 rounded-lg border border-dark-800">
+                          {item.pizzaSelections.map((p, pIdx) => (
+                            <p key={pIdx} className="text-[11px] text-brand-gold font-medium leading-tight">
+                              🍕 <strong className="text-white">{p.pizzaTitle}:</strong> {p.flavors.join(' / ')}
+                            </p>
+                          ))}
+                          {item.notes && (
+                            <p className="text-[10px] text-slate-400 italic mt-0.5">
+                              Obs: {item.notes}
+                            </p>
+                          )}
+                        </div>
+                      ) : (
+                        <>
+                          {item.flavors && item.flavors.length > 0 && (
+                            <p className="text-[11px] text-brand-gold/90 mt-0.5 font-medium">
+                              Sabores: {item.flavors.join(' / ')}
+                            </p>
+                          )}
+                          {item.notes && (
+                            <p className="text-[11px] text-slate-400 mt-0.5 italic">
+                              Obs: {item.notes}
+                            </p>
+                          )}
+                        </>
                       )}
 
                       {/* Quantity & Price */}

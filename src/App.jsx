@@ -15,7 +15,7 @@ import { OrderSuccessModal } from './components/OrderSuccessModal';
 import { BuffetSection } from './components/BuffetSection';
 import { Footer } from './components/Footer';
 import { BuffetApp } from './buffet/BuffetApp';
-import { ShoppingBag, ArrowRight, Sparkles, ChevronRight, Phone } from 'lucide-react';
+import { ShoppingBag, ArrowRight, Sparkles, ChevronRight, Phone, Search } from 'lucide-react';
 
 export default function App() {
   // App View mode: 'delivery' (default & primary) | 'full-buffet' (showcase)
@@ -162,25 +162,50 @@ export default function App() {
     setCartItems([]); // Clear cart upon successful order dispatch
   };
 
-  // Filtered Products
-  const filteredProducts = useMemo(() => {
-    let list = PRODUCTS;
-
-    if (activeCategory) {
-      list = list.filter(p => p.categoryId === activeCategory);
+  // Quick scroll to a category section
+  const handleSelectCategory = (catId) => {
+    setActiveCategory(catId);
+    setSearchQuery('');
+    const target = document.getElementById(`section-${catId}`);
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth' });
     }
+  };
 
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase().trim();
-      list = PRODUCTS.filter(p => 
-        p.name.toLowerCase().includes(query) ||
-        p.description?.toLowerCase().includes(query) ||
-        p.details?.toLowerCase().includes(query)
-      );
-    }
+  // IntersectionObserver to sync top category pill as user scrolls
+  useEffect(() => {
+    if (searchQuery.trim()) return;
 
-    return list;
-  }, [activeCategory, searchQuery]);
+    const handleScrollObserver = () => {
+      const scrollPosition = window.scrollY + 200;
+
+      for (const cat of CATEGORIES) {
+        const el = document.getElementById(`section-${cat.id}`);
+        if (el) {
+          const top = el.offsetTop;
+          const height = el.offsetHeight;
+          if (scrollPosition >= top && scrollPosition < top + height) {
+            setActiveCategory(cat.id);
+            break;
+          }
+        }
+      }
+    };
+
+    window.addEventListener('scroll', handleScrollObserver, { passive: true });
+    return () => window.removeEventListener('scroll', handleScrollObserver);
+  }, [searchQuery]);
+
+  // Search Results
+  const searchResults = useMemo(() => {
+    if (!searchQuery.trim()) return [];
+    const query = searchQuery.toLowerCase().trim();
+    return PRODUCTS.filter(p => 
+      p.name.toLowerCase().includes(query) ||
+      p.description?.toLowerCase().includes(query) ||
+      p.details?.toLowerCase().includes(query)
+    );
+  }, [searchQuery]);
 
   // Cart summary
   const totalCartCount = cartItems.reduce((acc, item) => acc + item.quantity, 0);
@@ -248,82 +273,159 @@ export default function App() {
       <div ref={menuSectionRef}>
         <CategoryNav
           activeCategory={activeCategory}
-          onSelectCategory={(catId) => {
-            setActiveCategory(catId);
-            setSearchQuery('');
-          }}
+          onSelectCategory={handleSelectCategory}
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
         />
       </div>
 
-      {/* 4. Menu Grid */}
-      <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
+      {/* 4. Menu Grid (Continuous Flow by Categories or Search Results) */}
+      <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full space-y-6">
         
-        {/* Section Title */}
-        <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-dark-800 pb-3">
-          <div>
-            <h2 className="text-xl sm:text-2xl font-display font-extrabold text-white flex items-center gap-2">
-              <span className="text-brand-gold">●</span>
-              <span>
-                {searchQuery 
-                  ? `Resultados para "${searchQuery}"` 
-                  : (CATEGORIES.find(c => c.id === activeCategory)?.name || 'Cardápio')}
+        {/* Banner with Delivery Info */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-dark-900/90 border border-dark-800 p-4 rounded-2xl">
+          <div className="flex items-center gap-2.5">
+            <span className="w-3 h-3 rounded-full bg-emerald-400 animate-pulse"></span>
+            <div>
+              <span className="text-xs sm:text-sm font-bold text-white block">
+                Atendimento Delivery em Ariquemes - RO
               </span>
-            </h2>
-            <p className="text-xs text-slate-400 mt-0.5">
-              {filteredProducts.length} {filteredProducts.length === 1 ? 'opção disponível' : 'opções disponíveis'} em {activeBranch.displayName}
-            </p>
+              <span className="text-[11px] text-slate-400">
+                Pioneiros em caixas de esfirras artesanais • Entrega em 45 a 75 minutos
+              </span>
+            </div>
           </div>
 
-          <div className="text-xs text-slate-400 flex items-center gap-2">
-            <span className="hidden sm:inline">Taxa de entrega:</span>
-            <span className="text-brand-gold font-bold bg-dark-900 px-2.5 py-1 rounded-lg border border-dark-800">
-              A partir de R$ 8,00 em Ariquemes
-            </span>
+          <div className="text-xs text-brand-gold font-extrabold bg-dark-950 px-3 py-1.5 rounded-xl border border-brand-gold/30 self-start sm:self-auto">
+            Borda de Catupiry GRÁTIS nas Pizzas Salgadas! 🧀
           </div>
         </div>
 
-        {/* Empty Search Result */}
-        {filteredProducts.length === 0 ? (
-          <div className="text-center py-16 bg-dark-900/50 rounded-3xl border border-dark-800">
-            <p className="text-sm text-slate-400">Nenhum item encontrado para esta busca.</p>
-            <button
-              onClick={() => {
-                setSearchQuery('');
-                setActiveCategory(CATEGORIES[0].id);
-              }}
-              className="mt-3 px-4 py-2 rounded-xl bg-brand-gold text-dark-950 font-bold text-xs hover:bg-amber-400 transition-colors"
-            >
-              Ver Todos os Itens
-            </button>
-          </div>
+        {/* SEARCH MODE: When user typed something */}
+        {searchQuery.trim() ? (
+          <section className="py-6">
+            <div className="mb-6 border-b border-dark-800 pb-3 flex items-center justify-between">
+              <div>
+                <h3 className="text-xl sm:text-2xl font-display font-extrabold text-white flex items-center gap-2">
+                  <Search className="w-5 h-5 text-brand-gold" />
+                  <span>Resultados para "{searchQuery}"</span>
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {searchResults.length} {searchResults.length === 1 ? 'item encontrado' : 'itens encontrados'}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="text-xs font-bold text-brand-gold hover:underline cursor-pointer"
+              >
+                Limpar Busca
+              </button>
+            </div>
+
+            {searchResults.length === 0 ? (
+              <div className="text-center py-16 bg-dark-900/50 rounded-3xl border border-dark-800">
+                <p className="text-sm text-slate-400">Nenhum item encontrado para esta busca.</p>
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="mt-3 px-4 py-2 rounded-xl bg-brand-gold text-dark-950 font-bold text-xs hover:bg-amber-400 transition-colors cursor-pointer"
+                >
+                  Ver Todo o Cardápio
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
+                {searchResults.map((product) => {
+                  const inCart = cartItems.find(item => item.id === product.id);
+                  return (
+                    <ProductCard
+                      key={product.id}
+                      product={product}
+                      cartQuantity={inCart ? inCart.quantity : 0}
+                      onAddToCart={handleAddToCart}
+                      onOpenBoxBuilder={(prod) => {
+                        setSelectedBoxForBuilder(prod);
+                        setIsBoxBuilderOpen(true);
+                      }}
+                      onOpenPizzaCustomizer={(prod) => {
+                        setSelectedPizzaForCustomizer(prod);
+                        setIsPizzaCustomizerOpen(true);
+                      }}
+                      onOpenComboCustomizer={(prod) => {
+                        setSelectedComboForCustomizer(prod);
+                        setIsComboCustomizerOpen(true);
+                      }}
+                    />
+                  );
+                })}
+              </div>
+            )}
+          </section>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
-            {filteredProducts.map((product) => {
-              const inCart = cartItems.find(item => item.id === product.id);
-              return (
-                <ProductCard
-                  key={product.id}
-                  product={product}
-                  cartQuantity={inCart ? inCart.quantity : 0}
-                  onAddToCart={handleAddToCart}
-                  onOpenBoxBuilder={(prod) => {
-                    setSelectedBoxForBuilder(prod);
-                    setIsBoxBuilderOpen(true);
-                  }}
-                  onOpenPizzaCustomizer={(prod) => {
-                    setSelectedPizzaForCustomizer(prod);
-                    setIsPizzaCustomizerOpen(true);
-                  }}
-                  onOpenComboCustomizer={(prod) => {
-                    setSelectedComboForCustomizer(prod);
-                    setIsComboCustomizerOpen(true);
-                  }}
-                />
-              );
-            })}
-          </div>
+          /* CONTINUOUS FLOW MODE: All categories displayed in full sequence! */
+          CATEGORIES.map((cat) => {
+            const categoryProducts = PRODUCTS.filter(p => p.categoryId === cat.id);
+            if (categoryProducts.length === 0) return null;
+
+            return (
+              <section 
+                key={cat.id} 
+                id={`section-${cat.id}`} 
+                className="scroll-mt-36 pt-6 pb-8 border-b border-dark-800/80 last:border-b-0"
+              >
+                {/* Category Header */}
+                <div className="mb-5 flex flex-col sm:flex-row sm:items-baseline justify-between gap-2 border-b border-dark-800/60 pb-3">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2.5">
+                      <h3 className="text-xl sm:text-2xl font-display font-extrabold text-white tracking-tight">
+                        {cat.name}
+                      </h3>
+                      {cat.tag && (
+                        <span className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-brand-gold/15 text-brand-goldLight border border-brand-gold/30">
+                          {cat.tag}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-400 mt-1">
+                      {categoryProducts.length} {categoryProducts.length === 1 ? 'delícia disponível' : 'delícias disponíveis'}
+                    </p>
+                  </div>
+
+                  <span className="text-[11px] text-slate-500 hidden sm:inline">
+                    Role para baixo para ver mais categorias
+                  </span>
+                </div>
+
+                {/* Products Grid for this category */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
+                  {categoryProducts.map((product) => {
+                    const inCart = cartItems.find(item => item.id === product.id);
+                    return (
+                      <ProductCard
+                        key={product.id}
+                        product={product}
+                        cartQuantity={inCart ? inCart.quantity : 0}
+                        onAddToCart={handleAddToCart}
+                        onOpenBoxBuilder={(prod) => {
+                          setSelectedBoxForBuilder(prod);
+                          setIsBoxBuilderOpen(true);
+                        }}
+                        onOpenPizzaCustomizer={(prod) => {
+                          setSelectedPizzaForCustomizer(prod);
+                          setIsPizzaCustomizerOpen(true);
+                        }}
+                        onOpenComboCustomizer={(prod) => {
+                          setSelectedComboForCustomizer(prod);
+                          setIsComboCustomizerOpen(true);
+                        }}
+                      />
+                    );
+                  })}
+                </div>
+              </section>
+            );
+          })
         )}
 
       </main>
@@ -410,7 +512,7 @@ export default function App() {
         onAddPizzaToCart={handleAddPizzaToCart}
       />
 
-      {/* Combo Customizer Modal */}
+      {/* Combo Customizer Modal (Handles Multi-Pizza selection) */}
       <ComboCustomizerModal
         isOpen={isComboCustomizerOpen}
         onClose={() => setIsComboCustomizerOpen(false)}

@@ -108,6 +108,18 @@ export const PRODUCTS = [
     details: "16 fatias deliciosas para reunir os amigos e família."
   },
   {
+    id: "combo-2-pizzas-gg",
+    categoryId: "combos",
+    name: "2 Pizzas Gigantes com Borda Grátis",
+    description: "Mega Combo de Gigantes! 2 Pizzas Gigantes de 12 fatias cada (total 24 fatias, escolha até 3 sabores para cada pizza). Ambas com borda recheada de Catupiry grátis.",
+    price: 98.00,
+    originalPrice: 110.00,
+    badge: "Mais Pedido da Galera 🔥",
+    bordaGratis: true,
+    image: "https://assets.olaclick.app/companies/products/images/800/dadb6a0e-498b-4d67-8b61-dc4759f1a9fc.jpeg",
+    details: "24 fatias generosas para toda a família e amigos."
+  },
+  {
     id: "combo-1gg-1fm-10esf",
     categoryId: "combos",
     name: "1 Pizza Gigante + 1 Pizza Família + 10 Esfirras",
