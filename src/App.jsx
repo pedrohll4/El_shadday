@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { BRANCHES, DEFAULT_BRANCH_ID } from './data/branchesData';
 import { PRODUCTS, CATEGORIES, RESTAURANT_INFO } from './data/menuData';
 import { Header } from './components/Header';
@@ -15,14 +15,30 @@ import { OrderSuccessModal } from './components/OrderSuccessModal';
 import { BuffetSection } from './components/BuffetSection';
 import { Footer } from './components/Footer';
 import { BuffetApp } from './buffet/BuffetApp';
-import { ShoppingBag, ArrowRight, Sparkles, ChevronRight, Phone, Search } from 'lucide-react';
+import { AdminDashboard } from './components/AdminDashboard';
+import { AdminLoginModal } from './components/AdminLoginModal';
+import { ShoppingBag, ArrowRight, Sparkles, ChevronRight, Phone, Search, ChefHat } from 'lucide-react';
+
+const getInitialOrders = () => {
+  try {
+    const saved = localStorage.getItem('el_shadday_all_orders');
+    return saved ? JSON.parse(saved) : [];
+  } catch (e) {
+    return [];
+  }
+};
 
 export default function App() {
-  // App View mode: 'delivery' (default & primary) | 'full-buffet' (showcase)
+  // App View mode: 'delivery' (default & primary) | 'admin' (kitchen KDS) | 'full-buffet' (showcase)
   const [appView, setAppView] = useState(() => {
     try {
       const params = new URLSearchParams(window.location.search);
       if (params.get('mode') === 'buffet') return 'full-buffet';
+      if (params.get('mode') === 'admin' || window.location.hash.includes('admin')) {
+        if (sessionStorage.getItem('el_shadday_admin_auth') === 'true') {
+          return 'admin';
+        }
+      }
       return 'delivery';
     } catch (e) {
       return 'delivery';
@@ -69,6 +85,55 @@ export default function App() {
 
   const [activeCategory, setActiveCategory] = useState(CATEGORIES[0].id);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Kitchen & Admin State
+  const [allOrders, setAllOrders] = useState(() => getInitialOrders());
+  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(() => {
+    return sessionStorage.getItem('el_shadday_admin_auth') === 'true';
+  });
+  const [isAdminLoginModalOpen, setIsAdminLoginModalOpen] = useState(false);
+
+  // Fetch orders from server API and poll every 3 seconds
+  const fetchOrdersFromServer = useCallback(async () => {
+    try {
+      const res = await fetch('/api/orders');
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          setAllOrders(data);
+          try {
+            localStorage.setItem('el_shadday_all_orders', JSON.stringify(data));
+          } catch (e) {}
+        }
+      }
+    } catch (err) {
+      console.warn('Could not fetch /api/orders, using local orders cache');
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchOrdersFromServer();
+    const interval = setInterval(fetchOrdersFromServer, 3000);
+    return () => clearInterval(interval);
+  }, [fetchOrdersFromServer]);
+
+  // Handle URL hash changes (#/admin, #admin, #/cozinha)
+  useEffect(() => {
+    const handleHash = () => {
+      const hash = window.location.hash;
+      if (hash === '#/admin' || hash === '#admin' || hash === '#/cozinha' || hash === '#cozinha') {
+        if (sessionStorage.getItem('el_shadday_admin_auth') === 'true') {
+          setAppView('admin');
+        } else {
+          setIsAdminLoginModalOpen(true);
+        }
+      }
+    };
+
+    handleHash();
+    window.addEventListener('hashchange', handleHash);
+    return () => window.removeEventListener('hashchange', handleHash);
+  }, []);
 
   // Modals State
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -155,11 +220,95 @@ export default function App() {
     setCartItems([]);
   };
 
-  const handleOrderFinished = (orderData) => {
+  const handleOrderFinished = async (orderData) => {
     setCompletedOrderData(orderData);
     setIsCartOpen(false);
     setIsOrderSuccessOpen(true);
     setCartItems([]); // Clear cart upon successful order dispatch
+
+    // Save optimistically to allOrders for the kitchen display
+    setAllOrders(prev => [orderData, ...prev]);
+
+    // Send to /api/orders so kitchen sees it immediately
+    try {
+      await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(orderData)
+      });
+    } catch (e) {
+      console.warn('Could not post order to server:', e);
+    }
+  };
+
+  // Kitchen Admin Handlers
+  const handleOpenAdminTrigger = () => {
+    if (isAdminLoggedIn) {
+      setAppView('admin');
+      window.location.hash = '#/admin';
+    } else {
+      setIsAdminLoginModalOpen(true);
+    }
+  };
+
+  const handleAdminLoginSuccess = () => {
+    setIsAdminLoggedIn(true);
+    sessionStorage.setItem('el_shadday_admin_auth', 'true');
+    setIsAdminLoginModalOpen(false);
+    setAppView('admin');
+    window.location.hash = '#/admin';
+  };
+
+  const handleAdminLogout = () => {
+    setIsAdminLoggedIn(false);
+    sessionStorage.removeItem('el_shadday_admin_auth');
+    setAppView('delivery');
+    window.location.hash = '';
+  };
+
+  const handleBackToSiteFromAdmin = () => {
+    setAppView('delivery');
+    window.location.hash = '';
+  };
+
+  const handleUpdateOrderStatus = async (orderId, newStatus) => {
+    setAllOrders(prev => {
+      const updated = prev.map(o => o.orderId === orderId ? { ...o, orderStatus: newStatus } : o);
+      try {
+        localStorage.setItem('el_shadday_all_orders', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+
+    try {
+      await fetch(`/api/orders/${orderId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderStatus: newStatus })
+      });
+    } catch (err) {
+      console.error('Error updating order status:', err);
+    }
+  };
+
+  const handleUpdatePaymentStatus = async (orderId, newPaymentStatus) => {
+    setAllOrders(prev => {
+      const updated = prev.map(o => o.orderId === orderId ? { ...o, paymentStatus: newPaymentStatus } : o);
+      try {
+        localStorage.setItem('el_shadday_all_orders', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+
+    try {
+      await fetch(`/api/orders/${orderId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paymentStatus: newPaymentStatus })
+      });
+    } catch (err) {
+      console.error('Error updating payment status:', err);
+    }
   };
 
   // Quick scroll to a category section
@@ -174,7 +323,7 @@ export default function App() {
 
   // IntersectionObserver to sync top category pill as user scrolls
   useEffect(() => {
-    if (searchQuery.trim()) return;
+    if (searchQuery.trim() || appView !== 'delivery') return;
 
     const handleScrollObserver = () => {
       const scrollPosition = window.scrollY + 200;
@@ -194,7 +343,7 @@ export default function App() {
 
     window.addEventListener('scroll', handleScrollObserver, { passive: true });
     return () => window.removeEventListener('scroll', handleScrollObserver);
-  }, [searchQuery]);
+  }, [searchQuery, appView]);
 
   // Search Results
   const searchResults = useMemo(() => {
@@ -226,7 +375,20 @@ export default function App() {
     }
   };
 
-  // If user navigated to full buffet view
+  // VIEW 1: KITCHEN KDS / PAINEL DA COZINHA
+  if (appView === 'admin') {
+    return (
+      <AdminDashboard
+        orders={allOrders}
+        onUpdateOrderStatus={handleUpdateOrderStatus}
+        onUpdatePaymentStatus={handleUpdatePaymentStatus}
+        onLogout={handleAdminLogout}
+        onBackToSite={handleBackToSiteFromAdmin}
+      />
+    );
+  }
+
+  // VIEW 2: FULL BUFFET SHOWCASE
   if (appView === 'full-buffet') {
     return (
       <div className="relative min-h-screen bg-dark-950">
@@ -247,10 +409,11 @@ export default function App() {
     );
   }
 
+  // VIEW 3: MAIN DELIVERY EXPERIENCE
   return (
     <div className="min-h-screen bg-dark-950 text-slate-100 flex flex-col font-sans selection:bg-brand-gold selection:text-dark-950">
       
-      {/* 1. Header with Branch and Cart Controls */}
+      {/* 1. Header with Branch, Cart and Kitchen Controls */}
       <Header
         cartCount={totalCartCount}
         cartTotal={totalCartValue}
@@ -258,6 +421,7 @@ export default function App() {
         activeBranch={activeBranch}
         onOpenBranchModal={() => setIsBranchModalOpen(true)}
         onScrollToBuffet={scrollToBuffet}
+        onOpenAdmin={handleOpenAdminTrigger}
       />
 
       {/* 2. Hero Presentation */}
@@ -434,7 +598,7 @@ export default function App() {
       <BuffetSection onExploreFullBuffet={() => setAppView('full-buffet')} />
 
       {/* 6. Footer */}
-      <Footer onOpenAdmin={() => {}} />
+      <Footer onOpenAdmin={handleOpenAdminTrigger} />
 
       {/* 7. Floating Bottom Bar on Mobile when Cart has Items */}
       {totalCartCount > 0 && !isCartOpen && (
@@ -494,6 +658,13 @@ export default function App() {
           setIsOrderSuccessOpen(false);
           setCompletedOrderData(null);
         }}
+      />
+
+      {/* Kitchen Admin Login Modal */}
+      <AdminLoginModal
+        isOpen={isAdminLoginModalOpen}
+        onClose={() => setIsAdminLoginModalOpen(false)}
+        onLoginSuccess={handleAdminLoginSuccess}
       />
 
       {/* Box Builder Modal */}

@@ -1,7 +1,7 @@
 import React from 'react';
 import { 
   ShoppingBag, Phone, MapPin, Clock, Flame, ChevronRight, 
-  Crown, Sparkles, Building2, UtensilsCrossed 
+  Crown, Sparkles, Building2, UtensilsCrossed, ChefHat 
 } from 'lucide-react';
 import { RESTAURANT_INFO } from '../data/menuData';
 
@@ -11,7 +11,8 @@ export function Header({
   onOpenCart, 
   activeBranch,
   onOpenBranchModal,
-  onScrollToBuffet
+  onScrollToBuffet,
+  onOpenAdmin
 }) {
   return (
     <header className="sticky top-0 z-40 bg-dark-950/90 backdrop-blur-md border-b border-dark-800 transition-all duration-300">
@@ -105,6 +106,19 @@ export function Header({
               >
                 <Crown className="w-4 h-4 text-brand-gold" />
                 <span>Buffet & Eventos</span>
+              </button>
+            )}
+
+            {/* Kitchen KDS Panel Button */}
+            {onOpenAdmin && (
+              <button
+                type="button"
+                onClick={onOpenAdmin}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-dark-900 hover:bg-dark-850 text-brand-gold hover:text-amber-300 text-xs font-bold border border-brand-gold/30 hover:border-brand-gold transition-all cursor-pointer shadow-sm"
+                title="Painel de Pedidos da Cozinha (KDS)"
+              >
+                <ChefHat className="w-4 h-4 text-brand-gold" />
+                <span className="hidden sm:inline">Cozinha</span>
               </button>
             )}
 
