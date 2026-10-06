@@ -27,23 +27,24 @@ export function BranchSelectorModal({
         )}
 
         {/* Modal Header */}
-        <div className="pt-8 pb-4 px-6 text-center bg-gradient-to-b from-dark-950 to-dark-900 border-b border-dark-800">
-          <div className="flex justify-center mb-2">
-            <ElShaddayLogo size="md" variant="horizontal" />
+        <div className="pt-6 pb-3 px-4 sm:px-6 text-center bg-gradient-to-b from-dark-950 to-dark-900 border-b border-dark-800">
+          <div className="flex justify-center mb-1.5">
+            <ElShaddayLogo size="sm" variant="horizontal" className="sm:hidden" />
+            <ElShaddayLogo size="md" variant="horizontal" className="hidden sm:flex" />
           </div>
           
-          <h2 className="text-xl sm:text-2xl font-display font-extrabold text-white mt-2">
+          <h2 className="text-lg sm:text-2xl font-display font-extrabold text-white mt-1.5 leading-tight">
             Selecione a Unidade para seu Pedido
           </h2>
-          <p className="text-xs sm:text-sm text-slate-400 max-w-md mx-auto mt-1">
-            Escolha a filial mais próxima de você para conferir o cardápio, prazos de entrega e fazer seu pedido.
+          <p className="text-[11px] sm:text-sm text-slate-400 max-w-md mx-auto mt-1">
+            Escolha a filial para conferir o cardápio e prazos de entrega.
           </p>
 
-          <GoldFiligree className="my-2.5" />
+          <GoldFiligree className="my-2" />
         </div>
 
         {/* Branches Grid */}
-        <div className="p-4 sm:p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+        <div className="p-3 sm:p-6 space-y-3 sm:space-y-4 max-h-[75dvh] overflow-y-auto">
           {BRANCHES.map((branch) => {
             const isActive = branch.status === 'active';
             const isCurrent = selectedBranchId === branch.id;

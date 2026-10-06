@@ -20,8 +20,8 @@ export function CategoryNav({
   onSearchChange 
 }) {
   return (
-    <div className="sticky top-20 z-30 bg-dark-950/95 backdrop-blur-md border-b border-dark-800 py-3 shadow-xl transition-all">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-2.5">
+    <div className="sticky top-[104px] sm:top-20 z-30 bg-dark-950/95 backdrop-blur-md border-b border-dark-800 py-2 sm:py-3 shadow-xl transition-all w-full max-w-full">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 space-y-2">
         
         {/* Search bar & Friendly helper title */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">

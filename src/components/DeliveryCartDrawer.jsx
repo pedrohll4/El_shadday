@@ -170,7 +170,7 @@ Pedido gerado via Cardápio Digital El Shadday.`;
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden bg-dark-950/80 backdrop-blur-sm flex justify-end animate-fade-in">
-      <div className="relative w-full max-w-lg bg-dark-900 border-l border-dark-800 shadow-2xl flex flex-col h-full overflow-hidden">
+      <div className="relative w-full max-w-lg bg-dark-900 border-l border-dark-800 shadow-2xl flex flex-col h-full max-h-[100dvh] overflow-hidden">
         
         {/* Drawer Header */}
         <div className="p-4 sm:p-5 border-b border-dark-800 bg-dark-950 flex items-center justify-between">
@@ -618,7 +618,7 @@ Pedido gerado via Cardápio Digital El Shadday.`;
 
         {/* Drawer Footer with Totals and WhatsApp Finalize Button */}
         {cartItems.length > 0 && (
-          <div className="p-4 sm:p-5 border-t border-dark-800 bg-dark-950 space-y-3">
+          <div className="p-4 sm:p-5 pb-8 sm:pb-5 border-t border-dark-800 bg-dark-950 space-y-3">
             
             {/* Totals Breakdown */}
             <div className="space-y-1.5 text-xs">

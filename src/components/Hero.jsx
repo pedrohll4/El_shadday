@@ -22,7 +22,7 @@ export function Hero({ onOpenBoxBuilder, onScrollToMenu }) {
             </div>
 
             {/* Main Headline */}
-            <h1 className="font-display font-extrabold text-4xl sm:text-5xl lg:text-6xl text-white tracking-tight leading-[1.12]">
+            <h1 className="font-display font-extrabold text-3xl sm:text-5xl lg:text-6xl text-white tracking-tight leading-[1.15]">
               Sabor artesanal que <br className="hidden sm:inline" />
               <span className="bg-gradient-to-r from-brand-gold via-amber-300 to-brand-goldLight bg-clip-text text-transparent drop-shadow-sm">
                 derrete na boca
@@ -126,7 +126,7 @@ export function Hero({ onOpenBoxBuilder, onScrollToMenu }) {
               </div>
 
               {/* Floating Mini Card - Pizza Highlight */}
-              <div className="absolute -bottom-6 -left-4 sm:-left-6 bg-dark-900/95 backdrop-blur-md border border-brand-gold/40 p-3.5 rounded-2xl shadow-glow-gold flex items-center gap-3 max-w-[240px] animate-bounce-subtle">
+              <div className="absolute -bottom-4 left-3 sm:-bottom-6 sm:-left-6 bg-dark-900/95 backdrop-blur-md border border-brand-gold/40 p-3 sm:p-3.5 rounded-2xl shadow-glow-gold flex items-center gap-2.5 sm:gap-3 max-w-[210px] sm:max-w-[240px] animate-bounce-subtle z-10">
                 <div className="w-12 h-12 rounded-xl overflow-hidden flex-shrink-0 bg-dark-950 border border-dark-800">
                   <img
                     src="https://assets.olaclick.app/companies/products/images/800/80ee539a-0a44-44f7-abf5-5e02b4c2f34b.png"

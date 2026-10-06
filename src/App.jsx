@@ -411,7 +411,7 @@ export default function App() {
 
   // VIEW 3: MAIN DELIVERY EXPERIENCE
   return (
-    <div className="min-h-screen bg-dark-950 text-slate-100 flex flex-col font-sans selection:bg-brand-gold selection:text-dark-950">
+    <div className={`min-h-screen bg-dark-950 text-slate-100 flex flex-col font-sans selection:bg-brand-gold selection:text-dark-950 w-full max-w-full overflow-x-hidden ${totalCartCount > 0 ? 'pb-24 sm:pb-0' : ''}`}>
       
       {/* 1. Header with Branch, Cart and Kitchen Controls */}
       <Header
