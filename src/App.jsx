@@ -2,9 +2,11 @@ import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { BRANCHES, DEFAULT_BRANCH_ID } from './data/branchesData';
 import { PRODUCTS, CATEGORIES, RESTAURANT_INFO } from './data/menuData';
 import { Header } from './components/Header';
-import { Hero } from './components/Hero';
+import { RestaurantStoreHeader } from './components/RestaurantStoreHeader';
+import { PromotionsShelf } from './components/PromotionsShelf';
 import { CategoryNav } from './components/CategoryNav';
 import { ProductCard } from './components/ProductCard';
+import { DesktopSidebarCart } from './components/DesktopSidebarCart';
 import { BoxBuilderModal } from './components/BoxBuilderModal';
 import { PizzaCustomizerModal } from './components/PizzaCustomizerModal';
 import { ComboCustomizerModal } from './components/ComboCustomizerModal';
@@ -65,6 +67,7 @@ export default function App() {
   });
 
   const [isConstructionModalOpen, setIsConstructionModalOpen] = useState(false);
+  const [deliveryMode, setDeliveryMode] = useState('delivery');
 
   // Cart & Menu State
   const [cartItems, setCartItems] = useState(() => {
@@ -424,13 +427,30 @@ export default function App() {
         onOpenAdmin={handleOpenAdminTrigger}
       />
 
-      {/* 2. Hero Presentation */}
-      <Hero 
-        onOpenBoxBuilder={() => {
-          setSelectedBoxForBuilder(null);
+      {/* 2. Restaurant Profile & iFood Header (Cover, Avatar, Ratings, Delivery Switcher) */}
+      <RestaurantStoreHeader
+        activeBranch={activeBranch}
+        onOpenBranchModal={() => setIsBranchModalOpen(true)}
+        deliveryMode={deliveryMode}
+        onToggleDeliveryMode={setDeliveryMode}
+        onScrollToCategory={handleSelectCategory}
+      />
+
+      {/* 2.1 Promotions & Highlights Shelf */}
+      <PromotionsShelf
+        onOpenBoxBuilder={(prod) => {
+          setSelectedBoxForBuilder(prod);
           setIsBoxBuilderOpen(true);
         }}
-        onScrollToMenu={scrollToMenu}
+        onOpenPizzaCustomizer={(prod) => {
+          setSelectedPizzaForCustomizer(prod);
+          setIsPizzaCustomizerOpen(true);
+        }}
+        onOpenComboCustomizer={(prod) => {
+          setSelectedComboForCustomizer(prod);
+          setIsComboCustomizerOpen(true);
+        }}
+        onAddToCart={handleAddToCart}
       />
 
       {/* 3. Category Navigation & Search */}
@@ -440,158 +460,159 @@ export default function App() {
           onSelectCategory={handleSelectCategory}
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
+          onScrollToBuffet={scrollToBuffet}
         />
       </div>
 
-      {/* 4. Menu Grid (Continuous Flow by Categories or Search Results) */}
-      <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full space-y-6">
-        
-        {/* Banner with Delivery Info */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-dark-900/90 border border-dark-800 p-4 rounded-2xl">
-          <div className="flex items-center gap-2.5">
-            <span className="w-3 h-3 rounded-full bg-emerald-400 animate-pulse"></span>
-            <div>
-              <span className="text-xs sm:text-sm font-bold text-white block">
-                Atendimento Delivery em Ariquemes - RO
-              </span>
-              <span className="text-[11px] text-slate-400">
-                Pioneiros em caixas de esfirras artesanais • Entrega em 45 a 75 minutos
-              </span>
-            </div>
-          </div>
-
-          <div className="text-xs text-brand-gold font-extrabold bg-dark-950 px-3 py-1.5 rounded-xl border border-brand-gold/30 self-start sm:self-auto">
-            Borda de Catupiry GRÁTIS nas Pizzas Salgadas! 🧀
-          </div>
-        </div>
-
-        {/* SEARCH MODE: When user typed something */}
-        {searchQuery.trim() ? (
-          <section className="py-6">
-            <div className="mb-6 border-b border-dark-800 pb-3 flex items-center justify-between">
-              <div>
-                <h3 className="text-xl sm:text-2xl font-display font-extrabold text-white flex items-center gap-2">
-                  <Search className="w-5 h-5 text-brand-gold" />
-                  <span>Resultados para "{searchQuery}"</span>
-                </h3>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  {searchResults.length} {searchResults.length === 1 ? 'item encontrado' : 'itens encontrados'}
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setSearchQuery('')}
-                className="text-xs font-bold text-brand-gold hover:underline cursor-pointer"
-              >
-                Limpar Busca
-              </button>
-            </div>
-
-            {searchResults.length === 0 ? (
-              <div className="text-center py-16 bg-dark-900/50 rounded-3xl border border-dark-800">
-                <p className="text-sm text-slate-400">Nenhum item encontrado para esta busca.</p>
-                <button
-                  onClick={() => setSearchQuery('')}
-                  className="mt-3 px-4 py-2 rounded-xl bg-brand-gold text-dark-950 font-bold text-xs hover:bg-amber-400 transition-colors cursor-pointer"
-                >
-                  Ver Todo o Cardápio
-                </button>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
-                {searchResults.map((product) => {
-                  const inCart = cartItems.find(item => item.id === product.id);
-                  return (
-                    <ProductCard
-                      key={product.id}
-                      product={product}
-                      cartQuantity={inCart ? inCart.quantity : 0}
-                      onAddToCart={handleAddToCart}
-                      onOpenBoxBuilder={(prod) => {
-                        setSelectedBoxForBuilder(prod);
-                        setIsBoxBuilderOpen(true);
-                      }}
-                      onOpenPizzaCustomizer={(prod) => {
-                        setSelectedPizzaForCustomizer(prod);
-                        setIsPizzaCustomizerOpen(true);
-                      }}
-                      onOpenComboCustomizer={(prod) => {
-                        setSelectedComboForCustomizer(prod);
-                        setIsComboCustomizerOpen(true);
-                      }}
-                    />
-                  );
-                })}
-              </div>
-            )}
-          </section>
-        ) : (
-          /* CONTINUOUS FLOW MODE: All categories displayed in full sequence! */
-          CATEGORIES.map((cat) => {
-            const categoryProducts = PRODUCTS.filter(p => p.categoryId === cat.id);
-            if (categoryProducts.length === 0) return null;
-
-            return (
-              <section 
-                key={cat.id} 
-                id={`section-${cat.id}`} 
-                className="scroll-mt-36 pt-6 pb-8 border-b border-dark-800/80 last:border-b-0"
-              >
-                {/* Category Header */}
-                <div className="mb-5 flex flex-col sm:flex-row sm:items-baseline justify-between gap-2 border-b border-dark-800/60 pb-3">
+      {/* 4. Menu Grid & Desktop Sidebar Layout (iFood Standard) */}
+      <main className="flex-1 max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-6 w-full">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          
+          {/* Left Column: Menu Items & Categories (8 columns on desktop) */}
+          <div className="lg:col-span-8 space-y-8 min-w-0">
+            
+            {/* SEARCH MODE: When user typed something */}
+            {searchQuery.trim() ? (
+              <section className="py-2">
+                <div className="mb-5 border-b border-dark-800 pb-3 flex items-center justify-between">
                   <div>
-                    <div className="flex flex-wrap items-center gap-2.5">
-                      <h3 className="text-xl sm:text-2xl font-display font-extrabold text-white tracking-tight">
-                        {cat.name}
-                      </h3>
-                      {cat.tag && (
-                        <span className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-brand-gold/15 text-brand-goldLight border border-brand-gold/30">
-                          {cat.tag}
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-slate-400 mt-1">
-                      {categoryProducts.length} {categoryProducts.length === 1 ? 'delícia disponível' : 'delícias disponíveis'}
+                    <h3 className="text-lg sm:text-xl font-display font-extrabold text-white flex items-center gap-2">
+                      <Search className="w-5 h-5 text-brand-gold" />
+                      <span>Resultados para "{searchQuery}"</span>
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      {searchResults.length} {searchResults.length === 1 ? 'item encontrado' : 'itens encontrados'}
                     </p>
                   </div>
 
-                  <span className="text-[11px] text-slate-500 hidden sm:inline">
-                    Role para baixo para ver mais categorias
-                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery('')}
+                    className="text-xs font-bold text-brand-gold hover:underline cursor-pointer"
+                  >
+                    Limpar Busca
+                  </button>
                 </div>
 
-                {/* Products Grid for this category */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
-                  {categoryProducts.map((product) => {
-                    const inCart = cartItems.find(item => item.id === product.id);
-                    return (
-                      <ProductCard
-                        key={product.id}
-                        product={product}
-                        cartQuantity={inCart ? inCart.quantity : 0}
-                        onAddToCart={handleAddToCart}
-                        onOpenBoxBuilder={(prod) => {
-                          setSelectedBoxForBuilder(prod);
-                          setIsBoxBuilderOpen(true);
-                        }}
-                        onOpenPizzaCustomizer={(prod) => {
-                          setSelectedPizzaForCustomizer(prod);
-                          setIsPizzaCustomizerOpen(true);
-                        }}
-                        onOpenComboCustomizer={(prod) => {
-                          setSelectedComboForCustomizer(prod);
-                          setIsComboCustomizerOpen(true);
-                        }}
-                      />
-                    );
-                  })}
-                </div>
+                {searchResults.length === 0 ? (
+                  <div className="text-center py-16 bg-dark-900/50 rounded-3xl border border-dark-800">
+                    <p className="text-sm text-slate-400">Nenhum item encontrado para esta busca.</p>
+                    <button
+                      onClick={() => setSearchQuery('')}
+                      className="mt-3 px-4 py-2 rounded-xl bg-brand-gold text-dark-950 font-bold text-xs hover:bg-amber-400 transition-colors cursor-pointer"
+                    >
+                      Ver Todo o Cardápio
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
+                    {searchResults.map((product) => {
+                      const inCart = cartItems.find(item => item.id === product.id);
+                      return (
+                        <ProductCard
+                          key={product.id}
+                          product={product}
+                          cartQuantity={inCart ? inCart.quantity : 0}
+                          cartItem={inCart}
+                          onAddToCart={handleAddToCart}
+                          onUpdateQuantity={handleUpdateQuantity}
+                          onOpenBoxBuilder={(prod) => {
+                            setSelectedBoxForBuilder(prod);
+                            setIsBoxBuilderOpen(true);
+                          }}
+                          onOpenPizzaCustomizer={(prod) => {
+                            setSelectedPizzaForCustomizer(prod);
+                            setIsPizzaCustomizerOpen(true);
+                          }}
+                          onOpenComboCustomizer={(prod) => {
+                            setSelectedComboForCustomizer(prod);
+                            setIsComboCustomizerOpen(true);
+                          }}
+                        />
+                      );
+                    })}
+                  </div>
+                )}
               </section>
-            );
-          })
-        )}
+            ) : (
+              /* CONTINUOUS FLOW MODE: All categories displayed in full sequence! */
+              CATEGORIES.map((cat) => {
+                const categoryProducts = PRODUCTS.filter(p => p.categoryId === cat.id);
+                if (categoryProducts.length === 0) return null;
 
+                return (
+                  <section 
+                    key={cat.id} 
+                    id={`section-${cat.id}`} 
+                    className="scroll-mt-36 pt-2 pb-6 border-b border-dark-800/80 last:border-b-0"
+                  >
+                    {/* Category Header */}
+                    <div className="mb-4 flex flex-col sm:flex-row sm:items-baseline justify-between gap-1 border-b border-dark-800/60 pb-2.5">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="text-lg sm:text-xl font-display font-extrabold text-white tracking-tight">
+                            {cat.name}
+                          </h3>
+                          {cat.tag && (
+                            <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-brand-gold/15 text-brand-goldLight border border-brand-gold/30">
+                              {cat.tag}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          {categoryProducts.length} {categoryProducts.length === 1 ? 'delícia disponível' : 'delícias disponíveis'}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Products Grid for this category (2 columns on desktop/tablet, 1 col on mobile) */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
+                      {categoryProducts.map((product) => {
+                        const inCart = cartItems.find(item => item.id === product.id);
+                        return (
+                          <ProductCard
+                            key={product.id}
+                            product={product}
+                            cartQuantity={inCart ? inCart.quantity : 0}
+                            cartItem={inCart}
+                            onAddToCart={handleAddToCart}
+                            onUpdateQuantity={handleUpdateQuantity}
+                            onOpenBoxBuilder={(prod) => {
+                              setSelectedBoxForBuilder(prod);
+                              setIsBoxBuilderOpen(true);
+                            }}
+                            onOpenPizzaCustomizer={(prod) => {
+                              setSelectedPizzaForCustomizer(prod);
+                              setIsPizzaCustomizerOpen(true);
+                            }}
+                            onOpenComboCustomizer={(prod) => {
+                              setSelectedComboForCustomizer(prod);
+                              setIsComboCustomizerOpen(true);
+                            }}
+                          />
+                        );
+                      })}
+                    </div>
+                  </section>
+                );
+              })
+            )}
+
+          </div>
+
+          {/* Right Column: Desktop Sidebar Cart (4 columns on desktop, hidden on mobile) */}
+          <DesktopSidebarCart
+            cartItems={cartItems}
+            onUpdateQuantity={handleUpdateQuantity}
+            onRemoveItem={handleRemoveItem}
+            onClearCart={handleClearCart}
+            onOpenCheckout={() => setIsCartOpen(true)}
+            activeBranch={activeBranch}
+            deliveryMode={deliveryMode}
+            deliveryFee={8}
+          />
+
+        </div>
       </main>
 
       {/* 5. Buffet Section at the Bottom (Quotation via WhatsApp) */}
@@ -647,6 +668,7 @@ export default function App() {
         onClearCart={handleClearCart}
         onOrderFinished={handleOrderFinished}
         activeBranch={activeBranch}
+        initialDeliveryType={deliveryMode}
       />
 
       {/* Order Success & Pix Proof Modal */}

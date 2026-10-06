@@ -14,9 +14,16 @@ export function DeliveryCartDrawer({
   onRemoveItem, 
   onClearCart,
   onOrderFinished,
-  activeBranch
+  activeBranch,
+  initialDeliveryType = 'delivery'
 }) {
-  const [deliveryType, setDeliveryType] = useState('delivery'); // 'delivery' | 'retirada'
+  const [deliveryType, setDeliveryType] = useState(initialDeliveryType); // 'delivery' | 'retirada'
+
+  React.useEffect(() => {
+    if (initialDeliveryType) {
+      setDeliveryType(initialDeliveryType);
+    }
+  }, [initialDeliveryType, isOpen]);
   const [selectedDistrict, setSelectedDistrict] = useState(ARIQUEMES_DISTRICTS[2].id); // Setor 03 default
   const [streetAddress, setStreetAddress] = useState('');
   const [addressNumber, setAddressNumber] = useState('');
