@@ -403,6 +403,63 @@ export default function App() {
     }
   };
 
+  const handleCancelOrder = async (orderId, reason = '') => {
+    setAllOrders(prev => {
+      const updated = prev.map(o => o.orderId === orderId ? { 
+        ...o, 
+        orderStatus: 'CANCELADO', 
+        cancelReason: reason || 'Cancelado pelo operador da cozinha',
+        cancelledAt: new Date().toISOString()
+      } : o);
+      try {
+        localStorage.setItem('el_shadday_all_orders', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+
+    try {
+      await dispatchOrderUpdateToKitchen(orderId, { 
+        orderStatus: 'CANCELADO', 
+        cancelReason: reason || 'Cancelado pelo operador da cozinha',
+        cancelledAt: new Date().toISOString()
+      });
+    } catch (err) {
+      console.error('Error cancelling order:', err);
+    }
+  };
+
+  const handleDeleteOrder = async (orderId) => {
+    setAllOrders(prev => {
+      const updated = prev.filter(o => o.orderId !== orderId);
+      try {
+        localStorage.setItem('el_shadday_all_orders', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+
+    try {
+      await dispatchOrderUpdateToKitchen(orderId, { orderStatus: 'DELETED', isDeleted: true });
+    } catch (err) {
+      console.error('Error deleting order:', err);
+    }
+  };
+
+  const handleCreateKitchenOrder = async (newOrder) => {
+    setAllOrders(prev => {
+      const updated = [newOrder, ...prev.filter(o => o.orderId !== newOrder.orderId)];
+      try {
+        localStorage.setItem('el_shadday_all_orders', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+
+    try {
+      await dispatchOrderToKitchen(newOrder);
+    } catch (err) {
+      console.error('Error dispatching kitchen PDV order:', err);
+    }
+  };
+
   // Quick scroll to a category section
   const handleSelectCategory = (catId) => {
     setActiveCategory(catId);
@@ -474,6 +531,9 @@ export default function App() {
         orders={allOrders}
         onUpdateOrderStatus={handleUpdateOrderStatus}
         onUpdatePaymentStatus={handleUpdatePaymentStatus}
+        onCancelOrder={handleCancelOrder}
+        onDeleteOrder={handleDeleteOrder}
+        onCreateKitchenOrder={handleCreateKitchenOrder}
         onLogout={handleAdminLogout}
         onBackToSite={handleBackToSiteFromAdmin}
       />

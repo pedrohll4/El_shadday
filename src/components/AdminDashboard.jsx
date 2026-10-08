@@ -3,19 +3,60 @@ import {
   Flame, Clock, AlertTriangle, CheckCircle2, Search, 
   MapPin, User, DollarSign, Package, 
   Printer, ArrowLeft, LogOut, RefreshCw, Send, Check,
-  Bike, ChefHat, BellRing
+  Bike, ChefHat, BellRing, Plus, Minus, Trash2, XCircle,
+  MessageSquare, Phone, ShoppingBag, Store, Copy, ChevronRight,
+  AlertCircle, X, ShieldAlert, Sparkles, CheckCheck
 } from 'lucide-react';
-import { RESTAURANT_INFO } from '../data/menuData';
+import { RESTAURANT_INFO, ARIQUEMES_DISTRICTS, CATEGORIES, PRODUCTS } from '../data/menuData';
 
-export function AdminDashboard({ orders, onUpdateOrderStatus, onUpdatePaymentStatus, onLogout, onBackToSite }) {
-  const [selectedFilter, setSelectedFilter] = useState('todos'); // 'todos' | 'atrasados' | 'pendentes' | 'preparo' | 'entrega' | 'concluidos' | 'nao_pagos'
+export function AdminDashboard({ 
+  orders, 
+  onUpdateOrderStatus, 
+  onUpdatePaymentStatus, 
+  onCancelOrder,
+  onDeleteOrder,
+  onCreateKitchenOrder,
+  onLogout, 
+  onBackToSite 
+}) {
+  // Navigation: 'kds' (Kitchen Display) | 'pdv' (Point of Sale / Criar Pedidos)
+  const [activeAdminTab, setActiveAdminTab] = useState('kds');
+
+  // KDS Filters
+  const [selectedFilter, setSelectedFilter] = useState('todos'); // 'todos' | 'atrasados' | 'pendentes' | 'preparo' | 'entrega' | 'concluidos' | 'nao_pagos' | 'cancelados'
   const [searchQuery, setSearchQuery] = useState('');
   const [now, setNow] = useState(Date.now());
   const [newOrderAlert, setNewOrderAlert] = useState(null);
 
+  // Audio chimes
   const audioCtxRef = useRef(null);
   const [isAudioUnlocked, setIsAudioUnlocked] = useState(false);
   const knownOrderIdsRef = useRef(new Set(orders.map(o => o.orderId)));
+
+  // WhatsApp Modal State
+  const [whatsappModalData, setWhatsappModalData] = useState(null); // { order, phone, message }
+  
+  // Cancel Order Modal State
+  const [cancelModalOrder, setCancelModalOrder] = useState(null);
+  const [cancelReason, setCancelReason] = useState('');
+
+  // PDV (Point of Sale) State
+  const [pdvCategory, setPdvCategory] = useState(CATEGORIES[0]?.id || 'combos');
+  const [pdvSearch, setPdvSearch] = useState('');
+  const [pdvCart, setPdvCart] = useState([]);
+  const [pdvCustomerName, setPdvCustomerName] = useState('');
+  const [pdvCustomerPhone, setPdvCustomerPhone] = useState('');
+  const [pdvDeliveryType, setPdvDeliveryType] = useState('balcao'); // 'balcao' | 'delivery'
+  const [pdvDistrict, setPdvDistrict] = useState(ARIQUEMES_DISTRICTS[2]); // Setor 03 default
+  const [pdvAddress, setPdvAddress] = useState('');
+  const [pdvNumber, setPdvNumber] = useState('');
+  const [pdvReference, setPdvReference] = useState('');
+  const [pdvPaymentMethod, setPdvPaymentMethod] = useState('pix'); // 'pix' | 'dinheiro' | 'debito' | 'credito'
+  const [pdvIsPaid, setPdvIsPaid] = useState(true);
+  const [pdvCashChange, setPdvCashChange] = useState('');
+  const [pdvOrderNotes, setPdvOrderNotes] = useState('');
+  const [pdvSuccessOrder, setPdvSuccessOrder] = useState(null);
+  const [pdvValidationError, setPdvValidationError] = useState('');
 
   // Sound chime helper using Web Audio API + Speech Synthesis
   const playChime = (isTest = false) => {
@@ -101,58 +142,81 @@ export function AdminDashboard({ orders, onUpdateOrderStatus, onUpdatePaymentSta
 
   // Check if order is delayed (active and older than 35 minutes)
   const isOrderDelayed = (order) => {
-    if (order.orderStatus === 'CONCLUIDO') return false;
+    if (order.orderStatus === 'CONCLUIDO' || order.orderStatus === 'CANCELADO') return false;
     const elapsed = getElapsedMinutes(order.createdAt);
     return elapsed >= 35; // 35+ minutes threshold for warning
   };
 
-  // Metrics calculations
-  const totalRevenue = useMemo(() => {
-    return orders
-      .filter(o => o.paymentStatus === 'PAGO_APROVADO' || o.orderStatus === 'CONCLUIDO')
-      .reduce((acc, o) => acc + o.total, 0);
+  // Metrics calculations (Excluding cancelled orders!)
+  const activeOrdersList = useMemo(() => {
+    return orders.filter(o => o.orderStatus !== 'CANCELADO');
   }, [orders]);
+
+  const totalRevenue = useMemo(() => {
+    return activeOrdersList
+      .filter(o => o.paymentStatus === 'PAGO_APROVADO' || o.orderStatus === 'CONCLUIDO')
+      .reduce((acc, o) => acc + (o.total || 0), 0);
+  }, [activeOrdersList]);
 
   const pendingCount = useMemo(() => {
-    return orders.filter(o => o.orderStatus === 'RECEBIDO_COZINHA').length;
-  }, [orders]);
+    return activeOrdersList.filter(o => o.orderStatus === 'RECEBIDO_COZINHA').length;
+  }, [activeOrdersList]);
 
   const inPrepCount = useMemo(() => {
-    return orders.filter(o => o.orderStatus === 'EM_PREPARO').length;
-  }, [orders]);
+    return activeOrdersList.filter(o => o.orderStatus === 'EM_PREPARO').length;
+  }, [activeOrdersList]);
+
+  const inDeliveryCount = useMemo(() => {
+    return activeOrdersList.filter(o => o.orderStatus === 'SAIU_ENTREGA').length;
+  }, [activeOrdersList]);
 
   const delayedCount = useMemo(() => {
-    return orders.filter(o => isOrderDelayed(o)).length;
-  }, [orders, now]);
+    return activeOrdersList.filter(o => isOrderDelayed(o)).length;
+  }, [activeOrdersList, now]);
 
   const completedCount = useMemo(() => {
-    return orders.filter(o => o.orderStatus === 'CONCLUIDO').length;
+    return activeOrdersList.filter(o => o.orderStatus === 'CONCLUIDO').length;
+  }, [activeOrdersList]);
+
+  const cancelledCount = useMemo(() => {
+    return orders.filter(o => o.orderStatus === 'CANCELADO').length;
   }, [orders]);
 
-  // Filtered orders list
+  // Filtered orders list for KDS
   const filteredOrders = useMemo(() => {
     return orders.filter(order => {
-      // Filter by category
+      const isCancelled = order.orderStatus === 'CANCELADO';
+
+      // Specific filter tabs
+      if (selectedFilter === 'cancelados') {
+        if (!isCancelled) return false;
+      } else {
+        // All other tabs hide cancelled orders unless specifically looking at cancelados
+        if (isCancelled && selectedFilter !== 'todos') return false;
+      }
+
       if (selectedFilter === 'atrasados' && !isOrderDelayed(order)) return false;
       if (selectedFilter === 'pendentes' && order.orderStatus !== 'RECEBIDO_COZINHA') return false;
       if (selectedFilter === 'preparo' && order.orderStatus !== 'EM_PREPARO') return false;
       if (selectedFilter === 'entrega' && order.orderStatus !== 'SAIU_ENTREGA') return false;
       if (selectedFilter === 'concluidos' && order.orderStatus !== 'CONCLUIDO') return false;
-      if (selectedFilter === 'nao_pagos' && order.paymentStatus === 'PAGO_APROVADO') return false;
+      if (selectedFilter === 'nao_pagos' && (order.paymentStatus === 'PAGO_APROVADO' || isCancelled)) return false;
 
-      // Filter by search query
+      // Search query
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
-        const matchesId = order.orderId.toLowerCase().includes(q);
-        const matchesName = order.customerName.toLowerCase().includes(q);
+        const matchesId = (order.orderId || '').toLowerCase().includes(q);
+        const matchesName = (order.customerName || '').toLowerCase().includes(q);
+        const matchesPhone = (order.customerPhone || '').replace(/\D/g, '').includes(q.replace(/\D/g, ''));
         const matchesDistrict = (order.district || '').toLowerCase().includes(q);
-        return matchesId || matchesName || matchesDistrict;
+        return matchesId || matchesName || matchesPhone || matchesDistrict;
       }
 
       return true;
     });
   }, [orders, selectedFilter, searchQuery, now]);
 
+  // Print ticket helper
   const handlePrintOrder = (order) => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
@@ -174,17 +238,19 @@ export function AdminDashboard({ orders, onUpdateOrderStatus, onUpdatePaymentSta
           <h2>EL SHADDAY DELIVERY</h2>
           <h3>COMANDA #${order.orderId}</h3>
           <div>Data: ${new Date(order.createdAt).toLocaleString('pt-BR')}</div>
+          ${order.orderStatus === 'CANCELADO' ? '<div style="color:red;font-weight:bold;font-size:16px;text-align:center;">*** PEDIDO CANCELADO ***</div>' : ''}
           <hr />
           <div><span class="bold">Cliente:</span> ${order.customerName}</div>
+          ${order.customerPhone ? `<div><span class="bold">WhatsApp:</span> ${order.customerPhone}</div>` : ''}
           <div><span class="bold">Tipo:</span> ${order.deliveryType === 'delivery' ? 'ENTREGA' : 'RETIRADA NO BALCÃO'}</div>
           ${order.deliveryType === 'delivery' ? `
             <div><span class="bold">Bairro:</span> ${order.district}</div>
-            <div><span class="bold">End:</span> ${order.address}, Nº ${order.number || 'S/N'}</div>
+            <div><span class="bold">End:</span> ${order.address}${order.number ? `, Nº ${order.number}` : ''}</div>
             ${order.reference ? `<div><span class="bold">Ref:</span> ${order.reference}</div>` : ''}
           ` : ''}
           <hr />
           <div class="bold">ITENS DO PEDIDO:</div>
-          ${order.items.map(it => `
+          ${(order.items || []).map(it => `
             <div class="item">
               <div class="bold">${it.quantity}x ${it.name}</div>
               ${it.isCustomBox && it.salgadasDetails ? `<div>- Salg: ${Object.entries(it.salgadasDetails).map(([k,v]) => `${v}x ${k}`).join(', ')}</div>` : ''}
@@ -193,12 +259,12 @@ export function AdminDashboard({ orders, onUpdateOrderStatus, onUpdatePaymentSta
             </div>
           `).join('')}
           <hr />
-          <div>Subtotal: R$ ${order.subtotal.toFixed(2)}</div>
-          <div>Taxa Entrega: R$ ${order.deliveryFee.toFixed(2)}</div>
-          <div class="bold" style="font-size: 15px;">TOTAL: R$ ${order.total.toFixed(2)}</div>
+          <div>Subtotal: R$ ${(order.subtotal || 0).toFixed(2)}</div>
+          <div>Taxa Entrega: R$ ${(order.deliveryFee || 0).toFixed(2)}</div>
+          <div class="bold" style="font-size: 15px;">TOTAL: R$ ${(order.total || 0).toFixed(2)}</div>
           <hr />
           <div><span class="bold">Pagamento:</span> ${order.paymentMethod}</div>
-          <div><span class="bold">Status:</span> ${order.paymentStatus === 'PAGO_APROVADO' ? 'PAGO NO SITE' : 'RECEBER NA ENTREGA'}</div>
+          <div><span class="bold">Status:</span> ${order.paymentStatus === 'PAGO_APROVADO' ? 'PAGO' : 'A RECEBER NA ENTREGA'}</div>
           <hr />
           <div style="text-align: center; font-size: 11px;">Ariquemes - RO • (69) 99222-8682</div>
         </body>
@@ -209,6 +275,229 @@ export function AdminDashboard({ orders, onUpdateOrderStatus, onUpdatePaymentSta
     printWindow.print();
   };
 
+  // WhatsApp Message Launcher
+  const handleOpenWhatsAppModal = (order, defaultType = 'pronto') => {
+    let rawPhone = (order.customerPhone || '').replace(/\D/g, '');
+    let initialMessage = '';
+
+    const name = order.customerName || 'Cliente';
+    const id = order.orderId;
+    const isBalcao = order.deliveryType === 'balcao';
+
+    if (defaultType === 'entrega') {
+      initialMessage = `Olá ${name}! 🛵💨 Seu pedido #${id} da El Shadday acabou de sair para entrega! O nosso motoboy já está a caminho do seu endereço. Bom apetite! 🍕`;
+    } else if (defaultType === 'pronto') {
+      if (isBalcao) {
+        initialMessage = `Olá ${name}! 🍕✨ Seu pedido #${id} da El Shadday já está quentinho e PRONTO no balcão esperando por você! Pode vir retirar na Rua Maceió, 2333 - Setor 03.`;
+      } else {
+        initialMessage = `Olá ${name}! 🍕✨ Seu pedido #${id} da El Shadday já ficou pronto e está sendo preparado para o envio!`;
+      }
+    } else if (defaultType === 'preparo') {
+      initialMessage = `Olá ${name}! 👨‍🍳🔥 Passando para avisar que o seu pedido #${id} já está no forno sendo preparado com muito carinho pela equipe El Shadday!`;
+    } else if (defaultType === 'cancelado') {
+      initialMessage = `Olá ${name}, informamos que o seu pedido #${id} foi cancelado no sistema da El Shadday. Qualquer dúvida, estamos à disposição por aqui!`;
+    }
+
+    setWhatsappModalData({
+      order,
+      phone: rawPhone,
+      message: initialMessage,
+      activeTemplate: defaultType
+    });
+  };
+
+  const handleApplyWhatsAppTemplate = (type) => {
+    if (!whatsappModalData) return;
+    const { order } = whatsappModalData;
+    const name = order.customerName || 'Cliente';
+    const id = order.orderId;
+    const isBalcao = order.deliveryType === 'balcao';
+
+    let msg = '';
+    if (type === 'entrega') {
+      msg = `Olá ${name}! 🛵💨 Seu pedido #${id} da El Shadday acabou de sair para entrega! O nosso motoboy já está a caminho do seu endereço. Bom apetite! 🍕`;
+    } else if (type === 'pronto') {
+      if (isBalcao) {
+        msg = `Olá ${name}! 🍕✨ Seu pedido #${id} da El Shadday já está quentinho e PRONTO no balcão esperando por você! Pode vir retirar na Rua Maceió, 2333 - Setor 03.`;
+      } else {
+        msg = `Olá ${name}! 🍕✨ Seu pedido #${id} da El Shadday já ficou pronto e quentinho!`;
+      }
+    } else if (type === 'preparo') {
+      msg = `Olá ${name}! 👨‍🍳🔥 Passando para avisar que seu pedido #${id} já está no forno sendo preparado com muito capricho pela equipe El Shadday!`;
+    } else if (type === 'cancelado') {
+      msg = `Olá ${name}, informamos que seu pedido #${id} foi cancelado no sistema da El Shadday. Qualquer dúvida, estamos à disposição por aqui!`;
+    }
+
+    setWhatsappModalData(prev => ({
+      ...prev,
+      message: msg,
+      activeTemplate: type
+    }));
+  };
+
+  const handleSendWhatsAppMessage = () => {
+    if (!whatsappModalData) return;
+    let digits = (whatsappModalData.phone || '').replace(/\D/g, '');
+    if (!digits) {
+      alert('Por favor, informe o número de WhatsApp do cliente!');
+      return;
+    }
+    if (digits.length === 10 || digits.length === 11) {
+      digits = '55' + digits;
+    }
+    const url = `https://wa.me/${digits}?text=${encodeURIComponent(whatsappModalData.message)}`;
+    window.open(url, '_blank');
+    setWhatsappModalData(null);
+  };
+
+  // Cancel / Delete Order Execution
+  const handleConfirmCancel = () => {
+    if (!cancelModalOrder) return;
+    if (onCancelOrder) {
+      onCancelOrder(cancelModalOrder.orderId, cancelReason);
+    } else {
+      onUpdateOrderStatus(cancelModalOrder.orderId, 'CANCELADO');
+    }
+    setCancelModalOrder(null);
+    setCancelReason('');
+  };
+
+  const handleConfirmDelete = () => {
+    if (!cancelModalOrder) return;
+    if (onDeleteOrder) {
+      onDeleteOrder(cancelModalOrder.orderId);
+    }
+    setCancelModalOrder(null);
+    setCancelReason('');
+  };
+
+  // PDV Helpers
+  const pdvFilteredProducts = useMemo(() => {
+    let list = PRODUCTS;
+    if (pdvCategory !== 'todos') {
+      list = list.filter(p => p.categoryId === pdvCategory);
+    }
+    if (pdvSearch.trim()) {
+      const q = pdvSearch.toLowerCase().trim();
+      list = list.filter(p => 
+        p.name.toLowerCase().includes(q) || 
+        (p.description || '').toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [pdvCategory, pdvSearch]);
+
+  const pdvCartSubtotal = useMemo(() => {
+    return pdvCart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+  }, [pdvCart]);
+
+  const pdvDeliveryFee = pdvDeliveryType === 'delivery' ? (pdvDistrict?.price || 8) : 0;
+  const pdvCartTotal = pdvCartSubtotal + pdvDeliveryFee;
+
+  const handleAddProductToPDV = (product, quantity = 1) => {
+    setPdvValidationError('');
+    setPdvCart(prev => {
+      const existing = prev.find(i => i.id === product.id);
+      if (existing) {
+        return prev.map(i => i.id === product.id ? { ...i, quantity: i.quantity + quantity } : i);
+      }
+      return [...prev, {
+        id: product.id,
+        name: product.name,
+        price: product.price,
+        quantity: quantity,
+        notes: '',
+        isBox: product.isBox,
+        totalCount: product.totalCount,
+        image: product.image
+      }];
+    });
+  };
+
+  const handleUpdatePDVItemQty = (id, delta) => {
+    setPdvCart(prev => {
+      return prev.map(item => {
+        if (item.id === id) {
+          const newQty = item.quantity + delta;
+          return newQty > 0 ? { ...item, quantity: newQty } : null;
+        }
+        return item;
+      }).filter(Boolean);
+    });
+  };
+
+  const handleRemovePDVItem = (id) => {
+    setPdvCart(prev => prev.filter(i => i.id !== id));
+  };
+
+  const handleLaunchPDVOrder = () => {
+    setPdvValidationError('');
+
+    if (pdvCart.length === 0) {
+      setPdvValidationError('Adicione pelo menos 1 item ao pedido no PDV!');
+      return;
+    }
+
+    if (!pdvCustomerName.trim()) {
+      setPdvValidationError('Por favor, informe o nome do cliente!');
+      return;
+    }
+
+    if (pdvDeliveryType === 'delivery' && !pdvAddress.trim()) {
+      setPdvValidationError('Informe o endereço de entrega do cliente!');
+      return;
+    }
+
+    const orderId = `ES-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    let paymentMethodText = 'PIX';
+    if (pdvPaymentMethod === 'dinheiro') {
+      paymentMethodText = `Dinheiro ${pdvCashChange ? `(Troco p/ R$ ${pdvCashChange})` : '(Sem troco)'}`;
+    } else if (pdvPaymentMethod === 'debito') {
+      paymentMethodText = 'Cartão de Débito (Balcão / Maquininha)';
+    } else if (pdvPaymentMethod === 'credito') {
+      paymentMethodText = 'Cartão de Crédito (Balcão / Maquininha)';
+    }
+
+    const newOrder = {
+      orderId,
+      createdAt: new Date().toISOString(),
+      customerName: pdvCustomerName.trim(),
+      customerPhone: pdvCustomerPhone.trim(),
+      deliveryType: pdvDeliveryType,
+      district: pdvDeliveryType === 'delivery' ? pdvDistrict.name : 'Balcão (Setor 03)',
+      address: pdvDeliveryType === 'delivery' ? pdvAddress.trim() : 'Rua Maceió, 2333 - Setor 03, Ariquemes - RO',
+      number: pdvDeliveryType === 'delivery' ? pdvNumber.trim() : '',
+      reference: pdvDeliveryType === 'delivery' ? pdvReference.trim() : '',
+      items: pdvCart,
+      subtotal: pdvCartSubtotal,
+      deliveryFee: pdvDeliveryFee,
+      total: pdvCartTotal,
+      paymentMethod: paymentMethodText,
+      paymentStatus: pdvIsPaid ? 'PAGO_APROVADO' : 'PENDENTE',
+      orderStatus: 'RECEBIDO_COZINHA',
+      source: 'PDV_BALCAO',
+      orderNotes: pdvOrderNotes.trim()
+    };
+
+    if (onCreateKitchenOrder) {
+      onCreateKitchenOrder(newOrder);
+    }
+
+    playChime(false);
+    setPdvSuccessOrder(newOrder);
+
+    // Reset PDV form
+    setPdvCart([]);
+    setPdvCustomerName('');
+    setPdvCustomerPhone('');
+    setPdvAddress('');
+    setPdvNumber('');
+    setPdvReference('');
+    setPdvCashChange('');
+    setPdvOrderNotes('');
+  };
+
   return (
     <div className="min-h-screen bg-dark-950 text-slate-100 flex flex-col font-sans">
       
@@ -217,11 +506,11 @@ export function AdminDashboard({ orders, onUpdateOrderStatus, onUpdatePaymentSta
         <div className="bg-gradient-to-r from-emerald-600 via-emerald-500 to-emerald-600 text-dark-950 font-black px-4 py-3 flex items-center justify-between shadow-2xl animate-bounce-subtle z-50 sticky top-0">
           <div className="flex items-center gap-2 text-xs sm:text-sm">
             <BellRing className="w-5 h-5 animate-pulse" />
-            <span>NOVO PEDIDO CHEGOU NA COZINHA! #{newOrderAlert.orderId} - {newOrderAlert.customerName} (R$ {newOrderAlert.total.toFixed(2).replace('.', ',')})</span>
+            <span>NOVO PEDIDO CHEGOU NA COZINHA! #{newOrderAlert.orderId} - {newOrderAlert.customerName} (R$ {(newOrderAlert.total || 0).toFixed(2).replace('.', ',')})</span>
           </div>
           <button
             onClick={() => setNewOrderAlert(null)}
-            className="text-xs bg-dark-950 text-white px-2.5 py-1 rounded-lg"
+            className="text-xs bg-dark-950 text-white px-2.5 py-1 rounded-lg cursor-pointer"
           >
             Dispensar
           </button>
@@ -229,460 +518,1352 @@ export function AdminDashboard({ orders, onUpdateOrderStatus, onUpdatePaymentSta
       )}
 
       {/* Top Navbar */}
-      <header className="bg-dark-900 border-b border-dark-800 sticky top-0 z-40 px-4 sm:px-6 py-3.5 shadow-md">
+      <header className="bg-dark-900 border-b border-dark-800 sticky top-0 z-40 px-3 sm:px-6 py-3 shadow-md">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
           
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-brand-gold/20 flex items-center justify-center text-brand-gold border border-brand-gold/30">
+            <div className="w-10 h-10 rounded-2xl bg-brand-gold/20 flex items-center justify-center text-brand-gold border border-brand-gold/30">
               <ChefHat className="w-6 h-6" />
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="font-display font-extrabold text-base sm:text-lg text-white">
-                  Painel de Controle da Pizzaria
+                  Painel de Controle El Shadday
                 </h1>
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 animate-pulse">
-                  🟢 Servidor Sincronizado
+                  🟢 KDS Sincronizado
                 </span>
               </div>
               <p className="text-[11px] text-slate-400">
-                El Shadday Ariquemes • Gestão de Cozinha (KDS) & Delivery
+                Gestão da Cozinha, Entregas & PDV de Balcão
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            {/* Audio activation and test button */}
+          {/* Quick Header Actions */}
+          <div className="flex items-center gap-2 flex-wrap">
             <button
               onClick={handleUnlockAndTestAudio}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
                 isAudioUnlocked
                   ? 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/40'
                   : 'bg-gradient-to-r from-brand-gold to-amber-400 text-dark-950 font-black animate-pulse shadow-glow-gold'
               }`}
-              title="Clique para ativar e testar o aviso sonoro da cozinha"
+              title="Ativar/testar alarme sonoro da cozinha"
             >
-              <BellRing className="w-4 h-4" />
-              <span>{isAudioUnlocked ? '🔔 Som: Ativo (Testar)' : '🔔 ATIVAR SOM DO ALERTA'}</span>
+              <BellRing className="w-3.5 h-3.5" />
+              <span>{isAudioUnlocked ? 'Som Ativo' : 'ATIVAR SOM'}</span>
             </button>
 
             <button
               onClick={onBackToSite}
-              className="px-3.5 py-2 rounded-xl bg-dark-800 hover:bg-dark-750 text-slate-300 font-semibold text-xs border border-dark-700 flex items-center gap-1.5 transition-colors cursor-pointer"
+              className="px-3 py-1.5 rounded-xl bg-dark-800 hover:bg-dark-750 text-slate-300 font-semibold text-xs border border-dark-700 flex items-center gap-1.5 transition-colors cursor-pointer"
             >
-              <ArrowLeft className="w-4 h-4" />
-              <span>Ver Site / Cardápio</span>
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Ver Site</span>
             </button>
 
             <button
               onClick={onLogout}
-              className="px-3.5 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 font-semibold text-xs border border-red-500/30 flex items-center gap-1.5 transition-colors cursor-pointer"
+              className="px-3 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 font-semibold text-xs border border-red-500/30 flex items-center gap-1.5 transition-colors cursor-pointer"
               title="Sair do painel administrativo"
             >
-              <LogOut className="w-4 h-4" />
+              <LogOut className="w-3.5 h-3.5" />
               <span>Sair</span>
             </button>
           </div>
 
         </div>
+
+        {/* Navigation Tabs: KDS vs PDV */}
+        <div className="max-w-7xl mx-auto mt-3 flex items-center gap-2 border-t border-dark-800 pt-2.5">
+          <button
+            type="button"
+            onClick={() => setActiveAdminTab('kds')}
+            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all cursor-pointer ${
+              activeAdminTab === 'kds'
+                ? 'bg-brand-gold text-dark-950 shadow-glow-gold font-black'
+                : 'bg-dark-800 text-slate-300 hover:bg-dark-750 hover:text-white border border-dark-750'
+            }`}
+          >
+            <ChefHat className="w-4 h-4" />
+            <span>Pedidos da Cozinha (KDS)</span>
+            <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+              activeAdminTab === 'kds' ? 'bg-dark-950 text-brand-gold' : 'bg-dark-900 text-slate-400'
+            }`}>
+              {activeOrdersList.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveAdminTab('pdv')}
+            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all cursor-pointer ${
+              activeAdminTab === 'pdv'
+                ? 'bg-brand-gold text-dark-950 shadow-glow-gold font-black'
+                : 'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 border border-emerald-500/40'
+            }`}
+          >
+            <Plus className="w-4 h-4 stroke-[3]" />
+            <span>Novo Pedido / PDV Balcão</span>
+            {pdvCart.length > 0 && (
+              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-500 text-dark-950 font-black">
+                {pdvCart.length} itens
+              </span>
+            )}
+          </button>
+        </div>
       </header>
 
       {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-5 space-y-6">
         
-        {/* KPI Summary Cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 sm:gap-4">
-          
-          {/* Card 1: Faturamento */}
-          <div className="p-4 rounded-2xl bg-dark-900 border border-dark-800 shadow-md flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center flex-shrink-0">
-              <DollarSign className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="text-[11px] text-slate-400 font-medium">Faturamento Total</div>
-              <div className="text-lg sm:text-xl font-black text-white">
-                R$ {totalRevenue.toFixed(2).replace('.', ',')}
-              </div>
-            </div>
-          </div>
-
-          {/* Card 2: Pedidos Pendentes */}
-          <div className="p-4 rounded-2xl bg-dark-900 border border-dark-800 shadow-md flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-500/15 text-amber-400 flex items-center justify-center flex-shrink-0">
-              <Clock className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="text-[11px] text-slate-400 font-medium">Novos / Pendentes</div>
-              <div className="text-lg sm:text-xl font-black text-amber-400">
-                {pendingCount}
-              </div>
-            </div>
-          </div>
-
-          {/* Card 3: Na Cozinha */}
-          <div className="p-4 rounded-2xl bg-dark-900 border border-dark-800 shadow-md flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-brand-gold/15 text-brand-gold flex items-center justify-center flex-shrink-0">
-              <Flame className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="text-[11px] text-slate-400 font-medium">No Forno / Preparo</div>
-              <div className="text-lg sm:text-xl font-black text-brand-gold">
-                {inPrepCount}
-              </div>
-            </div>
-          </div>
-
-          {/* Card 4: EM ATRASO (ALERT!) */}
-          <div className={`p-4 rounded-2xl border shadow-md flex items-center gap-3 ${
-            delayedCount > 0 
-              ? 'bg-red-500/15 border-red-500/50 text-red-400 animate-pulse' 
-              : 'bg-dark-900 border-dark-800 text-slate-400'
-          }`}>
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
-              delayedCount > 0 ? 'bg-red-500 text-dark-950 font-bold' : 'bg-dark-800 text-slate-500'
-            }`}>
-              <AlertTriangle className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="text-[11px] font-bold uppercase tracking-wider">
-                {delayedCount > 0 ? '🚨 Em Atraso (+35 min)' : 'Em Atraso'}
-              </div>
-              <div className="text-lg sm:text-xl font-black text-white">
-                {delayedCount}
-              </div>
-            </div>
-          </div>
-
-          {/* Card 5: Concluídos */}
-          <div className="p-4 rounded-2xl bg-dark-900 border border-dark-800 shadow-md flex items-center gap-3 col-span-2 sm:col-span-1">
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center flex-shrink-0">
-              <CheckCircle2 className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="text-[11px] text-slate-400 font-medium">Entregues / Prontos</div>
-              <div className="text-lg sm:text-xl font-black text-white">
-                {completedCount}
-              </div>
-            </div>
-          </div>
-
-        </div>
-
-        {/* Filter Bar & Search */}
-        <div className="p-4 rounded-2xl bg-dark-900 border border-dark-800 space-y-3">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+        {/* ============================================================== */}
+        {/* VIEW 1: KITCHEN DISPLAY SYSTEM (KDS) & ORDERS FEED             */}
+        {/* ============================================================== */}
+        {activeAdminTab === 'kds' && (
+          <div className="space-y-5 animate-fade-in">
             
-            {/* Filter buttons */}
-            <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto pb-1 no-scrollbar">
-              <button
-                onClick={() => setSelectedFilter('todos')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                  selectedFilter === 'todos' 
-                    ? 'bg-brand-gold text-dark-950' 
-                    : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
-                }`}
-              >
-                Todos ({orders.length})
-              </button>
+            {/* KPI Summary Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 sm:gap-4">
+              
+              {/* Card 1: Faturamento */}
+              <div className="p-3.5 sm:p-4 rounded-2xl bg-dark-900 border border-dark-800 shadow-md flex items-center gap-3">
+                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center flex-shrink-0">
+                  <DollarSign className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="text-[10px] sm:text-[11px] text-slate-400 font-medium">Faturamento Total</div>
+                  <div className="text-base sm:text-xl font-black text-white">
+                    R$ {totalRevenue.toFixed(2).replace('.', ',')}
+                  </div>
+                </div>
+              </div>
 
-              <button
-                onClick={() => setSelectedFilter('atrasados')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1 ${
-                  selectedFilter === 'atrasados' 
-                    ? 'bg-red-500 text-white font-black' 
-                    : 'bg-red-500/15 hover:bg-red-500/25 text-red-400 border border-red-500/30'
-                }`}
-              >
-                <AlertTriangle className="w-3.5 h-3.5" />
-                <span>Em Atraso ({delayedCount})</span>
-              </button>
+              {/* Card 2: Pedidos Pendentes */}
+              <div className="p-3.5 sm:p-4 rounded-2xl bg-dark-900 border border-dark-800 shadow-md flex items-center gap-3">
+                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-500/15 text-amber-400 flex items-center justify-center flex-shrink-0">
+                  <Clock className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="text-[10px] sm:text-[11px] text-slate-400 font-medium">Novos / Pendentes</div>
+                  <div className="text-base sm:text-xl font-black text-amber-400">
+                    {pendingCount}
+                  </div>
+                </div>
+              </div>
 
-              <button
-                onClick={() => setSelectedFilter('pendentes')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                  selectedFilter === 'pendentes' 
-                    ? 'bg-amber-500 text-dark-950 font-black' 
-                    : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
-                }`}
-              >
-                Pendentes ({pendingCount})
-              </button>
+              {/* Card 3: Na Cozinha */}
+              <div className="p-3.5 sm:p-4 rounded-2xl bg-dark-900 border border-dark-800 shadow-md flex items-center gap-3">
+                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-brand-gold/15 text-brand-gold flex items-center justify-center flex-shrink-0">
+                  <Flame className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="text-[10px] sm:text-[11px] text-slate-400 font-medium">No Forno / Preparo</div>
+                  <div className="text-base sm:text-xl font-black text-brand-gold">
+                    {inPrepCount}
+                  </div>
+                </div>
+              </div>
 
-              <button
-                onClick={() => setSelectedFilter('preparo')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                  selectedFilter === 'preparo' 
-                    ? 'bg-brand-gold text-dark-950 font-black' 
-                    : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
-                }`}
-              >
-                No Forno ({inPrepCount})
-              </button>
+              {/* Card 4: EM ATRASO (ALERT!) */}
+              <div className={`p-3.5 sm:p-4 rounded-2xl border shadow-md flex items-center gap-3 ${
+                delayedCount > 0 
+                  ? 'bg-red-500/15 border-red-500/50 text-red-400 animate-pulse' 
+                  : 'bg-dark-900 border-dark-800 text-slate-400'
+              }`}>
+                <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                  delayedCount > 0 ? 'bg-red-500 text-dark-950 font-bold' : 'bg-dark-800 text-slate-500'
+                }`}>
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider">
+                    {delayedCount > 0 ? '🚨 Atraso (+35 min)' : 'Em Atraso'}
+                  </div>
+                  <div className="text-base sm:text-xl font-black text-white">
+                    {delayedCount}
+                  </div>
+                </div>
+              </div>
 
-              <button
-                onClick={() => setSelectedFilter('entrega')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                  selectedFilter === 'entrega' 
-                    ? 'bg-blue-500 text-white font-black' 
-                    : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
-                }`}
-              >
-                Saiu p/ Entrega
-              </button>
+              {/* Card 5: Concluídos */}
+              <div className="p-3.5 sm:p-4 rounded-2xl bg-dark-900 border border-dark-800 shadow-md flex items-center gap-3 col-span-2 sm:col-span-1">
+                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center flex-shrink-0">
+                  <CheckCircle2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="text-[10px] sm:text-[11px] text-slate-400 font-medium">Entregues / Prontos</div>
+                  <div className="text-base sm:text-xl font-black text-white">
+                    {completedCount}
+                  </div>
+                </div>
+              </div>
 
-              <button
-                onClick={() => setSelectedFilter('nao_pagos')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                  selectedFilter === 'nao_pagos' 
-                    ? 'bg-amber-400 text-dark-950 font-black' 
-                    : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
-                }`}
-              >
-                Dinheiro / A Cobrar
-              </button>
             </div>
 
-            {/* Search input */}
-            <div className="relative w-full sm:w-64">
-              <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-              <input
-                type="text"
-                placeholder="Buscar por Nº, Nome ou Bairro..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-dark-950 border border-dark-750 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-brand-gold"
-              />
-            </div>
-
-          </div>
-        </div>
-
-        {/* Orders Feed */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between text-xs text-slate-400 px-1">
-            <span>Mostrando <strong>{filteredOrders.length}</strong> pedidos</span>
-            <span className="flex items-center gap-1 text-[11px] text-brand-gold">
-              <RefreshCw className="w-3 h-3 animate-spin-slow" />
-              Sincronização em tempo real ativa
-            </span>
-          </div>
-
-          {filteredOrders.length === 0 ? (
-            <div className="p-12 rounded-3xl bg-dark-900 border border-dark-800 text-center space-y-2">
-              <Package className="w-12 h-12 text-slate-600 mx-auto" />
-              <div className="text-sm font-bold text-slate-300">Nenhum pedido encontrado nesta seção.</div>
-              <p className="text-xs text-slate-500">Faça um novo pedido no site ou mude os filtros acima.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {filteredOrders.map((order) => {
-                const elapsedMin = getElapsedMinutes(order.createdAt);
-                const isDelayed = isOrderDelayed(order);
-                const isPaid = order.paymentStatus === 'PAGO_APROVADO';
-
-                return (
-                  <div
-                    key={order.orderId}
-                    className={`rounded-2xl border p-4 sm:p-5 flex flex-col justify-between transition-all shadow-md ${
-                      isDelayed
-                        ? 'bg-red-950/20 border-red-500/60 ring-1 ring-red-500/40'
-                        : order.orderStatus === 'CONCLUIDO'
-                        ? 'bg-dark-900/60 border-dark-800 opacity-70'
-                        : 'bg-dark-900 border-dark-800 hover:border-brand-gold/50'
+            {/* Filter Bar & Search */}
+            <div className="p-3.5 sm:p-4 rounded-2xl bg-dark-900 border border-dark-800 space-y-3">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+                
+                {/* Filter buttons */}
+                <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto pb-1 no-scrollbar">
+                  <button
+                    onClick={() => setSelectedFilter('todos')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                      selectedFilter === 'todos' 
+                        ? 'bg-brand-gold text-dark-950 font-black' 
+                        : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
                     }`}
                   >
-                    <div>
-                      {/* Top Header of the card */}
-                      <div className="flex items-start justify-between gap-2 border-b border-dark-800 pb-3">
+                    Ativos ({activeOrdersList.length})
+                  </button>
+
+                  <button
+                    onClick={() => setSelectedFilter('atrasados')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1 ${
+                      selectedFilter === 'atrasados' 
+                        ? 'bg-red-500 text-white font-black' 
+                        : 'bg-red-500/15 hover:bg-red-500/25 text-red-400 border border-red-500/30'
+                    }`}
+                  >
+                    <AlertTriangle className="w-3.5 h-3.5" />
+                    <span>Em Atraso ({delayedCount})</span>
+                  </button>
+
+                  <button
+                    onClick={() => setSelectedFilter('pendentes')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                      selectedFilter === 'pendentes' 
+                        ? 'bg-amber-500 text-dark-950 font-black' 
+                        : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
+                    }`}
+                  >
+                    Pendentes ({pendingCount})
+                  </button>
+
+                  <button
+                    onClick={() => setSelectedFilter('preparo')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                      selectedFilter === 'preparo' 
+                        ? 'bg-brand-gold text-dark-950 font-black' 
+                        : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
+                    }`}
+                  >
+                    No Forno ({inPrepCount})
+                  </button>
+
+                  <button
+                    onClick={() => setSelectedFilter('entrega')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                      selectedFilter === 'entrega' 
+                        ? 'bg-blue-500 text-white font-black' 
+                        : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
+                    }`}
+                  >
+                    Saiu p/ Entrega ({inDeliveryCount})
+                  </button>
+
+                  <button
+                    onClick={() => setSelectedFilter('concluidos')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                      selectedFilter === 'concluidos' 
+                        ? 'bg-emerald-500 text-dark-950 font-black' 
+                        : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
+                    }`}
+                  >
+                    Prontos / Entregues ({completedCount})
+                  </button>
+
+                  <button
+                    onClick={() => setSelectedFilter('cancelados')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1 ${
+                      selectedFilter === 'cancelados' 
+                        ? 'bg-red-700 text-white font-black' 
+                        : 'bg-red-950/40 text-red-400 hover:bg-red-950/70 border border-red-800/40'
+                    }`}
+                  >
+                    <XCircle className="w-3.5 h-3.5" />
+                    <span>Cancelados ({cancelledCount})</span>
+                  </button>
+                </div>
+
+                {/* Search input */}
+                <div className="relative w-full sm:w-64">
+                  <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    placeholder="Buscar por Nº, Nome ou Bairro..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-dark-950 border border-dark-750 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-brand-gold"
+                  />
+                </div>
+
+              </div>
+            </div>
+
+            {/* Orders Feed */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between text-xs text-slate-400 px-1">
+                <span>Mostrando <strong>{filteredOrders.length}</strong> pedidos</span>
+                <span className="flex items-center gap-1 text-[11px] text-brand-gold">
+                  <RefreshCw className="w-3 h-3 animate-spin-slow" />
+                  Sincronização em tempo real ativa
+                </span>
+              </div>
+
+              {filteredOrders.length === 0 ? (
+                <div className="p-12 rounded-3xl bg-dark-900 border border-dark-800 text-center space-y-2">
+                  <Package className="w-12 h-12 text-slate-600 mx-auto" />
+                  <div className="text-sm font-bold text-slate-300">Nenhum pedido encontrado nesta seção.</div>
+                  <p className="text-xs text-slate-500">Mude os filtros acima ou crie um novo pedido no PDV de Balcão!</p>
+                  <button
+                    onClick={() => setActiveAdminTab('pdv')}
+                    className="mt-2 px-4 py-2 rounded-xl bg-brand-gold hover:bg-amber-400 text-dark-950 font-black text-xs inline-flex items-center gap-1.5 cursor-pointer shadow-glow-gold"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Criar Pedido no PDV</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {filteredOrders.map((order) => {
+                    const elapsedMin = getElapsedMinutes(order.createdAt);
+                    const isDelayed = isOrderDelayed(order);
+                    const isCancelled = order.orderStatus === 'CANCELADO';
+                    const isPaid = order.paymentStatus === 'PAGO_APROVADO';
+
+                    return (
+                      <div
+                        key={order.orderId}
+                        className={`rounded-2xl border p-4 sm:p-5 flex flex-col justify-between transition-all shadow-md ${
+                          isCancelled
+                            ? 'bg-red-950/15 border-red-900/50 opacity-80'
+                            : isDelayed
+                            ? 'bg-red-950/20 border-red-500/60 ring-1 ring-red-500/40'
+                            : order.orderStatus === 'CONCLUIDO'
+                            ? 'bg-dark-900/60 border-dark-800 opacity-75'
+                            : 'bg-dark-900 border-dark-800 hover:border-brand-gold/50'
+                        }`}
+                      >
                         <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-display font-black text-lg text-white">
-                              #{order.orderId}
-                            </span>
-
-                            {/* Delay warning pill */}
-                            {isDelayed && (
-                              <span className="px-2 py-0.5 rounded-full bg-red-500 text-white font-black text-[10px] uppercase flex items-center gap-1 animate-pulse">
-                                <AlertTriangle className="w-3 h-3" />
-                                ATRASO ({elapsedMin} min)
-                              </span>
-                            )}
-
-                            {!isDelayed && (
-                              <span className="text-[11px] text-slate-400 flex items-center gap-1 font-mono">
-                                <Clock className="w-3 h-3 text-brand-gold" />
-                                {elapsedMin === 0 ? 'Agora mesmo' : `há ${elapsedMin} min`}
-                              </span>
-                            )}
-                          </div>
-
-                          <div className="text-xs font-bold text-white mt-1 flex items-center gap-1">
-                            <User className="w-3.5 h-3.5 text-brand-gold" />
-                            <span>{order.customerName}</span>
-                          </div>
-                        </div>
-
-                        {/* Payment Status Pill */}
-                        <div className="text-right">
-                          {isPaid ? (
-                            <span className="px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/40 text-emerald-400 font-bold text-[11px] inline-flex items-center gap-1">
-                              <CheckCircle2 className="w-3 h-3" />
-                              <span>PAGO NO SITE</span>
-                            </span>
-                          ) : (
-                            <div className="space-y-1">
-                              <span className="px-2.5 py-1 rounded-lg bg-amber-500/15 border border-amber-500/40 text-amber-400 font-bold text-[11px] inline-flex items-center gap-1">
-                                <AlertTriangle className="w-3 h-3" />
-                                <span>COBRAR NA ENTREGA</span>
-                              </span>
-                              <button
-                                onClick={() => onUpdatePaymentStatus(order.orderId, 'PAGO_APROVADO')}
-                                className="text-[10px] text-emerald-400 hover:text-emerald-300 underline block text-right cursor-pointer"
-                              >
-                                Marcar como Pago
-                              </button>
-                            </div>
-                          )}
-                          <div className="text-[10px] text-slate-400 mt-1">
-                            {order.paymentMethod}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Delivery address & info */}
-                      <div className="py-2.5 text-xs text-slate-300 space-y-1">
-                        <div className="flex items-center gap-1.5">
-                          <MapPin className="w-3.5 h-3.5 text-brand-gold flex-shrink-0" />
-                          <span>
-                            <strong>{order.deliveryType === 'delivery' ? order.district : 'Retirada no Balcão (Setor 03)'}</strong>
-                            {order.deliveryType === 'delivery' && ` • ${order.address}, Nº ${order.number || 'S/N'}`}
-                          </span>
-                        </div>
-                        {order.reference && (
-                          <div className="text-[11px] text-brand-goldLight pl-5">
-                            Ponto de Referência: {order.reference}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Items List (Kitchen preparation list) */}
-                      <div className="bg-dark-950 p-3 rounded-xl border border-dark-850 space-y-2 mt-1">
-                        <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                          O que precisa ser feito:
-                        </div>
-                        <div className="space-y-1.5 text-xs">
-                          {order.items.map((it, idx) => (
-                            <div key={idx} className="border-b border-dark-900 pb-1 last:border-0 last:pb-0">
-                              <div className="font-bold text-white flex items-center justify-between">
-                                <span>{it.quantity}x {it.name}</span>
-                                <span className="text-slate-400 text-[11px]">
-                                  R$ {(it.price * it.quantity).toFixed(2).replace('.', ',')}
+                          {/* Top Header of the card */}
+                          <div className="flex items-start justify-between gap-2 border-b border-dark-800 pb-3">
+                            <div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-display font-black text-lg text-white">
+                                  #{order.orderId}
                                 </span>
+
+                                {/* Cancelled badge */}
+                                {isCancelled && (
+                                  <span className="px-2 py-0.5 rounded-full bg-red-600 text-white font-black text-[10px] uppercase flex items-center gap-1">
+                                    <XCircle className="w-3 h-3" />
+                                    CANCELADO
+                                  </span>
+                                )}
+
+                                {/* Delay warning pill */}
+                                {!isCancelled && isDelayed && (
+                                  <span className="px-2 py-0.5 rounded-full bg-red-500 text-white font-black text-[10px] uppercase flex items-center gap-1 animate-pulse">
+                                    <AlertTriangle className="w-3 h-3" />
+                                    ATRASO ({elapsedMin} min)
+                                  </span>
+                                )}
+
+                                {!isCancelled && !isDelayed && (
+                                  <span className="text-[11px] text-slate-400 flex items-center gap-1 font-mono">
+                                    <Clock className="w-3 h-3 text-brand-gold" />
+                                    {elapsedMin === 0 ? 'Agora mesmo' : `há ${elapsedMin} min`}
+                                  </span>
+                                )}
                               </div>
 
-                              {/* Box details */}
-                              {it.isCustomBox && (
-                                <div className="text-[11px] text-brand-goldLight pl-2 mt-0.5 space-y-0.5">
-                                  {it.salgadasDetails && (
-                                    <div>🥟 <strong>Salg:</strong> {Object.entries(it.salgadasDetails).map(([k, v]) => `${v}x ${k}`).join(', ')}</div>
-                                  )}
-                                  {it.docesDetails && (
-                                    <div>🍫 <strong>Doces:</strong> {Object.entries(it.docesDetails).map(([k, v]) => `${v}x ${k}`).join(', ')}</div>
-                                  )}
-                                </div>
-                              )}
+                              <div className="text-xs font-bold text-white mt-1 flex items-center gap-1.5 flex-wrap">
+                                <span className="flex items-center gap-1">
+                                  <User className="w-3.5 h-3.5 text-brand-gold" />
+                                  <span>{order.customerName}</span>
+                                </span>
 
-                              {(it.semSuinos || it.semSuinosEsfirras) && (
-                                <div className="text-[11px] text-red-400 font-extrabold pl-2 bg-red-950/40 p-1 rounded border border-red-500/40 mt-0.5">
-                                  🚫 ATENÇÃO COZINHA: SEM CARNE SUÍNA (SEM CALABRESA / BACON)
-                                </div>
-                              )}
-
-                              {it.notes && (
-                                <div className="text-[11px] text-amber-300 font-semibold pl-2">
-                                  ⚠️ OBS: {it.notes}
-                                </div>
-                              )}
+                                {order.customerPhone && (
+                                  <span className="text-[11px] text-emerald-400 font-mono flex items-center gap-1 bg-emerald-500/10 px-1.5 py-0.5 rounded">
+                                    <Phone className="w-3 h-3" />
+                                    <span>{order.customerPhone}</span>
+                                  </span>
+                                )}
+                              </div>
                             </div>
-                          ))}
+
+                            {/* Payment Status Pill */}
+                            <div className="text-right">
+                              {isPaid ? (
+                                <span className="px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/40 text-emerald-400 font-bold text-[11px] inline-flex items-center gap-1">
+                                  <CheckCircle2 className="w-3 h-3" />
+                                  <span>PAGO</span>
+                                </span>
+                              ) : (
+                                <div className="space-y-1">
+                                  <span className="px-2.5 py-1 rounded-lg bg-amber-500/15 border border-amber-500/40 text-amber-400 font-bold text-[11px] inline-flex items-center gap-1">
+                                    <AlertTriangle className="w-3 h-3" />
+                                    <span>COBRAR NA ENTREGA</span>
+                                  </span>
+                                  {!isCancelled && (
+                                    <button
+                                      onClick={() => onUpdatePaymentStatus(order.orderId, 'PAGO_APROVADO')}
+                                      className="text-[10px] text-emerald-400 hover:text-emerald-300 underline block text-right cursor-pointer"
+                                    >
+                                      Marcar como Pago
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                              <div className="text-[10px] text-slate-400 mt-1">
+                                {order.paymentMethod}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Delivery address & info */}
+                          <div className="py-2.5 text-xs text-slate-300 space-y-1">
+                            <div className="flex items-center gap-1.5">
+                              <MapPin className="w-3.5 h-3.5 text-brand-gold flex-shrink-0" />
+                              <span>
+                                <strong>{order.deliveryType === 'delivery' ? order.district : 'Retirada no Balcão (Setor 03)'}</strong>
+                                {order.deliveryType === 'delivery' && ` • ${order.address}${order.number ? `, Nº ${order.number}` : ''}`}
+                              </span>
+                            </div>
+                            {order.reference && (
+                              <div className="text-[11px] text-brand-goldLight pl-5">
+                                Ponto de Referência: {order.reference}
+                              </div>
+                            )}
+                            {order.cancelReason && (
+                              <div className="text-[11px] text-red-400 pl-5 font-semibold">
+                                Motivo do Cancelamento: {order.cancelReason}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Items List (Kitchen preparation list) */}
+                          <div className="bg-dark-950 p-3 rounded-xl border border-dark-850 space-y-2 mt-1">
+                            <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                              O que precisa ser feito:
+                            </div>
+                            <div className="space-y-1.5 text-xs">
+                              {(order.items || []).map((it, idx) => (
+                                <div key={idx} className="border-b border-dark-900 pb-1 last:border-0 last:pb-0">
+                                  <div className="font-bold text-white flex items-center justify-between">
+                                    <span>{it.quantity}x {it.name}</span>
+                                    <span className="text-slate-400 text-[11px]">
+                                      R$ {((it.price || 0) * (it.quantity || 1)).toFixed(2).replace('.', ',')}
+                                    </span>
+                                  </div>
+
+                                  {/* Custom Box details */}
+                                  {it.isCustomBox && (
+                                    <div className="text-[11px] text-brand-goldLight pl-2 mt-0.5 space-y-0.5">
+                                      {it.salgadasDetails && (
+                                        <div>🥟 <strong>Salg:</strong> {Object.entries(it.salgadasDetails).map(([k, v]) => `${v}x ${k}`).join(', ')}</div>
+                                      )}
+                                      {it.docesDetails && (
+                                        <div>🍫 <strong>Doces:</strong> {Object.entries(it.docesDetails).map(([k, v]) => `${v}x ${k}`).join(', ')}</div>
+                                      )}
+                                    </div>
+                                  )}
+
+                                  {(it.semSuinos || it.semSuinosEsfirras) && (
+                                    <div className="text-[11px] text-red-400 font-extrabold pl-2 bg-red-950/40 p-1 rounded border border-red-500/40 mt-0.5">
+                                      🚫 ATENÇÃO COZINHA: SEM CARNE SUÍNA (SEM CALABRESA / BACON)
+                                    </div>
+                                  )}
+
+                                  {it.notes && (
+                                    <div className="text-[11px] text-amber-300 font-semibold pl-2">
+                                      ⚠️ OBS: {it.notes}
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Total */}
+                          <div className="flex justify-between items-baseline pt-3 text-xs">
+                            <span className="text-slate-400">Total com Entrega:</span>
+                            <span className="text-lg font-black text-brand-gold">
+                              R$ {(order.total || 0).toFixed(2).replace('.', ',')}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Operational Action Controls */}
+                        <div className="pt-3.5 border-t border-dark-800 mt-3 flex flex-wrap items-center justify-between gap-2">
+                          
+                          {/* Left: Print & WhatsApp Buttons */}
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <button
+                              onClick={() => handlePrintOrder(order)}
+                              className="px-2.5 py-1.5 rounded-xl bg-dark-800 hover:bg-dark-750 text-slate-300 text-xs font-semibold flex items-center gap-1 border border-dark-700 transition-colors cursor-pointer"
+                              title="Imprimir comanda para a cozinha"
+                            >
+                              <Printer className="w-3.5 h-3.5" />
+                              <span>Imprimir</span>
+                            </button>
+
+                            {/* WhatsApp Button */}
+                            <button
+                              onClick={() => handleOpenWhatsAppModal(order, order.deliveryType === 'balcao' ? 'pronto' : 'entrega')}
+                              className="px-2.5 py-1.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/40 text-xs font-bold flex items-center gap-1 transition-all cursor-pointer active:scale-95"
+                              title="Enviar mensagem no WhatsApp do cliente"
+                            >
+                              <MessageSquare className="w-3.5 h-3.5" />
+                              <span>Avisar Cliente</span>
+                            </button>
+                          </div>
+
+                          {/* Right: Status Flow & Cancel Button */}
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            
+                            {!isCancelled && order.orderStatus === 'RECEBIDO_COZINHA' && (
+                              <button
+                                onClick={() => {
+                                  onUpdateOrderStatus(order.orderId, 'EM_PREPARO');
+                                  handleOpenWhatsAppModal(order, 'preparo');
+                                }}
+                                className="px-3 py-1.5 rounded-xl bg-brand-gold hover:bg-amber-400 text-dark-950 font-bold text-xs flex items-center gap-1 shadow-glow-gold transition-all cursor-pointer"
+                              >
+                                <Flame className="w-3.5 h-3.5" />
+                                <span>Mover p/ Forno</span>
+                              </button>
+                            )}
+
+                            {!isCancelled && order.orderStatus === 'EM_PREPARO' && (
+                              <button
+                                onClick={() => {
+                                  if (order.deliveryType === 'balcao') {
+                                    onUpdateOrderStatus(order.orderId, 'CONCLUIDO');
+                                    handleOpenWhatsAppModal(order, 'pronto');
+                                  } else {
+                                    onUpdateOrderStatus(order.orderId, 'SAIU_ENTREGA');
+                                    handleOpenWhatsAppModal(order, 'entrega');
+                                  }
+                                }}
+                                className="px-3 py-1.5 rounded-xl bg-blue-500 hover:bg-blue-400 text-white font-bold text-xs flex items-center gap-1 shadow-md transition-all cursor-pointer"
+                              >
+                                {order.deliveryType === 'balcao' ? (
+                                  <>
+                                    <Check className="w-3.5 h-3.5 stroke-[3]" />
+                                    <span>Pronto p/ Retirada</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Bike className="w-3.5 h-3.5" />
+                                    <span>Despachar Entrega</span>
+                                  </>
+                                )}
+                              </button>
+                            )}
+
+                            {!isCancelled && order.orderStatus === 'SAIU_ENTREGA' && (
+                              <button
+                                onClick={() => onUpdateOrderStatus(order.orderId, 'CONCLUIDO')}
+                                className="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-dark-950 font-bold text-xs flex items-center gap-1 shadow-md transition-all cursor-pointer"
+                              >
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                <span>Marcar Entregue</span>
+                              </button>
+                            )}
+
+                            {!isCancelled && order.orderStatus === 'CONCLUIDO' && (
+                              <span className="text-xs font-bold text-emerald-400 flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500/10">
+                                <Check className="w-3.5 h-3.5 stroke-[3]" />
+                                <span>Concluído</span>
+                              </span>
+                            )}
+
+                            {/* CANCEL / DELETE BUTTON */}
+                            <button
+                              onClick={() => {
+                                setCancelModalOrder(order);
+                                setCancelReason('');
+                              }}
+                              className="p-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                              title="Cancelar ou excluir pedido"
+                            >
+                              <XCircle className="w-3.5 h-3.5" />
+                              <span className="hidden sm:inline">Cancelar</span>
+                            </button>
+
+                          </div>
+
+                        </div>
+
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+            </div>
+
+          </div>
+        )}
+
+        {/* ============================================================== */}
+        {/* VIEW 2: PDV DE BALCÃO (POINT OF SALE / CRIAR PEDIDOS COZINHA)  */}
+        {/* ============================================================== */}
+        {activeAdminTab === 'pdv' && (
+          <div className="space-y-6 animate-fade-in">
+            
+            {/* PDV Header Banner */}
+            <div className="p-4 rounded-3xl bg-gradient-to-r from-dark-900 via-dark-850 to-dark-900 border border-brand-gold/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xl">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Store className="w-5 h-5 text-brand-gold" />
+                  <h2 className="text-base sm:text-lg font-black text-white">
+                    Ponto de Venda (PDV) • Atendimento Rápido
+                  </h2>
+                </div>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Lance pedidos do balcão ou telefone diretamente na fila de produção da cozinha.
+                </p>
+              </div>
+
+              {pdvCart.length > 0 && (
+                <div className="flex items-center gap-3 self-end sm:self-auto">
+                  <span className="text-xs text-slate-400">Total Atual:</span>
+                  <span className="text-lg font-black text-brand-gold">
+                    R$ {pdvCartTotal.toFixed(2).replace('.', ',')}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Validation Banner if any */}
+            {pdvValidationError && (
+              <div className="p-3.5 rounded-2xl bg-red-500/20 border border-red-500/40 text-red-300 text-xs font-bold flex items-center justify-between gap-2 animate-bounce-subtle">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  <span>{pdvValidationError}</span>
+                </div>
+                <button
+                  onClick={() => setPdvValidationError('')}
+                  className="text-red-300 hover:text-white"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+
+            {/* PDV Main Layout Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              
+              {/* LEFT: PRODUCTS CATALOG (7 cols) */}
+              <div className="lg:col-span-7 space-y-4">
+                
+                {/* Search & Category Filter */}
+                <div className="p-3.5 rounded-2xl bg-dark-900 border border-dark-800 space-y-3">
+                  <div className="relative">
+                    <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type="text"
+                      placeholder="Buscar produto por nome ou ingrediente..."
+                      value={pdvSearch}
+                      onChange={(e) => setPdvSearch(e.target.value)}
+                      className="w-full pl-9 pr-3 py-2 rounded-xl bg-dark-950 border border-dark-750 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-brand-gold"
+                    />
+                  </div>
+
+                  {/* Category Pills */}
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+                    <button
+                      type="button"
+                      onClick={() => setPdvCategory('todos')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                        pdvCategory === 'todos'
+                          ? 'bg-brand-gold text-dark-950 font-black'
+                          : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
+                      }`}
+                    >
+                      Todos
+                    </button>
+                    {CATEGORIES.map(cat => (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => setPdvCategory(cat.id)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                          pdvCategory === cat.id
+                            ? 'bg-brand-gold text-dark-950 font-black'
+                            : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
+                        }`}
+                      >
+                        {cat.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Products Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[600px] overflow-y-auto pr-1">
+                  {pdvFilteredProducts.map(prod => {
+                    const inCart = pdvCart.find(i => i.id === prod.id);
+
+                    return (
+                      <div
+                        key={prod.id}
+                        onClick={() => handleAddProductToPDV(prod, 1)}
+                        className={`p-2.5 rounded-2xl border transition-all cursor-pointer select-none flex items-center justify-between gap-2.5 ${
+                          inCart
+                            ? 'bg-brand-gold/10 border-brand-gold/60 shadow-sm'
+                            : 'bg-dark-900 hover:bg-dark-850 border-dark-800'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          {prod.image && (
+                            <div className="w-11 h-11 rounded-xl overflow-hidden bg-dark-950 flex-shrink-0 border border-dark-800">
+                              <img src={prod.image} alt={prod.name} className="w-full h-full object-cover" loading="lazy" />
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <h4 className="text-xs font-bold text-white truncate">{prod.name}</h4>
+                            <div className="text-xs font-black text-brand-gold mt-0.5">
+                              R$ {(prod.price || 0).toFixed(2).replace('.', ',')}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Quick Add Button */}
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          {inCart ? (
+                            <div className="flex items-center gap-1 bg-dark-950 px-2 py-1 rounded-xl border border-dark-750">
+                              <span className="text-xs font-black text-brand-gold">
+                                {inCart.quantity}x
+                              </span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleAddProductToPDV(prod, 1);
+                                }}
+                                className="w-5 h-5 rounded bg-brand-gold hover:bg-amber-400 text-dark-950 flex items-center justify-center font-bold text-xs"
+                              >
+                                +
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleAddProductToPDV(prod, 1);
+                              }}
+                              className="px-2.5 py-1.5 rounded-xl bg-dark-800 hover:bg-brand-gold hover:text-dark-950 text-slate-300 font-bold text-xs transition-colors flex items-center gap-1 border border-dark-700"
+                            >
+                              <Plus className="w-3.5 h-3.5 stroke-[3]" />
+                              <span>Incluir</span>
+                            </button>
+                          )}
                         </div>
                       </div>
+                    );
+                  })}
+                </div>
 
-                      {/* Total */}
-                      <div className="flex justify-between items-baseline pt-3 text-xs">
-                        <span className="text-slate-400">Total com Entrega:</span>
-                        <span className="text-lg font-black text-brand-gold">
-                          R$ {order.total.toFixed(2).replace('.', ',')}
-                        </span>
+              </div>
+
+              {/* RIGHT: ORDER SUMMARY & DISPATCH (5 cols) */}
+              <div className="lg:col-span-5 space-y-4">
+                
+                <div className="p-4 rounded-3xl bg-dark-900 border border-dark-800 space-y-4 shadow-xl">
+                  
+                  {/* Cart Items Title */}
+                  <div className="flex items-center justify-between border-b border-dark-800 pb-2.5">
+                    <div className="flex items-center gap-2">
+                      <ShoppingBag className="w-4 h-4 text-brand-gold" />
+                      <h3 className="text-sm font-black text-white">Comanda do Pedido</h3>
+                    </div>
+                    {pdvCart.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setPdvCart([])}
+                        className="text-[11px] text-red-400 hover:underline cursor-pointer"
+                      >
+                        Limpar Itens
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Items list */}
+                  <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                    {pdvCart.length === 0 ? (
+                      <div className="text-center py-6 text-slate-500 text-xs">
+                        Clique nos produtos ao lado para montar o pedido.
+                      </div>
+                    ) : (
+                      pdvCart.map(item => (
+                        <div key={item.id} className="p-2 rounded-xl bg-dark-950 border border-dark-800 flex items-center justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-bold text-white truncate">{item.name}</div>
+                            <div className="text-[11px] text-brand-gold">
+                              R$ {(item.price * item.quantity).toFixed(2).replace('.', ',')}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => handleUpdatePDVItemQty(item.id, -1)}
+                              className="w-6 h-6 rounded-lg bg-dark-800 hover:bg-dark-700 text-white flex items-center justify-center text-xs cursor-pointer"
+                            >
+                              <Minus className="w-3 h-3" />
+                            </button>
+                            <span className="w-5 text-center text-xs font-black text-white">
+                              {item.quantity}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleUpdatePDVItemQty(item.id, 1)}
+                              className="w-6 h-6 rounded-lg bg-brand-gold hover:bg-amber-400 text-dark-950 flex items-center justify-center text-xs font-bold cursor-pointer"
+                            >
+                              <Plus className="w-3 h-3 stroke-[3]" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleRemovePDVItem(item.id)}
+                              className="w-6 h-6 rounded-lg text-slate-500 hover:text-red-400 flex items-center justify-center text-xs ml-1 cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  {/* Customer Information Form */}
+                  <div className="border-t border-dark-800 pt-3 space-y-3">
+                    <div className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+                      Dados do Cliente:
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[10px] text-slate-400 block mb-0.5">Nome do Cliente *</label>
+                        <input
+                          type="text"
+                          placeholder="Ex: Carlos Oliveira"
+                          value={pdvCustomerName}
+                          onChange={(e) => setPdvCustomerName(e.target.value)}
+                          className="w-full px-3 py-1.5 rounded-xl bg-dark-950 border border-dark-750 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-brand-gold"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-slate-400 block mb-0.5">WhatsApp / Celular</label>
+                        <input
+                          type="text"
+                          placeholder="(69) 99999-9999"
+                          value={pdvCustomerPhone}
+                          onChange={(e) => setPdvCustomerPhone(e.target.value)}
+                          className="w-full px-3 py-1.5 rounded-xl bg-dark-950 border border-dark-750 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-brand-gold"
+                        />
                       </div>
                     </div>
 
-                    {/* Operational Action Controls */}
-                    <div className="pt-4 border-t border-dark-800 mt-4 flex flex-wrap items-center justify-between gap-2">
-                      
-                      {/* Kitchen print button */}
-                      <button
-                        onClick={() => handlePrintOrder(order)}
-                        className="p-2 rounded-xl bg-dark-800 hover:bg-dark-750 text-slate-300 text-xs font-semibold flex items-center gap-1.5 border border-dark-700 transition-colors cursor-pointer"
-                        title="Imprimir comanda para a cozinha"
-                      >
-                        <Printer className="w-3.5 h-3.5" />
-                        <span>Imprimir</span>
-                      </button>
+                    {/* Delivery Type Selector */}
+                    <div>
+                      <label className="text-[10px] text-slate-400 block mb-1">Tipo de Pedido:</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setPdvDeliveryType('balcao')}
+                          className={`py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                            pdvDeliveryType === 'balcao'
+                              ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
+                              : 'bg-dark-950 text-slate-400 border border-dark-800'
+                          }`}
+                        >
+                          <Store className="w-3.5 h-3.5" />
+                          <span>Balcão (Retirada)</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPdvDeliveryType('delivery')}
+                          className={`py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                            pdvDeliveryType === 'delivery'
+                              ? 'bg-blue-500 text-white font-black shadow-sm'
+                              : 'bg-dark-950 text-slate-400 border border-dark-800'
+                          }`}
+                        >
+                          <Bike className="w-3.5 h-3.5" />
+                          <span>Delivery (Entrega)</span>
+                        </button>
+                      </div>
+                    </div>
 
-                      {/* Status Progress Button */}
-                      <div className="flex items-center gap-1.5">
-                        
-                        {order.orderStatus === 'RECEBIDO_COZINHA' && (
-                          <button
-                            onClick={() => onUpdateOrderStatus(order.orderId, 'EM_PREPARO')}
-                            className="px-3.5 py-2 rounded-xl bg-brand-gold hover:bg-amber-400 text-dark-950 font-bold text-xs flex items-center gap-1.5 shadow-glow-gold transition-all cursor-pointer"
+                    {/* If Delivery: District & Address */}
+                    {pdvDeliveryType === 'delivery' && (
+                      <div className="space-y-2 p-2.5 rounded-xl bg-dark-950 border border-dark-800">
+                        <div>
+                          <label className="text-[10px] text-slate-400 block mb-0.5">Bairro em Ariquemes:</label>
+                          <select
+                            value={pdvDistrict.id}
+                            onChange={(e) => {
+                              const found = ARIQUEMES_DISTRICTS.find(d => d.id === e.target.value);
+                              if (found) setPdvDistrict(found);
+                            }}
+                            className="w-full px-2.5 py-1.5 rounded-xl bg-dark-900 border border-dark-750 text-white text-xs focus:outline-none focus:border-brand-gold"
                           >
-                            <Flame className="w-3.5 h-3.5" />
-                            <span>Mover p/ Forno</span>
-                          </button>
-                        )}
+                            {ARIQUEMES_DISTRICTS.map(d => (
+                              <option key={d.id} value={d.id}>
+                                {d.name} (+ R$ {d.price.toFixed(2)})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
 
-                        {order.orderStatus === 'EM_PREPARO' && (
+                        <div className="grid grid-cols-3 gap-2">
+                          <div className="col-span-2">
+                            <label className="text-[10px] text-slate-400 block mb-0.5">Rua / Endereço *</label>
+                            <input
+                              type="text"
+                              placeholder="Ex: Rua das Flores"
+                              value={pdvAddress}
+                              onChange={(e) => setPdvAddress(e.target.value)}
+                              className="w-full px-2.5 py-1.5 rounded-xl bg-dark-900 border border-dark-750 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-brand-gold"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-slate-400 block mb-0.5">Nº</label>
+                            <input
+                              type="text"
+                              placeholder="123"
+                              value={pdvNumber}
+                              onChange={(e) => setPdvNumber(e.target.value)}
+                              className="w-full px-2.5 py-1.5 rounded-xl bg-dark-900 border border-dark-750 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-brand-gold"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="text-[10px] text-slate-400 block mb-0.5">Ponto de Referência</label>
+                          <input
+                            type="text"
+                            placeholder="Ex: Próximo à padaria"
+                            value={pdvReference}
+                            onChange={(e) => setPdvReference(e.target.value)}
+                            className="w-full px-2.5 py-1.5 rounded-xl bg-dark-900 border border-dark-750 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-brand-gold"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Payment & Status */}
+                    <div className="space-y-2">
+                      <label className="text-[10px] text-slate-400 block">Forma de Pagamento:</label>
+                      <div className="grid grid-cols-4 gap-1 text-[11px]">
+                        {[
+                          { id: 'pix', label: 'PIX' },
+                          { id: 'dinheiro', label: 'Dinheiro' },
+                          { id: 'debito', label: 'Débito' },
+                          { id: 'credito', label: 'Crédito' }
+                        ].map(p => (
                           <button
-                            onClick={() => onUpdateOrderStatus(order.orderId, 'SAIU_ENTREGA')}
-                            className="px-3.5 py-2 rounded-xl bg-blue-500 hover:bg-blue-400 text-white font-bold text-xs flex items-center gap-1.5 shadow-md transition-all cursor-pointer"
+                            key={p.id}
+                            type="button"
+                            onClick={() => setPdvPaymentMethod(p.id)}
+                            className={`py-1.5 rounded-lg font-bold border transition-all cursor-pointer ${
+                              pdvPaymentMethod === p.id
+                                ? 'bg-brand-gold text-dark-950 border-brand-gold'
+                                : 'bg-dark-950 text-slate-400 border-dark-800'
+                            }`}
                           >
-                            <Bike className="w-3.5 h-3.5" />
-                            <span>Despachar Entrega</span>
+                            {p.label}
                           </button>
-                        )}
-
-                        {order.orderStatus === 'SAIU_ENTREGA' && (
-                          <button
-                            onClick={() => onUpdateOrderStatus(order.orderId, 'CONCLUIDO')}
-                            className="px-3.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-dark-950 font-bold text-xs flex items-center gap-1.5 shadow-md transition-all cursor-pointer"
-                          >
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                            <span>Marcar Entregue</span>
-                          </button>
-                        )}
-
-                        {order.orderStatus === 'CONCLUIDO' && (
-                          <span className="text-xs font-bold text-emerald-400 flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-500/10">
-                            <Check className="w-3.5 h-3.5 stroke-[3]" />
-                            <span>Concluído</span>
-                          </span>
-                        )}
-
+                        ))}
                       </div>
 
+                      {pdvPaymentMethod === 'dinheiro' && (
+                        <div className="pt-1">
+                          <label className="text-[10px] text-slate-400 block mb-0.5">Troco para quanto?</label>
+                          <input
+                            type="text"
+                            placeholder="Ex: 50,00 ou deixe em branco se não precisa"
+                            value={pdvCashChange}
+                            onChange={(e) => setPdvCashChange(e.target.value)}
+                            className="w-full px-2.5 py-1.5 rounded-xl bg-dark-950 border border-dark-750 text-white text-xs focus:outline-none focus:border-brand-gold"
+                          />
+                        </div>
+                      )}
+
+                      {/* Payment Status Checkbox */}
+                      <label className="flex items-center gap-2 pt-1 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={pdvIsPaid}
+                          onChange={(e) => setPdvIsPaid(e.target.checked)}
+                          className="w-4 h-4 rounded text-emerald-500 accent-emerald-500 cursor-pointer"
+                        />
+                        <span className={`text-xs font-bold ${pdvIsPaid ? 'text-emerald-400' : 'text-amber-400'}`}>
+                          {pdvIsPaid ? '✅ Pedido Já Pago no Balcão' : '⚠️ A Cobrar na Entrega/Balcão'}
+                        </span>
+                      </label>
+                    </div>
+
+                    {/* Kitchen Observations */}
+                    <div>
+                      <label className="text-[10px] text-slate-400 block mb-0.5">Observações para a Cozinha:</label>
+                      <input
+                        type="text"
+                        placeholder="Ex: Sem cebola, massa bem crocante..."
+                        value={pdvOrderNotes}
+                        onChange={(e) => setPdvOrderNotes(e.target.value)}
+                        className="w-full px-2.5 py-1.5 rounded-xl bg-dark-950 border border-dark-750 text-white text-xs focus:outline-none focus:border-brand-gold"
+                      />
                     </div>
 
                   </div>
-                );
-              })}
-            </div>
-          )}
 
-        </div>
+                  {/* Summary Totals & Launch Button */}
+                  <div className="border-t border-dark-800 pt-3 space-y-2">
+                    <div className="flex justify-between text-xs text-slate-400">
+                      <span>Subtotal Itens:</span>
+                      <span>R$ {pdvCartSubtotal.toFixed(2).replace('.', ',')}</span>
+                    </div>
+
+                    {pdvDeliveryType === 'delivery' && (
+                      <div className="flex justify-between text-xs text-slate-400">
+                        <span>Taxa de Entrega ({pdvDistrict.name}):</span>
+                        <span>R$ {pdvDeliveryFee.toFixed(2).replace('.', ',')}</span>
+                      </div>
+                    )}
+
+                    <div className="flex justify-between text-sm font-black text-white pt-1 border-t border-dark-850">
+                      <span>Total Geral:</span>
+                      <span className="text-xl font-black text-brand-gold">
+                        R$ {pdvCartTotal.toFixed(2).replace('.', ',')}
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleLaunchPDVOrder}
+                      disabled={pdvCart.length === 0}
+                      className={`w-full py-3 rounded-2xl font-black text-sm flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg mt-2 ${
+                        pdvCart.length > 0
+                          ? 'bg-gradient-to-r from-brand-gold via-amber-400 to-brand-gold hover:scale-102 text-dark-950 shadow-glow-gold active:scale-98'
+                          : 'bg-dark-800 text-slate-500 cursor-not-allowed'
+                      }`}
+                    >
+                      <Flame className="w-5 h-5" />
+                      <span>Lançar Pedido na Cozinha (PDV)</span>
+                    </button>
+                  </div>
+
+                </div>
+
+              </div>
+
+            </div>
+
+          </div>
+        )}
 
       </main>
+
+      {/* ============================================================== */}
+      {/* MODAL 1: WHATSAPP DIRECT MESSAGING MODAL                       */}
+      {/* ============================================================== */}
+      {whatsappModalData && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-dark-950/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 animate-fade-in">
+          <div className="relative w-full max-w-lg bg-dark-900 border border-emerald-500/40 rounded-3xl shadow-2xl p-5 space-y-4">
+            
+            <div className="flex items-center justify-between border-b border-dark-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center border border-emerald-500/30">
+                  <MessageSquare className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-white">
+                    Enviar WhatsApp ao Cliente
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    Pedido #{whatsappModalData.order.orderId} • {whatsappModalData.order.customerName}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setWhatsappModalData(null)}
+                className="w-8 h-8 rounded-full bg-dark-800 text-slate-400 hover:text-white flex items-center justify-center cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Phone input */}
+            <div>
+              <label className="text-xs font-bold text-slate-300 block mb-1">
+                WhatsApp do Cliente (com DDD):
+              </label>
+              <div className="relative">
+                <Phone className="w-4 h-4 text-emerald-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="(69) 99999-9999"
+                  value={whatsappModalData.phone}
+                  onChange={(e) => setWhatsappModalData(prev => ({ ...prev, phone: e.target.value }))}
+                  className="w-full pl-9 pr-3 py-2 rounded-xl bg-dark-950 border border-dark-750 text-white text-xs font-mono focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+            </div>
+
+            {/* Quick Templates */}
+            <div>
+              <label className="text-xs font-bold text-slate-300 block mb-1.5">
+                Mensagens Rápidas (1 Clique):
+              </label>
+              <div className="grid grid-cols-2 gap-2 text-xs font-bold">
+                <button
+                  type="button"
+                  onClick={() => handleApplyWhatsAppTemplate('entrega')}
+                  className={`p-2 rounded-xl border text-left flex items-center gap-2 transition-all cursor-pointer ${
+                    whatsappModalData.activeTemplate === 'entrega'
+                      ? 'bg-blue-500/20 border-blue-500 text-blue-300 font-black'
+                      : 'bg-dark-950 border-dark-800 text-slate-300 hover:border-dark-700'
+                  }`}
+                >
+                  <Bike className="w-4 h-4 text-blue-400 flex-shrink-0" />
+                  <span>🛵 Saiu p/ Entrega</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleApplyWhatsAppTemplate('pronto')}
+                  className={`p-2 rounded-xl border text-left flex items-center gap-2 transition-all cursor-pointer ${
+                    whatsappModalData.activeTemplate === 'pronto'
+                      ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300 font-black'
+                      : 'bg-dark-950 border-dark-800 text-slate-300 hover:border-dark-700'
+                  }`}
+                >
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                  <span>🍕 Pronto p/ Retirada</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleApplyWhatsAppTemplate('preparo')}
+                  className={`p-2 rounded-xl border text-left flex items-center gap-2 transition-all cursor-pointer ${
+                    whatsappModalData.activeTemplate === 'preparo'
+                      ? 'bg-amber-500/20 border-amber-500 text-amber-300 font-black'
+                      : 'bg-dark-950 border-dark-800 text-slate-300 hover:border-dark-700'
+                  }`}
+                >
+                  <Flame className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                  <span>👨‍🍳 No Forno / Preparo</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleApplyWhatsAppTemplate('cancelado')}
+                  className={`p-2 rounded-xl border text-left flex items-center gap-2 transition-all cursor-pointer ${
+                    whatsappModalData.activeTemplate === 'cancelado'
+                      ? 'bg-red-500/20 border-red-500 text-red-300 font-black'
+                      : 'bg-dark-950 border-dark-800 text-slate-300 hover:border-dark-700'
+                  }`}
+                >
+                  <XCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+                  <span>❌ Pedido Cancelado</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Message Text Area */}
+            <div>
+              <label className="text-xs font-bold text-slate-300 block mb-1">
+                Texto da Mensagem (Editável):
+              </label>
+              <textarea
+                rows={4}
+                value={whatsappModalData.message}
+                onChange={(e) => setWhatsappModalData(prev => ({ ...prev, message: e.target.value }))}
+                className="w-full p-3 rounded-xl bg-dark-950 border border-dark-750 text-white text-xs leading-relaxed focus:outline-none focus:border-emerald-500 resize-none"
+              />
+            </div>
+
+            {/* Action buttons */}
+            <div className="flex items-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setWhatsappModalData(null)}
+                className="flex-1 py-2.5 rounded-xl bg-dark-800 hover:bg-dark-750 text-slate-300 font-semibold text-xs cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleSendWhatsAppMessage}
+                className="flex-2 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-dark-950 font-black text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 cursor-pointer active:scale-98"
+              >
+                <Send className="w-4 h-4" />
+                <span>Abrir WhatsApp do Cliente ↗</span>
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* MODAL 2: CANCEL / DELETE ORDER MODAL                           */}
+      {/* ============================================================== */}
+      {cancelModalOrder && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-dark-950/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 animate-fade-in">
+          <div className="relative w-full max-w-md bg-dark-900 border border-red-500/40 rounded-3xl shadow-2xl p-5 space-y-4">
+            
+            <div className="flex items-center justify-between border-b border-dark-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-red-500/20 text-red-400 flex items-center justify-center border border-red-500/30">
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-white">
+                    Cancelar ou Excluir Pedido
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    Pedido #{cancelModalOrder.orderId} • {cancelModalOrder.customerName}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setCancelModalOrder(null)}
+                className="w-8 h-8 rounded-full bg-dark-800 text-slate-400 hover:text-white flex items-center justify-center cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-300">
+              Escolha se deseja apenas marcar como <strong>Cancelado</strong> (mantendo no histórico) ou <strong>Excluir Definitivamente</strong> da lista.
+            </p>
+
+            <div>
+              <label className="text-xs font-bold text-slate-300 block mb-1">
+                Motivo do Cancelamento (Opcional):
+              </label>
+              <input
+                type="text"
+                placeholder="Ex: Cliente desistiu, Teste do sistema, Endereço errado..."
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl bg-dark-950 border border-dark-750 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-red-500"
+              />
+            </div>
+
+            <div className="space-y-2 pt-2">
+              <button
+                type="button"
+                onClick={handleConfirmCancel}
+                className="w-full py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-black text-xs flex items-center justify-center gap-2 cursor-pointer shadow-md active:scale-98"
+              >
+                <XCircle className="w-4 h-4" />
+                <span>Marcar como Cancelado (Manter no Histórico)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                className="w-full py-2.5 rounded-xl bg-dark-800 hover:bg-red-950/60 text-red-400 hover:text-red-300 border border-red-900/50 font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition-colors"
+                title="Remove permanentemente do sistema"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Excluir Definitivamente (Remover da Lista)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setCancelModalOrder(null)}
+                className="w-full py-2 rounded-xl bg-dark-850 hover:bg-dark-800 text-slate-400 font-semibold text-xs cursor-pointer mt-1"
+              >
+                Voltar / Não fazer nada
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* MODAL 3: PDV ORDER CREATED SUCCESS MODAL                       */}
+      {/* ============================================================== */}
+      {pdvSuccessOrder && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-dark-950/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 animate-fade-in">
+          <div className="relative w-full max-w-md bg-dark-900 border border-brand-gold/50 rounded-3xl shadow-2xl p-6 text-center space-y-4">
+            
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-brand-gold to-amber-400 text-dark-950 flex items-center justify-center mx-auto shadow-glow-gold">
+              <Check className="w-8 h-8 stroke-[3]" />
+            </div>
+
+            <div>
+              <h3 className="text-lg font-black text-white">
+                Pedido #{pdvSuccessOrder.orderId} Lançado!
+              </h3>
+              <p className="text-xs text-brand-gold font-medium mt-1">
+                O pedido já está visível em tempo real na fila da cozinha.
+              </p>
+              <div className="text-sm font-bold text-slate-300 mt-2">
+                Cliente: {pdvSuccessOrder.customerName} • R$ {(pdvSuccessOrder.total || 0).toFixed(2).replace('.', ',')}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => handlePrintOrder(pdvSuccessOrder)}
+                className="py-2.5 px-3 rounded-xl bg-dark-800 hover:bg-dark-750 text-white font-bold text-xs flex items-center justify-center gap-1.5 border border-dark-700 cursor-pointer"
+              >
+                <Printer className="w-4 h-4" />
+                <span>Imprimir Comanda</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  handleOpenWhatsAppModal(pdvSuccessOrder, pdvSuccessOrder.deliveryType === 'balcao' ? 'pronto' : 'preparo');
+                  setPdvSuccessOrder(null);
+                }}
+                className="py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-md"
+              >
+                <MessageSquare className="w-4 h-4" />
+                <span>Avisar Cliente</span>
+              </button>
+            </div>
+
+            <div className="pt-2 border-t border-dark-800 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setPdvSuccessOrder(null)}
+                className="flex-1 py-2.5 rounded-xl bg-brand-gold hover:bg-amber-400 text-dark-950 font-black text-xs cursor-pointer shadow-glow-gold"
+              >
+                + Criar Outro Pedido
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setPdvSuccessOrder(null);
+                  setActiveAdminTab('kds');
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-dark-800 hover:bg-dark-750 text-slate-300 font-semibold text-xs cursor-pointer"
+              >
+                Ver na Cozinha (KDS)
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
 
     </div>
   );

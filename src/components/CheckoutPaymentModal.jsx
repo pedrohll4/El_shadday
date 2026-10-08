@@ -135,6 +135,7 @@ export function CheckoutPaymentModal({
         number: orderDetails.addressNumber,
         reference: orderDetails.reference,
         customerName: orderDetails.customerName,
+        customerPhone: orderDetails.customerPhone || '',
         paymentMethod: selectedMethod === 'cartao' 
           ? `Cartão de ${cardType === 'credito' ? 'Crédito' : 'Débito'} (final ${cardNumber.slice(-4)})`
           : selectedMethod === 'pix' 

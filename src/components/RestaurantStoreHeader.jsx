@@ -79,18 +79,20 @@ export function RestaurantStoreHeader({
 
                 <span className="text-dark-700">•</span>
 
-                {/* Filial Switcher */}
+                {/* Filial Switcher - High Visibility */}
                 <button
                   type="button"
                   onClick={onOpenBranchModal}
-                  className="flex items-center gap-1 text-slate-300 hover:text-brand-gold transition-colors font-semibold group cursor-pointer"
-                  title="Alterar filial"
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-gradient-to-r from-dark-900 to-dark-850 border border-brand-gold/60 hover:border-brand-gold text-slate-200 hover:text-white transition-all shadow-sm hover:shadow-glow-gold cursor-pointer group active:scale-95"
+                  title="Trocar filial entre Ariquemes e Porto Velho"
                 >
                   <MapPin className="w-3.5 h-3.5 text-brand-gold" />
-                  <span className="underline decoration-brand-gold/50 group-hover:decoration-brand-gold">
+                  <span className="font-extrabold text-white text-xs">
                     {activeBranch?.displayName || 'Ariquemes - RO'}
                   </span>
-                  <span className="text-[10px] text-brand-gold font-bold ml-0.5">(Alterar)</span>
+                  <span className="text-[10px] bg-brand-gold text-dark-950 font-black px-1.5 py-0.2 rounded-md ml-0.5 group-hover:bg-amber-400">
+                    ⇄ Trocar Filial
+                  </span>
                 </button>
               </div>
             </div>
@@ -129,7 +131,7 @@ export function RestaurantStoreHeader({
 
         </div>
 
-        {/* 3. iFood Metrics Row: Delivery Time, Fee, Min Order */}
+        {/* 3. iFood Metrics Row: Delivery Time, Fee, Sem Pedido Mínimo, Tradição */}
         <div className="mt-4 pt-4 border-t border-dark-800/80 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
           
           {/* Tempo de entrega */}
@@ -158,14 +160,14 @@ export function RestaurantStoreHeader({
             </div>
           </div>
 
-          {/* Pedido Mínimo */}
+          {/* SEM PEDIDO MÍNIMO */}
           <div className="p-2.5 rounded-xl bg-dark-900/60 border border-dark-800/80 flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-brand-gold/15 flex items-center justify-center text-brand-gold flex-shrink-0">
-              <ShieldCheck className="w-4 h-4" />
+            <div className="w-8 h-8 rounded-lg bg-emerald-500/15 flex items-center justify-center text-emerald-400 flex-shrink-0">
+              <Sparkles className="w-4 h-4" />
             </div>
             <div>
               <div className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Pedido Mínimo</div>
-              <div className="font-extrabold text-white text-xs sm:text-sm">R$ 20,00</div>
+              <div className="font-extrabold text-emerald-400 text-xs sm:text-sm">Sem Valor Mínimo</div>
             </div>
           </div>
 

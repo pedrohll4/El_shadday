@@ -52,15 +52,11 @@ export function BranchSelectorModal({
             return (
               <div
                 key={branch.id}
-                onClick={() => {
-                  if (isActive) {
-                    onSelectBranch(branch.id);
-                  }
-                }}
-                className={`group relative rounded-2xl p-4 sm:p-5 border transition-all duration-300 ${
+                onClick={() => onSelectBranch(branch.id)}
+                className={`group relative rounded-2xl p-4 sm:p-5 border transition-all duration-300 cursor-pointer ${
                   isActive
-                    ? 'cursor-pointer bg-dark-850/90 hover:bg-dark-800 border-brand-gold/40 hover:border-brand-gold hover:shadow-glow-gold'
-                    : 'cursor-not-allowed bg-dark-950/60 border-dark-800 opacity-80'
+                    ? 'bg-dark-850/90 hover:bg-dark-800 border-brand-gold/40 hover:border-brand-gold hover:shadow-glow-gold'
+                    : 'bg-dark-950/80 hover:bg-dark-900 border-dark-800 hover:border-amber-500/50'
                 } ${isCurrent ? 'ring-2 ring-brand-gold bg-dark-800' : ''}`}
               >
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -70,7 +66,7 @@ export function BranchSelectorModal({
                     <div className={`w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 ${
                       isActive 
                         ? 'bg-brand-gold/20 text-brand-gold border border-brand-gold/40' 
-                        : 'bg-dark-800 text-slate-500 border border-dark-700'
+                        : 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
                     }`}>
                       <Building2 className="w-6 h-6" />
                     </div>
@@ -118,23 +114,21 @@ export function BranchSelectorModal({
 
                   {/* Right: Action Button */}
                   <div className="w-full sm:w-auto flex-shrink-0 sm:self-center">
-                    {isActive ? (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onSelectBranch(branch.id);
-                        }}
-                        className="w-full sm:w-auto px-5 py-3 rounded-xl bg-gradient-to-r from-brand-gold to-amber-400 hover:from-amber-400 hover:to-brand-gold text-dark-950 font-extrabold text-xs shadow-glow-gold transition-all duration-200 active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
-                      >
-                        <span>Entrar no Cardápio</span>
-                        <ChevronRight className="w-4 h-4 text-dark-950" />
-                      </button>
-                    ) : (
-                      <div className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-dark-800 text-slate-400 text-xs font-semibold text-center border border-dark-700">
-                        Inauguração em Breve
-                      </div>
-                    )}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSelectBranch(branch.id);
+                      }}
+                      className={`w-full sm:w-auto px-5 py-3 rounded-xl font-extrabold text-xs transition-all duration-200 active:scale-95 flex items-center justify-center gap-2 cursor-pointer ${
+                        isActive
+                          ? 'bg-gradient-to-r from-brand-gold to-amber-400 hover:from-amber-400 hover:to-brand-gold text-dark-950 shadow-glow-gold'
+                          : 'bg-dark-800 hover:bg-dark-750 text-amber-300 border border-amber-500/40 hover:border-amber-400'
+                      }`}
+                    >
+                      <span>{isActive ? 'Entrar no Cardápio' : 'Ver Unidade Porto Velho'}</span>
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
                   </div>
 
                 </div>
