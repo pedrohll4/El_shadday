@@ -16,6 +16,7 @@ export const RESTAURANT_INFO = {
 };
 
 export const ARIQUEMES_DISTRICTS = [
+  // --- BAIRROS R$ 8,00 ---
   { id: "setor-01", name: "Setor 01", price: 8 },
   { id: "setor-02", name: "Setor 02", price: 8 },
   { id: "setor-03", name: "Setor 03 (Próximo à Loja)", price: 8 },
@@ -28,6 +29,7 @@ export const ARIQUEMES_DISTRICTS = [
   { id: "setor-10", name: "Setor 10", price: 8 },
   { id: "setor-11", name: "Setor 11", price: 8 },
   { id: "setor-12", name: "Setor 12", price: 8 },
+  { id: "demais-setores", name: "Demais Setores", price: 8 },
   { id: "bnh", name: "BNH", price: 8 },
   { id: "bom-futuro", name: "Bom Futuro", price: 8 },
   { id: "bom-jesus", name: "Bom Jesus", price: 8 },
@@ -42,33 +44,40 @@ export const ARIQUEMES_DISTRICTS = [
   { id: "jardim-rio-de-janeiro", name: "Jardim Rio de Janeiro", price: 8 },
   { id: "jardim-primavera", name: "Jardim Primavera", price: 8 },
   { id: "jardim-parana", name: "Jardim Paraná", price: 8 },
+
+  // --- BAIRROS R$ 10,00 ---
   { id: "jardim-zona-sul", name: "Jardim Zona Sul", price: 10 },
-  { id: "bela-vista", name: "Bela Vista", price: 10 },
-  { id: "bella-vista-2", name: "Bella Vista 2", price: 10 },
+  { id: "marechal-rondon", name: "Marechal Rondon", price: 10 },
+  { id: "sao-geraldo", name: "São Geraldo 1 e 2", price: 10 },
   { id: "monte-cristo", name: "Monte Cristo 1 e 2", price: 10 },
+  { id: "multirao", name: "Multirão", price: 10 },
   { id: "nova-londrina", name: "Nova Londrina", price: 10 },
-  { id: "greenvilhe", name: "Greenvilhe", price: 10 },
-  { id: "multirao", name: "Mutirão", price: 10 },
-  { id: "hoteis", name: "Hotéis", price: 10 },
-  { id: "prf", name: "Posto PRF", price: 10 },
-  { id: "white-solder", name: "White Solder", price: 10 },
   { id: "vila-sossego", name: "Vila do Sossego", price: 10 },
-  { id: "condominio", name: "Condomínios Fechados", price: 10 },
+  { id: "hoteis", name: "Hotéis da BR", price: 10 },
+  { id: "white-solder-prf", name: "White Solder e PRF", price: 10 },
+  { id: "condominio", name: "Condomínios", price: 10 },
+  { id: "greenvilhe", name: "Greenvilhe", price: 10 },
+  { id: "bela-vista", name: "Bela Vista 1 e 2", price: 10 },
+
+  // --- BAIRROS R$ 15,00 ---
+  { id: "supremax-rical", name: "Supremax e Rical", price: 15 },
   { id: "sol-nascente", name: "Sol Nascente", price: 15 },
-  { id: "linha-pioneiros", name: "Linha dos Pioneiros", price: 15 },
-  { id: "via-codorna", name: "Via Codorna", price: 15 },
-  { id: "supremax", name: "Supremax", price: 15 },
-  { id: "rical", name: "Rical", price: 15 },
   { id: "entre-rios", name: "Entre Rios", price: 15 },
   { id: "linha-gaucha", name: "Linha Gaúcha", price: 15 },
-  { id: "via-araras", name: "Via das Araras (Clube Lessa)", price: 15 },
+  { id: "linha-pioneiros", name: "Linha dos Pioneiros", price: 15 },
+  { id: "via-codorna", name: "Via Codorna", price: 15 },
   { id: "via-coelhos", name: "Via dos Coelhos", price: 15 },
-  { id: "bairro-jamari", name: "Bairro Jamari (B-40)", price: 20 },
-  { id: "aterro-sanitario", name: "Aterro Sanitário", price: 20 },
-  { id: "bar-garapeira", name: "Bar da Garapeira", price: 20 },
+  { id: "via-araras", name: "Via Araras (Clube Lessa)", price: 15 },
+
+  // --- BAIRROS R$ 20,00 ---
   { id: "zaltana", name: "Zaltana", price: 20 },
+  { id: "bairro-jamari", name: "Bairro Jamari (B-40)", price: 20 },
+  { id: "bar-garapeira", name: "Bar da Garapeira", price: 20 },
+  { id: "aterro-sanitario", name: "Aterro Sanitário", price: 20 },
+
+  // --- LOCALIDADES ESPECIAIS ---
   { id: "ifro", name: "IFRO", price: 30 },
-  { id: "linha-75", name: "Linha 75", price: 50 },
+  { id: "linha-75", name: "Centro de Ressocialização de Ariquemes (Linha 75)", price: 50 },
   { id: "outro", name: "Outro Bairro (A Combinar)", price: 8 }
 ];
 
