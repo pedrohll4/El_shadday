@@ -28,13 +28,14 @@ import { saveQuoteToHistory } from '../buffetData';
 
 // Category icon map helper
 const CATEGORY_ICONS = {
+  acompanhamentos: Salad,
+  prato_principal: UtensilsCrossed,
   carnes: UtensilsCrossed,
   churrasco: Flame,
   pratos_especiais: Sparkles,
-  acompanhamentos: Salad,
   entradas: ConciergeBell,
-  bebidas: Wine,
-  sobremesas: Cake
+  sobremesas: Cake,
+  bebidas: Wine
 };
 
 export function BuffetBuilder({ 
@@ -47,7 +48,7 @@ export function BuffetBuilder({
   const [currentStep, setCurrentStep] = useState('selection');
   
   // Active category filter tab in selection step
-  const [activeCategoryTab, setActiveCategoryTab] = useState(categories[0]?.id || 'carnes');
+  const [activeCategoryTab, setActiveCategoryTab] = useState(categories[0]?.id || 'acompanhamentos');
 
   // Selected items stored as an array of item IDs
   const [selectedItemIds, setSelectedItemIds] = useState(() => {

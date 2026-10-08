@@ -12,6 +12,7 @@ import { BuffetHero } from './components/BuffetHero';
 import { BuffetAbout } from './components/BuffetAbout';
 import { BuffetHowItWorks } from './components/BuffetHowItWorks';
 import { BuffetMenuPreview } from './components/BuffetMenuPreview';
+import { BuffetGallery } from './components/BuffetGallery';
 import { BuffetBuilder } from './components/BuffetBuilder';
 import { BuffetFooter } from './components/BuffetFooter';
 import { BuffetFloatingWhatsApp } from './components/BuffetFloatingWhatsApp';
@@ -181,6 +182,9 @@ export function BuffetApp({ currentAppMode, onToggleAppMode }) {
           categories={categories}
           onScrollToBuilder={() => scrollTo('montador')}
         />
+
+        {/* Section 3.1: Galeria de Fotos Reservada */}
+        <BuffetGallery />
 
         {/* Section 4: Montador de Orçamento (Principal Funcionalidade) */}
         <BuffetBuilder

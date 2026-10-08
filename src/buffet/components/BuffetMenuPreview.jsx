@@ -3,7 +3,7 @@ import { GoldFiligree } from './ElShaddayLogo';
 import { Sparkles, Utensils, ArrowRight, Check } from 'lucide-react';
 
 export function BuffetMenuPreview({ categories = [], onScrollToBuilder }) {
-  const [activeCategoryTab, setActiveCategoryTab] = useState(categories[0]?.id || 'carnes');
+  const [activeCategoryTab, setActiveCategoryTab] = useState(categories[0]?.id || 'acompanhamentos');
 
   return (
     <section id="cardapio-preview" className="py-16 sm:py-24 bg-[#1A202A] text-slate-100 border-b border-[#2E3744] relative">
@@ -113,36 +113,36 @@ export function BuffetMenuPreview({ categories = [], onScrollToBuilder }) {
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm">
               
-              {/* Col 1: Carnes & Churrasco */}
+              {/* Col 1: Acompanhamentos */}
               <div className="p-4 rounded-xl bg-white/70 border border-[#D8B85A]/30">
                 <h4 className="font-serif text-base font-bold text-[#15191F] pb-2 border-b border-[#D8B85A]/30 flex items-center gap-1.5">
                   <Sparkles className="w-4 h-4 text-[#B3913A]" />
-                  <span>Carnes & Churrasco</span>
+                  <span>Acompanhamentos (10 Opções)</span>
                 </h4>
                 <p className="text-xs text-slate-600 mt-2 leading-relaxed">
-                  Cortes bovinos nobres, frango marinado, toscana artesanal, porco nobre e pão de alho crocante assados no ponto ideal.
+                  Salada Tropical, Batatas Rústicas, Arroz Branco e à Grega, Farofa de Banana da terra, Farofa Tropeira, Massas (Alho e Óleo, Molho Branco, Bolonhesa), Creme de Milho e Vinagrete.
                 </p>
               </div>
 
-              {/* Col 2: Pratos Especiais & Acompanhamentos */}
+              {/* Col 2: Prato Principal & Assados */}
               <div className="p-4 rounded-xl bg-white/70 border border-[#D8B85A]/30">
                 <h4 className="font-serif text-base font-bold text-[#15191F] pb-2 border-b border-[#D8B85A]/30 flex items-center gap-1.5">
                   <Sparkles className="w-4 h-4 text-[#B3913A]" />
-                  <span>Especiais & Guarnições</span>
+                  <span>Prato Principal & Assados</span>
                 </h4>
                 <p className="text-xs text-slate-600 mt-2 leading-relaxed">
-                  Moqueca especial da casa, vatapá tradicional cremoso, farofa tradicional na manteiga, farofa tropeiro com bacon, arroz e saladas frescas.
+                  Filé de Peito ao Molho Branco, Carne ao Molho Madeira, Coxa/Sobrecoxa Desossada e Recheada, Strogonoff de Frango e Carne, Porco Frito e Churrasco na brasa (Carne, Toscana e Frango).
                 </p>
               </div>
 
-              {/* Col 3: Bebidas & Sobremesas */}
+              {/* Col 3: Entradas, Sobremesas & Bebidas */}
               <div className="p-4 rounded-xl bg-white/70 border border-[#D8B85A]/30">
                 <h4 className="font-serif text-base font-bold text-[#15191F] pb-2 border-b border-[#D8B85A]/30 flex items-center gap-1.5">
                   <Sparkles className="w-4 h-4 text-[#B3913A]" />
-                  <span>Bebidas & Doces</span>
+                  <span>Entradas, Doces & Bebidas</span>
                 </h4>
                 <p className="text-xs text-slate-600 mt-2 leading-relaxed">
-                  Refrigerantes, sucos naturais e água servidos gelados em taças apropriadas, finalizando com mousses refinados de maracujá e cupuaçu.
+                  Salgadinhos e Petiscos Variados, Mousses artesanais de Cupuaçu e Maracujá, Refrigerantes (Regional e Original), Água Mineral e Sucos Naturais servidos em taças.
                 </p>
               </div>
 

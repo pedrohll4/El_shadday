@@ -38,105 +38,126 @@ export const INITIAL_EVENT_TYPES = [
   "Outro"
 ];
 
-export const INITIAL_BUFFET_CATEGORIES = [
+// Espaço reservado para as fotos oficiais do Buffet El Shadday.
+// Basta substituir as URLs abaixo pelas fotos que o cliente enviar!
+export const RESERVED_BUFFET_PHOTOS = [
   {
-    id: "carnes",
-    name: "Carnes",
-    description: "Opções de carnes selecionadas preparadas no capricho",
-    icon: "UtensilsCrossed",
-    badge: "Principal",
-    items: [
-      { id: "carne_bovina", name: "Carne", desc: "Cortes bovinos nobres selecionados e suculentos", active: true },
-      { id: "carne_frango", name: "Frango", desc: "Cortes de frango temperados com especiarias da casa", active: true },
-      { id: "carne_toscana", name: "Toscana", desc: "Linguiça toscana artesanal grelhada no ponto ideal", active: true },
-      { id: "carne_porco", name: "Porco", desc: "Carne suína nobre dourada, macia e saborosa", active: true }
-    ]
+    id: "rechauds",
+    title: "Mesa de Pratos Quentes & Rechauds",
+    subtitle: "Estrutura térmica que mantém a temperatura perfeita do início ao fim",
+    tag: "Rechauds & Buffet",
+    url: "https://images.unsplash.com/photo-1555244162-803834f70033?w=800&auto=format&fit=crop&q=80",
+    isReservedPlaceholder: true
+  },
+  {
+    id: "prataria",
+    title: "Prataria Nobre, Taças & Talheres",
+    subtitle: "Mesa posta sofisticada com taças finas e talheres de alto padrão inclusos",
+    tag: "Louças & Cristais",
+    url: "https://images.unsplash.com/photo-1519225421980-715cb0215aed?w=800&auto=format&fit=crop&q=80",
+    isReservedPlaceholder: true
+  },
+  {
+    id: "entradas",
+    title: "Entradas & Salgadinhos Variados",
+    subtitle: "Coxinhas, quibes, risoles e petiscos finos servidos quentinhos",
+    tag: "Entradas & Petiscos",
+    url: "https://images.unsplash.com/photo-1541544741938-0af808871cc0?w=800&auto=format&fit=crop&q=80",
+    isReservedPlaceholder: true
   },
   {
     id: "churrasco",
-    name: "Churrasco",
-    description: "Assados na brasa com cortes nobres e complementos tradicionais",
-    icon: "Flame",
-    badge: "Assados",
-    items: [
-      { id: "churr_carne", name: "Carne", desc: "Churrasco de corte bovino assado na brasa", active: true },
-      { id: "churr_frango", name: "Frango", desc: "Churrasco de frango marinado e dourado", active: true },
-      { id: "churr_toscana", name: "Toscana", desc: "Toscana especial assada na brasa", active: true },
-      { id: "churr_porco", name: "Porco", desc: "Carne de porco selecionada e assada com crosta dourada", active: true },
-      { id: "churr_pao_alho", name: "Pão de alho", desc: "Pão de alho crocante recheado com creme especial e queijo", active: true }
-    ]
+    title: "Churrasco & Carnes Nobres",
+    subtitle: "Cortes bovinos, toscana suculenta e frango dourados no ponto ideal",
+    tag: "Carnes & Assados",
+    url: "https://images.unsplash.com/photo-1544025162-d76694265947?w=800&auto=format&fit=crop&q=80",
+    isReservedPlaceholder: true
   },
   {
-    id: "pratos_especiais",
-    name: "Pratos Especiais",
-    description: "Preparações refinadas exclusivas do Buffet El Shadday",
-    icon: "Sparkles",
-    badge: "Destaque",
-    items: [
-      { id: "esp_moqueca", name: "Moqueca", desc: "Moqueca especial rica em temperos, dendê e leite de coco cremoso", active: true },
-      { id: "esp_carne_madeira", name: "Carne ao Molho Madeira", desc: "Iscas nobres com molho madeira encorpado e champignon", active: true },
-      { id: "esp_peito_branco", name: "Filé de Peito ao Molho Branco", desc: "Filés macios cobertos com molho branco aveludado e queijo", active: true },
-      { id: "esp_coxa_recheada", name: "Coxa / Sobrecoxa Recheada", desc: "Desossada e recheada com queijo, bacon e ervas finas", active: true },
-      { id: "esp_strogonoff_frango", name: "Strogonoff de Frango", desc: "Clássico strogonoff cremoso com cogumelos frescos", active: true },
-      { id: "esp_strogonoff_carne", name: "Strogonoff de Carne", desc: "Filé em tiras com creme aveludado de especiarias", active: true },
-      { id: "esp_porco_frito", name: "Porco Frito Crocante", desc: "Pedaços suínos temperados e fritos no ponto pururuca", active: true }
-    ]
+    id: "garcons",
+    title: "Equipe de Garçons Uniformizada",
+    subtitle: "Profissionais experientes, atenciosos e ágeis no atendimento",
+    tag: "Serviço de Salão",
+    url: "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&auto=format&fit=crop&q=80",
+    isReservedPlaceholder: true
   },
+  {
+    id: "sobremesas",
+    title: "Mousses de Cupuaçu & Maracujá",
+    subtitle: "Sobremesas aeradas e refinadas preparadas artesanalmente",
+    tag: "Sobremesas",
+    url: "https://images.unsplash.com/photo-1551024709-8f23befc6f87?w=800&auto=format&fit=crop&q=80",
+    isReservedPlaceholder: true
+  }
+];
+
+export const INITIAL_BUFFET_CATEGORIES = [
   {
     id: "acompanhamentos",
     name: "Acompanhamentos",
-    description: "Guarnições aromáticas, farofas caseiras e saladas frescas",
+    description: "Guarnições aromáticas, farofas caseiras, massas nobres e saladas frescas",
     icon: "Salad",
-    badge: "Guarnições",
+    badge: "10 Opções",
     items: [
-      { id: "acomp_vatapa", name: "Vatapá", desc: "Vatapá tradicional cremoso, aromático e com textura suave", active: true },
-      { id: "acomp_farofa_trad", name: "Farofa Tradicional", desc: "Farofa artesanal dourada na manteiga com ervas finas", active: true },
-      { id: "acomp_farofa_tropeiro", name: "Farofa Tropeiro", desc: "Farofa tropeira com pedacinhos de bacon, calabresa e temperos", active: true },
-      { id: "acomp_arroz_grega", name: "Arroz Branco e Arroz à Grega", desc: "Dupla tradicional soltinha com legumes selecionados", active: true },
-      { id: "acomp_salada_tropical", name: "Salada Verde Tropical", desc: "Mix de folhas nobres, frutas da estação e molho agridoce", active: true },
-      { id: "acomp_batatas_rusticas", name: "Batatas Rústicas Assadas", desc: "Batatas douradas ao forno com alecrim e azeite de oliva", active: true },
-      { id: "acomp_creme_milho", name: "Creme de Milho", desc: "Creme aveludado preparado com milho verde e toque de queijo", active: true },
-      { id: "acomp_salada_vinagrete", name: "Salada de Vinagrete", desc: "Cubos de tomate, cebola e pimentão marinados em azeite", active: true },
-      { id: "acomp_macarrao_alho", name: "Macarrão Alho e Óleo", desc: "Massa al dente salteada em azeite extravirgem e alho dourado", active: true },
-      { id: "acomp_macarrao_branco", name: "Macarrão ao Molho Branco", desc: "Massa nobre envolvida em molho bechamel cremoso", active: true },
-      { id: "acomp_macarrao_bolonhesa", name: "Macarrão à Bolonhesa", desc: "Massa ao sugo artesanal com carne moída de primeira", active: true }
+      { id: "acomp_salada_tropical", name: "Salada Verde Tropical", desc: "Mix de folhas nobres, frutas da estação e molho agridoce suave", active: true },
+      { id: "acomp_batatas_rusticas", name: "Batatas Rústicas Assadas", desc: "Batatas douradas ao forno com azeite de oliva e alecrim fresco", active: true },
+      { id: "acomp_arroz_grega", name: "Arroz branco e Arroz a Grega", desc: "Dupla tradicional soltinha com legumes selecionados", active: true },
+      { id: "acomp_farofa_banana", name: "Farofa de Banana da terra", desc: "Farofa crocante dourada na manteiga com pedacinhos de banana da terra", active: true },
+      { id: "acomp_farofa_tropeira", name: "Farofa Tropeira", desc: "Farofa tropeira com pedacinhos de bacon, calabresa e temperos caseiros", active: true },
+      { id: "acomp_macarrao_alho", name: "Macarrão Alho e Oleo", desc: "Massa al dente salteada em azeite extravirgem e alho dourado crocante", active: true },
+      { id: "acomp_macarrao_branco", name: "Macarrão ao Molho Branco", desc: "Massa nobre envolvida em molho bechamel cremoso e queijo", active: true },
+      { id: "acomp_creme_milho", name: "Creme de milho", desc: "Creme aveludado preparado com milho verde fresco e toque suave de queijo", active: true },
+      { id: "acomp_salada_vinagrete", name: "Salada de Vinagrete", desc: "Cubos de tomate, cebola e pimentão marinados em azeite extravirgem", active: true },
+      { id: "acomp_macarrao_bolonhesa", name: "Macarrão a Bolonhesa", desc: "Massa ao sugo artesanal com carne moída de primeira selecionada", active: true }
+    ]
+  },
+  {
+    id: "prato_principal",
+    name: "Prato Principal & Assados",
+    description: "Cortes bovinos, suínos e aves com molhos refinados e churrasco na brasa",
+    icon: "UtensilsCrossed",
+    badge: "Carnes & Assados",
+    items: [
+      { id: "pp_peito_branco", name: "Filé de Peito ao molho Branco", desc: "Filés macios de peito grelhados com molho branco aveludado e queijo", active: true },
+      { id: "pp_carne_madeira", name: "Carne ao Molho Madeira", desc: "Iscas de carne nobre com molho madeira encorpado e champignon", active: true },
+      { id: "pp_coxa_recheada", name: "Coxa/Sobre coxa desossada e recheada", desc: "Cortes desossados e recheados com queijo, bacon e ervas finas", active: true },
+      { id: "pp_strogonoff_frango", name: "Strogonoff de Frango", desc: "Clássico strogonoff cremoso com cogumelos frescos da estação", active: true },
+      { id: "pp_strogonoff_carne", name: "Strogonoff de Carne", desc: "Filé em tiras com creme aveludado de especiarias e cogumelos", active: true },
+      { id: "pp_porco_frito", name: "Porco Frito", desc: "Pedaços suínos temperados e fritos no ponto perfeito crocante", active: true },
+      { id: "pp_churrasco_assados", name: "Churrasco de: ( Carne, toscana e Frango)", desc: "Assados na brasa com corte bovino, toscana artesanal e frango dourado", isAssado: true, badge: "Assados", active: true }
+    ]
+  },
+  {
+    id: "sobremesas",
+    name: "Sobremesa",
+    description: "Mousses artesanais aerados para adoçar sua festa com requinte",
+    icon: "Cake",
+    badge: "Doces Finos",
+    items: [
+      { id: "sob_cupuacu", name: "Mousse de cupuaçu", desc: "Mousse artesanal cremoso e aerado com calda da fruta fresca", active: true },
+      { id: "sob_maracuja", name: "Mousse de Maracuja", desc: "Mousse suave e levemente cítrico com sementes e calda natural", active: true }
     ]
   },
   {
     id: "entradas",
-    name: "Entradas & Petiscos",
-    description: "Para recepcionar seus convidados com elegância",
+    name: "Entrada",
+    description: "Recepção com salgadinhos dourados e petiscos especiais",
     icon: "ConciergeBell",
-    badge: "Boas-vindas",
+    badge: "Boas-Vindas",
     items: [
-      { id: "ent_salgadinhos", name: "Salgadinhos Variados", desc: "Coxinhas, quibes, risoles e empadas douradas e quentinhas", active: true },
-      { id: "ent_petiscos", name: "Petiscos Variados", desc: "Canapés finos, tábuas de frios selecionados e torradinhas", active: true }
+      { id: "ent_salgadinhos", name: "Salgadinhos Variados", desc: "Coxinhas, quibes, risoles e empadas servidos quentinhos", active: true },
+      { id: "ent_petiscos", name: "Petiscos Variados", desc: "Canapés finos, tábua de frios e finger foods selecionados", active: true }
     ]
   },
   {
     id: "bebidas",
     name: "Bebidas",
-    description: "Linha de refrigerantes, sucos naturais e água para seu evento",
+    description: "Linha de refrigerantes, água mineral e sucos naturais servidos gelados",
     icon: "Wine",
     badge: "Bebidas",
     items: [
-      { id: "beb_refri_reg", name: "Refrigerante Regional", desc: "Refrigerante regional + água mineral com e sem gás e suco natural", active: true },
-      { id: "beb_refri_orig", name: "Refrigerante Original", desc: "Refrigerante de marca original + água mineral e suco natural", active: true },
-      { id: "beb_refrigerante", name: "Refrigerante", desc: "Seleção de refrigerantes de primeira linha servidos gelados", active: true },
-      { id: "beb_agua", name: "Água Mineral", desc: "Água mineral cristalina (com gás e sem gás)", active: true },
-      { id: "beb_suco", name: "Suco Natural", desc: "Sucos naturais de polpas e frutas frescas da época", active: true }
-    ]
-  },
-  {
-    id: "sobremesas",
-    name: "Sobremesas",
-    description: "O toque doce e requintado para fechar com chave de ouro",
-    icon: "Cake",
-    badge: "Doces",
-    items: [
-      { id: "sob_cupuacu", name: "Mousse de Cupuaçu", desc: "Mousse artesanal cremoso com calda leve da fruta", active: true },
-      { id: "sob_maracuja", name: "Mousse de Maracujá", desc: "Mousse suave e aerado com calda de maracujá e sementes", active: true },
-      { id: "sob_especial", name: "Sobremesa Especial", desc: "Sobremesa da casa personalizada para a ocasião", active: true }
+      { id: "beb_regional", name: "Refrigerante Regional + Agua mineral e Suco natural", desc: "Refrigerante regional gelado, água mineral (com e sem gás) e suco natural", active: true },
+      { id: "beb_original", name: "Refrigerante Original + Agua mineral e Suco natural", desc: "Refrigerantes de marca original de primeira linha, água mineral e suco natural", active: true }
     ]
   }
 ];
@@ -144,7 +165,7 @@ export const INITIAL_BUFFET_CATEGORIES = [
 // Helper to get company settings with localStorage persistence
 export function getStoredBuffetCompany() {
   try {
-    const saved = localStorage.getItem("el_shadday_buffet_company");
+    const saved = localStorage.getItem("el_shadday_buffet_company_v4");
     if (saved) {
       return { ...INITIAL_BUFFET_COMPANY, ...JSON.parse(saved) };
     }
@@ -156,7 +177,7 @@ export function getStoredBuffetCompany() {
 
 export function saveStoredBuffetCompany(company) {
   try {
-    localStorage.setItem("el_shadday_buffet_company", JSON.stringify(company));
+    localStorage.setItem("el_shadday_buffet_company_v4", JSON.stringify(company));
   } catch (e) {
     console.error("Error saving company data:", e);
   }
@@ -165,7 +186,7 @@ export function saveStoredBuffetCompany(company) {
 // Helper to get buffet categories & items with localStorage persistence
 export function getStoredBuffetCategories() {
   try {
-    const saved = localStorage.getItem("el_shadday_buffet_categories");
+    const saved = localStorage.getItem("el_shadday_buffet_categories_v4");
     if (saved) {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed) && parsed.length > 0) {
@@ -180,7 +201,7 @@ export function getStoredBuffetCategories() {
 
 export function saveStoredBuffetCategories(categories) {
   try {
-    localStorage.setItem("el_shadday_buffet_categories", JSON.stringify(categories));
+    localStorage.setItem("el_shadday_buffet_categories_v4", JSON.stringify(categories));
   } catch (e) {
     console.error("Error saving buffet categories:", e);
   }
