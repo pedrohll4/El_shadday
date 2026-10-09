@@ -63,22 +63,9 @@ ALTER TABLE public.buffet_gallery ADD COLUMN IF NOT EXISTS thumbnail TEXT;
 
 CREATE INDEX IF NOT EXISTS idx_gallery_category ON public.buffet_gallery (category);
 
--- Inserir as primeiras fotos oficiais do Buffet El Shadday
-INSERT INTO public.buffet_gallery (id, title, subtitle, category, tag, url, position)
-VALUES 
-    ('gal_1', 'Churrasco na Brasa com Cortes Nobres', 'Picanha, cortes bovinos no ponto e linguiça toscana artesanal', 'churrasco', 'Churrasco Nobre', 'https://images.unsplash.com/photo-1544025162-d76694265947?w=1000&auto=format&fit=crop&q=80', 0),
-    ('gal_2', 'Estrutura Térmica & Rechauds em Inox', 'Pratos quentes mantidos na temperatura ideal durante todo o evento', 'rechauds', 'Rechauds & Buffet', 'https://images.unsplash.com/photo-1555244162-803834f70033?w=1000&auto=format&fit=crop&q=80', 1),
-    ('gal_3', 'Prataria Nobre & Taças de Cristal', 'Mesa posta sofisticada com talheres de alto padrão inclusos', 'prataria', 'Louças & Cristais', 'https://images.unsplash.com/photo-1519225421980-715cb0215aed?w=1000&auto=format&fit=crop&q=80', 2),
-    ('gal_4', 'Entradas & Salgadinhos Finos', 'Coxinhas crocantes, quibes, risoles e canapés servidos quentinhos', 'entradas', 'Entradas & Petiscos', 'https://images.unsplash.com/photo-1541544741938-0af808871cc0?w=1000&auto=format&fit=crop&q=80', 3),
-    ('gal_5', 'Assados Especiais & Frango Grelhado', 'Sobrecoxas desossadas e frango dourado com tempero artesanal', 'churrasco', 'Assados na Brasa', 'https://images.unsplash.com/photo-1598515214211-89d3c73ae83b?w=1000&auto=format&fit=crop&q=80', 4),
-    ('gal_6', 'Mesa de Sobremesas & Mousses Gourmet', 'Mousses aerados de maracujá e cupuaçu com apresentação refinada', 'sobremesas', 'Doces Artesanais', 'https://images.unsplash.com/photo-1551024709-8f23befc6f87?w=1000&auto=format&fit=crop&q=80', 5),
-    ('gal_7', 'Equipe de Garçons Uniformizada', 'Profissionais atenciosos, treinados e ágeis no atendimento', 'equipe', 'Atendimento de Salão', 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1000&auto=format&fit=crop&q=80', 6),
-    ('gal_8', 'Porco Assado Suculento & Pururuca', 'Cortes suínos preparados na brasa com pele crocante e maciez', 'churrasco', 'Porco Assado', 'https://images.unsplash.com/photo-1529692236671-f1f6cf9683ba?w=1000&auto=format&fit=crop&q=80', 7),
-    ('gal_9', 'Mesa de Saladas Tropicais Frescas', 'Mix de folhas nobres, frutas da estação e vinagrete especial', 'rechauds', 'Guarnições & Saladas', 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=1000&auto=format&fit=crop&q=80', 8),
-    ('gal_10', 'Mesa Posta Completa para Casamento', 'Arranjos florais, sousplat, taças para água, suco e espumante', 'prataria', 'Decoração & Mesa', 'https://images.unsplash.com/photo-1465495976277-4387d4b0b4c6?w=1000&auto=format&fit=crop&q=80', 9),
-    ('gal_11', 'Tábua de Frios & Canapés Nobres', 'Queijos selecionados, salames e frutas secas para recepção', 'entradas', 'Petiscos de Recepção', 'https://images.unsplash.com/photo-1505253758473-96b3015f21c9?w=1000&auto=format&fit=crop&q=80', 10),
-    ('gal_12', 'Serviço Atencioso em Todas as Mesas', 'Reposição constante de pratos, bebidas e recolhimento ágil', 'equipe', 'Excelência El Shadday', 'https://images.unsplash.com/photo-1530103862676-de8c9debad1d?w=1000&auto=format&fit=crop&q=80', 11)
-ON CONFLICT (id) DO NOTHING;
+-- 3.1 LIMPAR FOTOS FAKES/PADRÃO PARA DEIXAR A GALERIA LIVRE PARA AS FOTOS REAIS DO BUFFET
+DELETE FROM public.buffet_gallery WHERE id LIKE 'gal_%' OR url LIKE '%unsplash.com%';
+UPDATE public.company_settings SET buffet_gallery = '[]'::jsonb WHERE id = 'el_shadday_config' AND buffet_gallery::text LIKE '%unsplash.com%';
 
 -- 4. TABELA DE CONFIGURAÇÕES GERAIS DA EMPRESA (COM DADOS REAIS DE ARIQUEMES - RO)
 CREATE TABLE IF NOT EXISTS public.company_settings (

@@ -156,8 +156,9 @@ export default function App() {
         .then(({ data, error }) => {
           if (!error && data) {
             if (Array.isArray(data.buffet_gallery)) {
-              saveStoredBuffetGallery(data.buffet_gallery);
-              window.dispatchEvent(new CustomEvent("buffet_gallery_updated", { detail: data.buffet_gallery }));
+              const cleanGal = data.buffet_gallery.filter(p => p && !p.id?.startsWith('gal_') && !p.url?.includes('images.unsplash.com'));
+              saveStoredBuffetGallery(cleanGal);
+              window.dispatchEvent(new CustomEvent("buffet_gallery_updated", { detail: cleanGal }));
             }
             if (Array.isArray(data.menu_products) && data.menu_products.length > 0) {
               setProducts(data.menu_products);
@@ -198,8 +199,9 @@ export default function App() {
           const freshData = payload.new;
           if (freshData) {
             if (Array.isArray(freshData.buffet_gallery)) {
-              saveStoredBuffetGallery(freshData.buffet_gallery);
-              window.dispatchEvent(new CustomEvent("buffet_gallery_updated", { detail: freshData.buffet_gallery }));
+              const cleanGal = freshData.buffet_gallery.filter(p => p && !p.id?.startsWith('gal_') && !p.url?.includes('images.unsplash.com'));
+              saveStoredBuffetGallery(cleanGal);
+              window.dispatchEvent(new CustomEvent("buffet_gallery_updated", { detail: cleanGal }));
             }
             if (Array.isArray(freshData.menu_products)) {
               setProducts(freshData.menu_products);

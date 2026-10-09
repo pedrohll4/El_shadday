@@ -119,14 +119,18 @@ export function AdminDashboard({
     window.addEventListener('buffet_gallery_updated', handleGallerySync);
 
     if (isSupabaseConfigured && supabase) {
+      // Limpa automaticamente fotos padrão/fake do banco se existirem
+      supabase.from('buffet_gallery').delete().or('id.like.gal_%,url.like.%unsplash.com%').then(() => {});
+
       supabase
         .from('buffet_gallery')
         .select('*')
         .order('position', { ascending: true })
         .then(({ data, error }) => {
-          if (!error && Array.isArray(data) && data.length > 0) {
-            setGalleryList(data);
-            saveStoredBuffetGallery(data);
+          if (!error && Array.isArray(data)) {
+            const clean = data.filter(p => p && !p.id?.startsWith('gal_') && !p.url?.includes('images.unsplash.com'));
+            setGalleryList(clean);
+            saveStoredBuffetGallery(clean);
           } else {
             supabase
               .from('company_settings')
@@ -134,9 +138,10 @@ export function AdminDashboard({
               .eq('id', 'el_shadday_config')
               .single()
               .then(({ data: csData }) => {
-                if (Array.isArray(csData?.buffet_gallery) && csData.buffet_gallery.length > 0) {
-                  setGalleryList(csData.buffet_gallery);
-                  saveStoredBuffetGallery(csData.buffet_gallery);
+                if (Array.isArray(csData?.buffet_gallery)) {
+                  const cleanCs = csData.buffet_gallery.filter(p => p && !p.id?.startsWith('gal_') && !p.url?.includes('images.unsplash.com'));
+                  setGalleryList(cleanCs);
+                  saveStoredBuffetGallery(cleanCs);
                 }
               });
           }
@@ -151,8 +156,9 @@ export function AdminDashboard({
             .order('position', { ascending: true })
             .then(({ data }) => {
               if (Array.isArray(data)) {
-                setGalleryList(data);
-                saveStoredBuffetGallery(data);
+                const clean = data.filter(p => p && !p.id?.startsWith('gal_') && !p.url?.includes('images.unsplash.com'));
+                setGalleryList(clean);
+                saveStoredBuffetGallery(clean);
               }
             });
         })
@@ -251,27 +257,16 @@ export function AdminDashboard({
   };
 
   const handleResetGallery = async () => {
-    if (!window.confirm('Deseja restaurar as fotos padrão do Buffet?')) return;
-    setGalleryList(INITIAL_BUFFET_GALLERY);
-    saveStoredBuffetGallery(INITIAL_BUFFET_GALLERY);
-    dispatchConfigSync('GALLERY_UPDATE', INITIAL_BUFFET_GALLERY);
+    if (!window.confirm('Deseja limpar todas as fotos da galeria?')) return;
+    setGalleryList([]);
+    saveStoredBuffetGallery([]);
+    dispatchConfigSync('GALLERY_UPDATE', []);
     if (isSupabaseConfigured && supabase) {
       try {
         await supabase.from('buffet_gallery').delete().neq('id', '___none___');
-        await supabase.from('buffet_gallery').insert(
-          INITIAL_BUFFET_GALLERY.map((p, i) => ({
-            id: p.id,
-            url: p.url,
-            title: p.title,
-            subtitle: p.subtitle,
-            category: p.category,
-            tag: p.tag,
-            position: i
-          }))
-        );
       } catch (err) {}
     }
-    setGalleryFeedback('Galeria restaurada para o padrão!');
+    setGalleryFeedback('Galeria limpa com sucesso!');
     setTimeout(() => setGalleryFeedback(''), 3500);
   };
 

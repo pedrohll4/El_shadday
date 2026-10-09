@@ -92,9 +92,10 @@ export function BuffetSection({ onExploreFullBuffet }) {
         .select('*')
         .order('position', { ascending: true })
         .then(({ data, error }) => {
-          if (!error && Array.isArray(data) && data.length > 0) {
-            setGalleryPhotos(data);
-            saveStoredBuffetGallery(data);
+          if (!error && Array.isArray(data)) {
+            const clean = data.filter(p => p && !p.id?.startsWith('gal_') && !p.url?.includes('images.unsplash.com'));
+            setGalleryPhotos(clean);
+            saveStoredBuffetGallery(clean);
           } else {
             supabase
               .from('company_settings')
@@ -102,9 +103,10 @@ export function BuffetSection({ onExploreFullBuffet }) {
               .eq('id', 'el_shadday_config')
               .single()
               .then(({ data: csData }) => {
-                if (Array.isArray(csData?.buffet_gallery) && csData.buffet_gallery.length > 0) {
-                  setGalleryPhotos(csData.buffet_gallery);
-                  saveStoredBuffetGallery(csData.buffet_gallery);
+                if (Array.isArray(csData?.buffet_gallery)) {
+                  const cleanCs = csData.buffet_gallery.filter(p => p && !p.id?.startsWith('gal_') && !p.url?.includes('images.unsplash.com'));
+                  setGalleryPhotos(cleanCs);
+                  saveStoredBuffetGallery(cleanCs);
                 }
               });
           }
@@ -119,8 +121,9 @@ export function BuffetSection({ onExploreFullBuffet }) {
             .order('position', { ascending: true })
             .then(({ data }) => {
               if (Array.isArray(data)) {
-                setGalleryPhotos(data);
-                saveStoredBuffetGallery(data);
+                const clean = data.filter(p => p && !p.id?.startsWith('gal_') && !p.url?.includes('images.unsplash.com'));
+                setGalleryPhotos(clean);
+                saveStoredBuffetGallery(clean);
               }
             });
         })
@@ -129,14 +132,18 @@ export function BuffetSection({ onExploreFullBuffet }) {
 
     // Carrega fotos mais recentes da nuvem pública (cross-device)
     fetchCloudConfigHistory().then(cfg => {
-      if (cfg?.gallery && cfg.gallery.length > 0) {
-        setGalleryPhotos(cfg.gallery);
+      if (cfg?.gallery && Array.isArray(cfg.gallery)) {
+        const clean = cfg.gallery.filter(p => p && !p.id?.startsWith('gal_') && !p.url?.includes('images.unsplash.com'));
+        setGalleryPhotos(clean);
       }
     });
 
     const unsubscribeGallery = subscribeToConfigEvents({
       onGalleryUpdate: (gal) => {
-        if (gal && gal.length > 0) setGalleryPhotos(gal);
+        if (Array.isArray(gal)) {
+          const clean = gal.filter(p => p && !p.id?.startsWith('gal_') && !p.url?.includes('images.unsplash.com'));
+          setGalleryPhotos(clean);
+        }
       }
     });
 
@@ -629,15 +636,17 @@ export function BuffetSection({ onExploreFullBuffet }) {
             </div>
           )}
 
-          <div className="mt-3.5 flex items-center justify-between text-[11px] text-slate-400">
-            <span className="flex items-center gap-1.5 text-slate-300">
-              <Sparkles className="w-3.5 h-3.5 text-[#D8B85A]" />
-              <span>Fotos e vídeos reais que mudam automaticamente a cada 3,5s</span>
-            </span>
-            <span className="font-mono text-[#D8B85A] text-[10px] font-semibold">
-              Foto {((galleryIndex % (galleryPhotos?.length || 1)) + 1)} de {galleryPhotos?.length || INITIAL_BUFFET_GALLERY.length}
-            </span>
-          </div>
+          {galleryPhotos && galleryPhotos.length > 0 && (
+            <div className="mt-3.5 flex items-center justify-between text-[11px] text-slate-400">
+              <span className="flex items-center gap-1.5 text-slate-300">
+                <Sparkles className="w-3.5 h-3.5 text-[#D8B85A]" />
+                <span>Fotos e vídeos reais que mudam automaticamente a cada 3,5s</span>
+              </span>
+              <span className="font-mono text-[#D8B85A] text-[10px] font-semibold">
+                Foto {((galleryIndex % galleryPhotos.length) + 1)} de {galleryPhotos.length}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* 5. Formulário de Orçamento Direto no WhatsApp */}

@@ -145,9 +145,10 @@ export function BuffetApp({ currentAppMode, onToggleAppMode }) {
         .select('*')
         .order('position', { ascending: true })
         .then(({ data, error }) => {
-          if (!error && Array.isArray(data) && data.length > 0) {
-            setGalleryPhotos(data);
-            saveStoredBuffetGallery(data);
+          if (!error && Array.isArray(data)) {
+            const clean = data.filter(p => p && !p.id?.startsWith('gal_') && !p.url?.includes('images.unsplash.com'));
+            setGalleryPhotos(clean);
+            saveStoredBuffetGallery(clean);
           } else {
             // Fallback: verificar se está salvo em company_settings
             supabase
@@ -156,9 +157,10 @@ export function BuffetApp({ currentAppMode, onToggleAppMode }) {
               .eq('id', 'el_shadday_config')
               .single()
               .then(({ data: csData }) => {
-                if (Array.isArray(csData?.buffet_gallery) && csData.buffet_gallery.length > 0) {
-                  setGalleryPhotos(csData.buffet_gallery);
-                  saveStoredBuffetGallery(csData.buffet_gallery);
+                if (Array.isArray(csData?.buffet_gallery)) {
+                  const cleanCs = csData.buffet_gallery.filter(p => p && !p.id?.startsWith('gal_') && !p.url?.includes('images.unsplash.com'));
+                  setGalleryPhotos(cleanCs);
+                  saveStoredBuffetGallery(cleanCs);
                 }
               });
           }
@@ -174,8 +176,9 @@ export function BuffetApp({ currentAppMode, onToggleAppMode }) {
             .order('position', { ascending: true })
             .then(({ data }) => {
               if (Array.isArray(data)) {
-                setGalleryPhotos(data);
-                saveStoredBuffetGallery(data);
+                const clean = data.filter(p => p && !p.id?.startsWith('gal_') && !p.url?.includes('images.unsplash.com'));
+                setGalleryPhotos(clean);
+                saveStoredBuffetGallery(clean);
               }
             });
         })
@@ -184,14 +187,18 @@ export function BuffetApp({ currentAppMode, onToggleAppMode }) {
 
     // Carrega fotos mais recentes da nuvem pública (cross-device)
     fetchCloudConfigHistory().then(cfg => {
-      if (cfg?.gallery && cfg.gallery.length > 0) {
-        setGalleryPhotos(cfg.gallery);
+      if (cfg?.gallery && Array.isArray(cfg.gallery)) {
+        const clean = cfg.gallery.filter(p => p && !p.id?.startsWith('gal_') && !p.url?.includes('images.unsplash.com'));
+        setGalleryPhotos(clean);
       }
     });
 
     const unsubscribeGallery = subscribeToConfigEvents({
       onGalleryUpdate: (gal) => {
-        if (gal && gal.length > 0) setGalleryPhotos(gal);
+        if (Array.isArray(gal)) {
+          const clean = gal.filter(p => p && !p.id?.startsWith('gal_') && !p.url?.includes('images.unsplash.com'));
+          setGalleryPhotos(clean);
+        }
       }
     });
 

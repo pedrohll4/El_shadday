@@ -292,10 +292,10 @@ export function BuffetAdminDashboard({
   };
 
   const handleResetGalleryToDefault = () => {
-    if (!window.confirm('Deseja restaurar as fotos padrão da galeria?')) return;
-    setTempGallery(INITIAL_BUFFET_GALLERY);
-    if (onSaveGalleryPhotos) onSaveGalleryPhotos(INITIAL_BUFFET_GALLERY);
-    triggerSaveNotification('Galeria restaurada para o padrão!');
+    if (!window.confirm('Deseja limpar todas as fotos da galeria?')) return;
+    setTempGallery([]);
+    if (onSaveGalleryPhotos) onSaveGalleryPhotos([]);
+    triggerSaveNotification('Galeria limpa com sucesso!');
   };
 
   return (
@@ -964,8 +964,8 @@ export function BuffetAdminDashboard({
                     onClick={handleResetGalleryToDefault}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#15191F] hover:bg-[#2A3442] text-xs font-semibold text-slate-300 hover:text-white border border-[#2E3744] transition-all cursor-pointer"
                   >
-                    <RotateCcw className="w-3.5 h-3.5 text-[#D8B85A]" />
-                    <span>Restaurar Fotos Padrão</span>
+                    <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                    <span>Limpar Todas as Fotos</span>
                   </button>
                 </div>
               </div>

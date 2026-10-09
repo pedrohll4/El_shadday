@@ -67,108 +67,11 @@ export const GALLERY_CATEGORIES = [
   { id: 'equipe', label: 'Serviço & Garçons' }
 ];
 
-// Galeria com suporte a todas as 49 fotos do Buffet El Shadday.
-// Fotos categorizadas com links otimizados que podem ser editados no painel ou banco.
-export const INITIAL_BUFFET_GALLERY = [
-  {
-    id: "gal_1",
-    title: "Churrasco na Brasa com Cortes Nobres",
-    subtitle: "Picanha, cortes bovinos no ponto e linguiça toscana artesanal",
-    category: "churrasco",
-    tag: "Churrasco Nobre",
-    url: "https://images.unsplash.com/photo-1544025162-d76694265947?w=1000&auto=format&fit=crop&q=80"
-  },
-  {
-    id: "gal_2",
-    title: "Estrutura Térmica & Rechauds em Inox",
-    subtitle: "Pratos quentes mantidos na temperatura ideal durante todo o evento",
-    category: "rechauds",
-    tag: "Rechauds & Buffet",
-    url: "https://images.unsplash.com/photo-1555244162-803834f70033?w=1000&auto=format&fit=crop&q=80"
-  },
-  {
-    id: "gal_3",
-    title: "Prataria Nobre & Taças de Cristal",
-    subtitle: "Mesa posta sofisticada com talheres de alto padrão inclusos",
-    category: "prataria",
-    tag: "Louças & Cristais",
-    url: "https://images.unsplash.com/photo-1519225421980-715cb0215aed?w=1000&auto=format&fit=crop&q=80"
-  },
-  {
-    id: "gal_4",
-    title: "Entradas & Salgadinhos Finos",
-    subtitle: "Coxinhas crocantes, quibes, risoles e canapés servidos quentinhos",
-    category: "entradas",
-    tag: "Entradas & Petiscos",
-    url: "https://images.unsplash.com/photo-1541544741938-0af808871cc0?w=1000&auto=format&fit=crop&q=80"
-  },
-  {
-    id: "gal_5",
-    title: "Assados Especiais & Frango Grelhado",
-    subtitle: "Sobrecoxas desossadas e frango dourado com tempero artesanal",
-    category: "churrasco",
-    tag: "Assados na Brasa",
-    url: "https://images.unsplash.com/photo-1598515214211-89d3c73ae83b?w=1000&auto=format&fit=crop&q=80"
-  },
-  {
-    id: "gal_6",
-    title: "Mesa de Sobremesas & Mousses Gourmet",
-    subtitle: "Mousses aerados de maracujá e cupuaçu com apresentação refinada",
-    category: "sobremesas",
-    tag: "Doces Artesanais",
-    url: "https://images.unsplash.com/photo-1551024709-8f23befc6f87?w=1000&auto=format&fit=crop&q=80"
-  },
-  {
-    id: "gal_7",
-    title: "Equipe de Garçons Uniformizada",
-    subtitle: "Profissionais atenciosos, treinados e ágeis no atendimento",
-    category: "equipe",
-    tag: "Atendimento de Salão",
-    url: "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1000&auto=format&fit=crop&q=80"
-  },
-  {
-    id: "gal_8",
-    title: "Porco Assado Suculento & Pururuca",
-    subtitle: "Cortes suínos preparados na brasa com pele crocante e maciez",
-    category: "churrasco",
-    tag: "Porco Assado",
-    url: "https://images.unsplash.com/photo-1529692236671-f1f6cf9683ba?w=1000&auto=format&fit=crop&q=80"
-  },
-  {
-    id: "gal_9",
-    title: "Mesa de Saladas Tropicais Frescas",
-    subtitle: "Mix de folhas nobres, frutas da estação e vinagrete especial",
-    category: "rechauds",
-    tag: "Guarnições & Saladas",
-    url: "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=1000&auto=format&fit=crop&q=80"
-  },
-  {
-    id: "gal_10",
-    title: "Mesa Posta Completa para Casamento",
-    subtitle: "Arranjos florais, sousplat, taças para água, suco e espumante",
-    category: "prataria",
-    tag: "Decoração & Mesa",
-    url: "https://images.unsplash.com/photo-1465495976277-4387d4b0b4c6?w=1000&auto=format&fit=crop&q=80"
-  },
-  {
-    id: "gal_11",
-    title: "Tábua de Frios & Canapés Nobres",
-    subtitle: "Queijos selecionados, salames e frutas secas para recepção",
-    category: "entradas",
-    tag: "Petiscos de Recepção",
-    url: "https://images.unsplash.com/photo-1505253758473-96b3015f21c9?w=1000&auto=format&fit=crop&q=80"
-  },
-  {
-    id: "gal_12",
-    title: "Serviço Atencioso em Todas as Mesas",
-    subtitle: "Reposição constante de pratos, bebidas e recolhimento ágil",
-    category: "equipe",
-    tag: "Excelência El Shadday",
-    url: "https://images.unsplash.com/photo-1530103862676-de8c9debad1d?w=1000&auto=format&fit=crop&q=80"
-  }
-];
+// Galeria de fotos do Buffet El Shadday.
+// Inicia vazia para que APENAS as fotos e vídeos reais adicionados pelo usuário sejam exibidos.
+export const INITIAL_BUFFET_GALLERY = [];
 
-export const RESERVED_BUFFET_PHOTOS = INITIAL_BUFFET_GALLERY;
+export const RESERVED_BUFFET_PHOTOS = [];
 
 export const INITIAL_BUFFET_CATEGORIES = [
   {
@@ -381,20 +284,20 @@ export function saveQuoteToHistory(quote) {
   }
 }
 
-// Helper to get buffet gallery photos with persistence
+// Helper to get buffet gallery photos with persistence (apenas fotos reais do usuário)
 export function getStoredBuffetGallery() {
   try {
     const saved = localStorage.getItem("el_shadday_buffet_gallery_v2");
     if (saved !== null) {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed)) {
-        return parsed;
+        return parsed.filter(item => item && !item.id?.startsWith('gal_') && !item.url?.includes('images.unsplash.com'));
       }
     }
   } catch (e) {
     console.error("Error reading stored buffet gallery:", e);
   }
-  return INITIAL_BUFFET_GALLERY;
+  return [];
 }
 
 export function saveStoredBuffetGallery(gallery) {
