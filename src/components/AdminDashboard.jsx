@@ -6,9 +6,21 @@ import {
   Bike, ChefHat, BellRing, Plus, Minus, Trash2, XCircle,
   MessageSquare, Phone, ShoppingBag, Store, Copy, ChevronRight,
   AlertCircle, X, ShieldAlert, Sparkles, CheckCheck,
-  Camera, RotateCcw
+  Camera, RotateCcw, Edit, Edit2, Eye, EyeOff, Tag, Percent,
+  Utensils, ToggleLeft, ToggleRight, Save, Layers, CheckSquare
 } from 'lucide-react';
-import { RESTAURANT_INFO, ARIQUEMES_DISTRICTS, CATEGORIES, PRODUCTS } from '../data/menuData';
+import { 
+  RESTAURANT_INFO, 
+  ARIQUEMES_DISTRICTS, 
+  CATEGORIES, 
+  PRODUCTS,
+  getStoredProducts,
+  saveStoredProducts,
+  getStoredPromoSettings,
+  saveStoredPromoSettings,
+  getStoredRestaurantInfo,
+  saveStoredRestaurantInfo
+} from '../data/menuData';
 import { 
   GALLERY_CATEGORIES, 
   INITIAL_BUFFET_GALLERY, 
@@ -170,6 +182,293 @@ export function AdminDashboard({
     setGalleryFeedback('Galeria restaurada para o padrão!');
     setTimeout(() => setGalleryFeedback(''), 3500);
   };
+
+  // ==============================================================
+  // MENU, PRODUCTS & PROMOTIONS MANAGEMENT
+  // ==============================================================
+  const [productsList, setProductsList] = useState(() => getStoredProducts());
+  const [promoSettings, setPromoSettings] = useState(() => getStoredPromoSettings());
+  const [restaurantSettings, setRestaurantSettings] = useState(() => getStoredRestaurantInfo());
+
+  // Sub-navigation in Menu Tab: 'products' | 'promos' | 'store'
+  const [menuSubTab, setMenuSubTab] = useState('products');
+
+  // Search & Filter in Products list
+  const [menuSearch, setMenuSearch] = useState('');
+  const [menuCategoryFilter, setMenuCategoryFilter] = useState('todos');
+
+  // Product Modal State
+  const [isProductModalOpen, setIsProductModalOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState(null); // null = new, object = edit
+
+  // Product Form Fields
+  const [prodFormName, setProdFormName] = useState('');
+  const [prodFormCategory, setProdFormCategory] = useState(CATEGORIES[0]?.id || 'combos');
+  const [prodFormPrice, setProdFormPrice] = useState('');
+  const [prodFormOriginalPrice, setProdFormOriginalPrice] = useState('');
+  const [prodFormBadge, setProdFormBadge] = useState('');
+  const [prodFormDescription, setProdFormDescription] = useState('');
+  const [prodFormDetails, setProdFormDetails] = useState('');
+  const [prodFormImage, setProdFormImage] = useState('');
+  const [prodFormIsAvailable, setProdFormIsAvailable] = useState(true);
+  const [prodFormIsPromo, setProdFormIsPromo] = useState(false);
+  const [prodFormBordaGratis, setProdFormBordaGratis] = useState(false);
+
+  // Promo Form Fields
+  const [tempBannerText, setTempBannerText] = useState(promoSettings.bannerText || '');
+  const [tempBannerActive, setTempBannerActive] = useState(promoSettings.bannerActive !== false);
+  const [tempCouponCode, setTempCouponCode] = useState(promoSettings.couponCode || 'ELSHADDAY10');
+  const [tempCouponDiscount, setTempCouponDiscount] = useState(promoSettings.couponDiscountPercent || 10);
+  const [tempCouponMinOrder, setTempCouponMinOrder] = useState(promoSettings.minOrderValueForCoupon || 50);
+  const [tempCouponActive, setTempCouponActive] = useState(promoSettings.couponActive !== false);
+
+  // Store Form Fields
+  const [tempStoreName, setTempStoreName] = useState(restaurantSettings.name || '');
+  const [tempStorePhone, setTempStorePhone] = useState(restaurantSettings.phone || '5569992228682');
+  const [tempStorePhoneFormatted, setTempStorePhoneFormatted] = useState(restaurantSettings.phoneFormatted || '(69) 99222-8682');
+  const [tempStoreAddress, setTempStoreAddress] = useState(restaurantSettings.address || '');
+  const [tempStoreDeliveryTime, setTempStoreDeliveryTime] = useState(restaurantSettings.deliveryTime || '45 - 75 min');
+  const [tempStorePixKey, setTempStorePixKey] = useState(restaurantSettings.pixKey || '69992228682');
+  const [tempStorePixName, setTempStorePixName] = useState(restaurantSettings.pixName || 'El Shadday Delivery');
+  const [tempStoreOpeningHours, setTempStoreOpeningHours] = useState(restaurantSettings.openingHours || '');
+
+  // Menu Feedback Toast
+  const [menuFeedback, setMenuFeedback] = useState('');
+
+  const triggerMenuToast = (msg) => {
+    setMenuFeedback(msg);
+    setTimeout(() => setMenuFeedback(''), 3500);
+  };
+
+  // Sync menu & promos across tabs/windows
+  useEffect(() => {
+    const handleProductsSync = (e) => {
+      if (e?.detail && Array.isArray(e.detail) && e.detail.length > 0) {
+        setProductsList(e.detail);
+      } else {
+        setProductsList(getStoredProducts());
+      }
+    };
+    const handlePromosSync = (e) => {
+      if (e?.detail) setPromoSettings(e.detail);
+      else setPromoSettings(getStoredPromoSettings());
+    };
+    const handleStoreSync = (e) => {
+      if (e?.detail) setRestaurantSettings(e.detail);
+      else setRestaurantSettings(getStoredRestaurantInfo());
+    };
+
+    window.addEventListener('delivery_products_updated', handleProductsSync);
+    window.addEventListener('delivery_promos_updated', handlePromosSync);
+    window.addEventListener('delivery_restaurant_info_updated', handleStoreSync);
+    window.addEventListener('storage', handleProductsSync);
+
+    return () => {
+      window.removeEventListener('delivery_products_updated', handleProductsSync);
+      window.removeEventListener('delivery_promos_updated', handlePromosSync);
+      window.removeEventListener('delivery_restaurant_info_updated', handleStoreSync);
+      window.removeEventListener('storage', handleProductsSync);
+    };
+  }, []);
+
+  // Handlers for Products
+  const handleOpenCreateProduct = () => {
+    setEditingProduct(null);
+    setProdFormName('');
+    setProdFormCategory(CATEGORIES[0]?.id || 'combos');
+    setProdFormPrice('');
+    setProdFormOriginalPrice('');
+    setProdFormBadge('');
+    setProdFormDescription('');
+    setProdFormDetails('');
+    setProdFormImage('https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&auto=format&fit=crop&q=80');
+    setProdFormIsAvailable(true);
+    setProdFormIsPromo(false);
+    setProdFormBordaGratis(false);
+    setIsProductModalOpen(true);
+  };
+
+  const handleOpenEditProduct = (prod) => {
+    setEditingProduct(prod);
+    setProdFormName(prod.name || '');
+    setProdFormCategory(prod.categoryId || 'combos');
+    setProdFormPrice(prod.price !== undefined ? prod.price.toString() : '');
+    setProdFormOriginalPrice(prod.originalPrice !== undefined ? prod.originalPrice.toString() : '');
+    setProdFormBadge(prod.badge || '');
+    setProdFormDescription(prod.description || '');
+    setProdFormDetails(prod.details || '');
+    setProdFormImage(prod.image || '');
+    setProdFormIsAvailable(prod.isAvailable !== false);
+    setProdFormIsPromo(!!prod.isPromo || !!prod.originalPrice);
+    setProdFormBordaGratis(!!prod.bordaGratis);
+    setIsProductModalOpen(true);
+  };
+
+  const handleSaveProduct = (e) => {
+    e.preventDefault();
+    if (!prodFormName.trim()) {
+      alert('Informe o nome do produto.');
+      return;
+    }
+    const priceNum = parseFloat(prodFormPrice.toString().replace(',', '.'));
+    if (isNaN(priceNum) || priceNum <= 0) {
+      alert('Informe um preço válido.');
+      return;
+    }
+    const origPriceNum = prodFormOriginalPrice ? parseFloat(prodFormOriginalPrice.toString().replace(',', '.')) : null;
+
+    const savedProd = {
+      id: editingProduct ? editingProduct.id : `prod_${Date.now()}`,
+      name: prodFormName.trim(),
+      categoryId: prodFormCategory,
+      price: priceNum,
+      originalPrice: (origPriceNum && origPriceNum > priceNum) ? origPriceNum : (prodFormIsPromo ? (origPriceNum || Math.round(priceNum * 1.25)) : undefined),
+      badge: prodFormBadge.trim() || (prodFormIsPromo ? 'Promoção 🔥' : ''),
+      description: prodFormDescription.trim(),
+      details: prodFormDetails.trim(),
+      image: prodFormImage.trim() || 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&auto=format&fit=crop&q=80',
+      isAvailable: prodFormIsAvailable,
+      isPromo: prodFormIsPromo,
+      bordaGratis: prodFormBordaGratis,
+      isBox: editingProduct ? editingProduct.isBox : (prodFormCategory === 'caixas'),
+      isPizzaCustomizer: editingProduct ? editingProduct.isPizzaCustomizer : (prodFormCategory === 'pizzas')
+    };
+
+    let updated;
+    if (editingProduct) {
+      updated = productsList.map(p => p.id === editingProduct.id ? savedProd : p);
+      triggerMenuToast(`Produto "${savedProd.name}" atualizado com sucesso!`);
+    } else {
+      updated = [savedProd, ...productsList];
+      triggerMenuToast(`Novo produto "${savedProd.name}" criado com sucesso!`);
+    }
+
+    setProductsList(updated);
+    saveStoredProducts(updated);
+    setIsProductModalOpen(false);
+  };
+
+  const handleToggleProductAvailability = (prodId) => {
+    const updated = productsList.map(p => {
+      if (p.id === prodId) {
+        const nextState = p.isAvailable === false ? true : false;
+        triggerMenuToast(nextState ? `"${p.name}" ativado (disponível)!` : `"${p.name}" pausado (esgotado)!`);
+        return { ...p, isAvailable: nextState };
+      }
+      return p;
+    });
+    setProductsList(updated);
+    saveStoredProducts(updated);
+  };
+
+  const handleToggleProductPromo = (prodId) => {
+    const updated = productsList.map(p => {
+      if (p.id === prodId) {
+        const isNowPromo = !p.isPromo && !p.originalPrice;
+        if (isNowPromo) {
+          triggerMenuToast(`"${p.name}" agora está em Promoção 🔥!`);
+          return {
+            ...p,
+            isPromo: true,
+            originalPrice: p.originalPrice || Math.round(p.price * 1.25),
+            badge: p.badge || 'Promoção 🔥'
+          };
+        } else {
+          triggerMenuToast(`Promoção removida de "${p.name}".`);
+          const copy = { ...p };
+          delete copy.originalPrice;
+          copy.isPromo = false;
+          if (copy.badge === 'Promoção 🔥') copy.badge = '';
+          return copy;
+        }
+      }
+      return p;
+    });
+    setProductsList(updated);
+    saveStoredProducts(updated);
+  };
+
+  const handleDuplicateProduct = (prod) => {
+    const cloned = {
+      ...prod,
+      id: `prod_${Date.now()}`,
+      name: `${prod.name} (Cópia)`
+    };
+    const updated = [cloned, ...productsList];
+    setProductsList(updated);
+    saveStoredProducts(updated);
+    triggerMenuToast(`Cópia de "${prod.name}" criada com sucesso!`);
+  };
+
+  const handleDeleteProduct = (prodId, prodName) => {
+    if (!window.confirm(`Tem certeza que deseja remover o produto "${prodName}" do cardápio?`)) return;
+    const updated = productsList.filter(p => p.id !== prodId);
+    setProductsList(updated);
+    saveStoredProducts(updated);
+    triggerMenuToast(`Produto removido do cardápio!`);
+  };
+
+  const handleResetMenuToDefault = () => {
+    if (!window.confirm('Deseja restaurar todos os produtos e preços para o padrão original da loja?')) return;
+    setProductsList(PRODUCTS);
+    saveStoredProducts(PRODUCTS);
+    triggerMenuToast('Cardápio restaurado para o padrão original!');
+  };
+
+  const handleSavePromoSettings = (e) => {
+    e.preventDefault();
+    const newSettings = {
+      bannerText: tempBannerText.trim(),
+      bannerActive: tempBannerActive,
+      couponCode: tempCouponCode.trim().toUpperCase(),
+      couponDiscountPercent: parseFloat(tempCouponDiscount) || 10,
+      minOrderValueForCoupon: parseFloat(tempCouponMinOrder) || 50,
+      couponActive: tempCouponActive
+    };
+    setPromoSettings(newSettings);
+    saveStoredPromoSettings(newSettings);
+    triggerMenuToast('Promoções e Cupons salvos com sucesso!');
+  };
+
+  const handleSaveStoreSettings = (e) => {
+    e.preventDefault();
+    const newStore = {
+      ...restaurantSettings,
+      name: tempStoreName.trim(),
+      phone: tempStorePhone.trim(),
+      phoneFormatted: tempStorePhoneFormatted.trim(),
+      address: tempStoreAddress.trim(),
+      deliveryTime: tempStoreDeliveryTime.trim(),
+      pixKey: tempStorePixKey.trim(),
+      pixName: tempStorePixName.trim(),
+      openingHours: tempStoreOpeningHours.trim()
+    };
+    setRestaurantSettings(newStore);
+    saveStoredRestaurantInfo(newStore);
+    triggerMenuToast('Dados do restaurante atualizados com sucesso!');
+  };
+
+  // Filtered products in Admin
+  const filteredAdminProducts = useMemo(() => {
+    let list = productsList;
+    if (menuCategoryFilter === 'promos') {
+      list = list.filter(p => p.isPromo || p.originalPrice);
+    } else if (menuCategoryFilter === 'pausados') {
+      list = list.filter(p => p.isAvailable === false);
+    } else if (menuCategoryFilter !== 'todos') {
+      list = list.filter(p => p.categoryId === menuCategoryFilter);
+    }
+
+    if (menuSearch.trim()) {
+      const q = menuSearch.toLowerCase().trim();
+      list = list.filter(p => 
+        p.name.toLowerCase().includes(q) ||
+        (p.description || '').toLowerCase().includes(q) ||
+        (p.id || '').toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [productsList, menuCategoryFilter, menuSearch]);
 
   // Sound chime helper using Web Audio API + Speech Synthesis
   const playChime = (isTest = false) => {
@@ -486,7 +785,7 @@ export function AdminDashboard({
 
   // PDV Helpers
   const pdvFilteredProducts = useMemo(() => {
-    let list = PRODUCTS;
+    let list = productsList.filter(p => p.isAvailable !== false);
     if (pdvCategory !== 'todos') {
       list = list.filter(p => p.categoryId === pdvCategory);
     }
@@ -498,7 +797,7 @@ export function AdminDashboard({
       );
     }
     return list;
-  }, [pdvCategory, pdvSearch]);
+  }, [pdvCategory, pdvSearch, productsList]);
 
   const pdvCartSubtotal = useMemo(() => {
     return pdvCart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
@@ -688,12 +987,12 @@ export function AdminDashboard({
 
         </div>
 
-        {/* Navigation Tabs: KDS vs PDV */}
-        <div className="max-w-7xl mx-auto mt-3 flex items-center gap-2 border-t border-dark-800 pt-2.5">
+        {/* Navigation Tabs */}
+        <div className="max-w-7xl mx-auto mt-3 flex items-center gap-2 border-t border-dark-800 pt-2.5 overflow-x-auto scrollbar-none pb-1">
           <button
             type="button"
             onClick={() => setActiveAdminTab('kds')}
-            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all cursor-pointer ${
+            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
               activeAdminTab === 'kds'
                 ? 'bg-brand-gold text-dark-950 shadow-glow-gold font-black'
                 : 'bg-dark-800 text-slate-300 hover:bg-dark-750 hover:text-white border border-dark-750'
@@ -711,14 +1010,14 @@ export function AdminDashboard({
           <button
             type="button"
             onClick={() => setActiveAdminTab('pdv')}
-            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all cursor-pointer ${
+            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
               activeAdminTab === 'pdv'
                 ? 'bg-brand-gold text-dark-950 shadow-glow-gold font-black'
                 : 'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 border border-emerald-500/40'
             }`}
           >
             <Plus className="w-4 h-4 stroke-[3]" />
-            <span>Novo Pedido / PDV Balcão</span>
+            <span>Novo Pedido (PDV)</span>
             {pdvCart.length > 0 && (
               <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-500 text-dark-950 font-black">
                 {pdvCart.length} itens
@@ -728,8 +1027,26 @@ export function AdminDashboard({
 
           <button
             type="button"
+            onClick={() => setActiveAdminTab('menu')}
+            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
+              activeAdminTab === 'menu'
+                ? 'bg-brand-gold text-dark-950 shadow-glow-gold font-black'
+                : 'bg-dark-800 text-slate-300 hover:bg-dark-750 hover:text-white border border-dark-750'
+            }`}
+          >
+            <Utensils className="w-4 h-4" />
+            <span>Cardápio & Promoções</span>
+            <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+              activeAdminTab === 'menu' ? 'bg-dark-950 text-brand-gold' : 'bg-dark-900 text-slate-400'
+            }`}>
+              {productsList.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => setActiveAdminTab('gallery')}
-            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all cursor-pointer ${
+            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
               activeAdminTab === 'gallery'
                 ? 'bg-brand-gold text-dark-950 shadow-glow-gold font-black'
                 : 'bg-dark-800 text-slate-300 hover:bg-dark-750 hover:text-white border border-dark-750'
@@ -748,7 +1065,7 @@ export function AdminDashboard({
             <button
               type="button"
               onClick={onSwitchToBuffet}
-              className="ml-auto px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-1.5 bg-gradient-to-r from-amber-500/20 to-brand-gold/20 text-brand-gold hover:text-white hover:bg-brand-gold/30 border border-brand-gold/40 transition-all cursor-pointer"
+              className="ml-auto px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-1.5 bg-gradient-to-r from-amber-500/20 to-brand-gold/20 text-brand-gold hover:text-white hover:bg-brand-gold/30 border border-brand-gold/40 transition-all cursor-pointer whitespace-nowrap"
               title="Acessar o site do Buffet"
             >
               <Sparkles className="w-4 h-4" />
@@ -766,33 +1083,6 @@ export function AdminDashboard({
         {/* ============================================================== */}
         {activeAdminTab === 'kds' && (
           <div className="space-y-5 animate-fade-in">
-            
-            {/* Quick Buffet Gallery Banner */}
-            <div className="bg-gradient-to-r from-amber-500/15 via-brand-gold/20 to-amber-500/15 border border-brand-gold/40 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-lg">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-brand-gold text-dark-950 flex items-center justify-center font-bold shadow-md">
-                  <Camera className="w-5 h-5 text-dark-950" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-black text-white flex items-center gap-2">
-                    <span>Galeria de Fotos do Buffet</span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-brand-gold text-dark-950 font-black">
-                      {galleryList.length} fotos cadastradas
-                    </span>
-                  </h3>
-                  <p className="text-xs text-slate-300">
-                    Cadastre, visualize e remova as fotos do carrossel rotativo do Buffet El Shadday.
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setActiveAdminTab('gallery')}
-                className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-gradient-to-r from-brand-gold to-amber-400 hover:brightness-110 text-dark-950 font-black text-xs transition-transform active:scale-95 shadow-glow-gold cursor-pointer whitespace-nowrap"
-              >
-                Abrir Gerenciador de Fotos 📸
-              </button>
-            </div>
 
             {/* KPI Summary Cards */}
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 sm:gap-4">
@@ -1741,7 +2031,589 @@ export function AdminDashboard({
         )}
 
         {/* ============================================================== */}
-        {/* VIEW 3: BUFFET PHOTO GALLERY MANAGEMENT                        */}
+        {/* VIEW 3: CARDÁPIO, PRODUTOS & PROMOÇÕES MANAGEMENT             */}
+        {/* ============================================================== */}
+        {activeAdminTab === 'menu' && (
+          <div className="space-y-6 animate-fade-in">
+            
+            {/* Header Box */}
+            <div className="bg-dark-900 border border-dark-800 rounded-3xl p-5 sm:p-7 shadow-xl">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-dark-800">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-2xl bg-brand-gold/15 text-brand-gold flex items-center justify-center border border-brand-gold/30">
+                    <Utensils className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h2 className="font-display font-extrabold text-base sm:text-lg text-white flex items-center gap-2">
+                      <span>Gestão Completa de Cardápio & Promoções</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-brand-gold/20 text-brand-gold border border-brand-gold/30 font-bold">
+                        {productsList.length} itens
+                      </span>
+                    </h2>
+                    <p className="text-xs text-slate-400">
+                      Crie novos itens, edite preços, pause produtos esgotados e configure promoções e cupons da loja.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleOpenCreateProduct}
+                    className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-brand-gold to-amber-400 text-dark-950 font-black text-xs hover:brightness-110 shadow-glow-gold flex items-center gap-2 transition-transform active:scale-95 cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4 stroke-[3]" />
+                    <span>+ Criar Novo Produto</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleResetMenuToDefault}
+                    className="px-3 py-2 rounded-xl bg-dark-800 hover:bg-dark-750 text-slate-300 hover:text-white text-xs font-semibold border border-dark-700 flex items-center gap-1.5 transition-colors cursor-pointer"
+                    title="Restaurar o cardápio original"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5 text-brand-gold" />
+                    <span>Restaurar Padrão</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Toast Feedback */}
+              {menuFeedback && (
+                <div className="mt-4 p-3 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-bold flex items-center gap-2 animate-fadeIn">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                  <span>{menuFeedback}</span>
+                </div>
+              )}
+
+              {/* Sub-tabs: Produtos | Promoções & Cupons | Dados do Restaurante */}
+              <div className="flex items-center gap-2 mt-5 border-b border-dark-800 pb-3 overflow-x-auto scrollbar-none">
+                <button
+                  type="button"
+                  onClick={() => setMenuSubTab('products')}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                    menuSubTab === 'products'
+                      ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
+                      : 'bg-dark-800/80 text-slate-400 hover:text-white hover:bg-dark-800'
+                  }`}
+                >
+                  <Package className="w-3.5 h-3.5" />
+                  <span>Produtos & Preços ({productsList.length})</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setMenuSubTab('promos')}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                    menuSubTab === 'promos'
+                      ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
+                      : 'bg-dark-800/80 text-slate-400 hover:text-white hover:bg-dark-800'
+                  }`}
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Promoções, Banners & Cupons</span>
+                  {promoSettings.bannerActive && (
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setMenuSubTab('store')}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                    menuSubTab === 'store'
+                      ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
+                      : 'bg-dark-800/80 text-slate-400 hover:text-white hover:bg-dark-800'
+                  }`}
+                >
+                  <Store className="w-3.5 h-3.5" />
+                  <span>Configurações da Loja</span>
+                </button>
+              </div>
+
+              {/* SUBTAB 1: PRODUTOS & PREÇOS */}
+              {menuSubTab === 'products' && (
+                <div className="mt-5 space-y-4">
+                  {/* Search and Category Filters */}
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                    <div className="relative flex-1 max-w-md">
+                      <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <input
+                        type="text"
+                        placeholder="Buscar por nome, ingrediente ou ID..."
+                        value={menuSearch}
+                        onChange={(e) => setMenuSearch(e.target.value)}
+                        className="w-full pl-9 pr-4 py-2 rounded-xl bg-dark-800 border border-dark-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand-gold"
+                      />
+                    </div>
+
+                    <div className="text-xs text-slate-400 flex items-center gap-2">
+                      <span>Exibindo:</span>
+                      <span className="font-mono text-brand-gold font-bold">{filteredAdminProducts.length}</span>
+                      <span>de {productsList.length} itens</span>
+                    </div>
+                  </div>
+
+                  {/* Filter Pills */}
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+                    <button
+                      type="button"
+                      onClick={() => setMenuCategoryFilter('todos')}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold whitespace-nowrap transition-colors cursor-pointer ${
+                        menuCategoryFilter === 'todos'
+                          ? 'bg-brand-gold text-dark-950 font-black'
+                          : 'bg-dark-800 text-slate-300 hover:bg-dark-750 hover:text-white'
+                      }`}
+                    >
+                      Todos ({productsList.length})
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setMenuCategoryFilter('promos')}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold whitespace-nowrap transition-colors cursor-pointer flex items-center gap-1 ${
+                        menuCategoryFilter === 'promos'
+                          ? 'bg-amber-400 text-dark-950 font-black'
+                          : 'bg-dark-800 text-amber-300 hover:bg-dark-750'
+                      }`}
+                    >
+                      <Sparkles className="w-3 h-3 text-amber-400" />
+                      <span>Em Promoção ({productsList.filter(p => p.isPromo || p.originalPrice).length})</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setMenuCategoryFilter('pausados')}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold whitespace-nowrap transition-colors cursor-pointer flex items-center gap-1 ${
+                        menuCategoryFilter === 'pausados'
+                          ? 'bg-rose-500 text-white font-black'
+                          : 'bg-dark-800 text-rose-300 hover:bg-dark-750'
+                      }`}
+                    >
+                      <EyeOff className="w-3 h-3 text-rose-400" />
+                      <span>Pausados/Esgotados ({productsList.filter(p => p.isAvailable === false).length})</span>
+                    </button>
+
+                    {CATEGORIES.map(cat => (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => setMenuCategoryFilter(cat.id)}
+                        className={`px-3 py-1 rounded-lg text-xs font-bold whitespace-nowrap transition-colors cursor-pointer ${
+                          menuCategoryFilter === cat.id
+                            ? 'bg-brand-gold text-dark-950 font-black'
+                            : 'bg-dark-800 text-slate-300 hover:bg-dark-750 hover:text-white'
+                        }`}
+                      >
+                        {cat.name} ({productsList.filter(p => p.categoryId === cat.id).length})
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Products Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 pt-2">
+                    {filteredAdminProducts.map(product => {
+                      const isAvailable = product.isAvailable !== false;
+                      const hasPromo = !!product.isPromo || (product.originalPrice && product.originalPrice > product.price);
+                      const discountPercent = hasPromo && product.originalPrice 
+                        ? Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100) 
+                        : null;
+
+                      return (
+                        <div
+                          key={product.id}
+                          className={`rounded-2xl p-3.5 bg-dark-800/80 border transition-all flex flex-col justify-between gap-3 ${
+                            isAvailable ? 'border-dark-700 hover:border-brand-gold/50' : 'border-rose-900/60 bg-dark-900/90 opacity-75'
+                          }`}
+                        >
+                          <div className="flex gap-3 items-start">
+                            {/* Thumbnail */}
+                            <div className="relative w-20 h-20 rounded-xl overflow-hidden bg-black/50 border border-dark-700 flex-shrink-0">
+                              <img
+                                src={product.image || 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&auto=format&fit=crop&q=80'}
+                                alt={product.name}
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  e.currentTarget.src = 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&auto=format&fit=crop&q=80';
+                                }}
+                              />
+                              {!isAvailable && (
+                                <div className="absolute inset-0 bg-black/75 flex items-center justify-center p-1 text-center">
+                                  <span className="text-[9px] font-black text-rose-300 uppercase leading-tight">Esgotado</span>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Details */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="text-[9px] px-1.5 py-0.2 rounded font-bold uppercase bg-dark-950 text-slate-400 border border-dark-700">
+                                  {CATEGORIES.find(c => c.id === product.categoryId)?.name || product.categoryId}
+                                </span>
+                                {product.badge && (
+                                  <span className="text-[9px] px-1.5 py-0.2 rounded font-black uppercase bg-brand-red text-white">
+                                    {product.badge}
+                                  </span>
+                                )}
+                                {discountPercent && (
+                                  <span className="text-[9px] px-1.5 py-0.2 rounded font-black uppercase bg-amber-400 text-dark-950">
+                                    -{discountPercent}% OFF
+                                  </span>
+                                )}
+                              </div>
+
+                              <h4 className="font-display font-bold text-sm text-white mt-1 leading-snug line-clamp-1" title={product.name}>
+                                {product.name}
+                              </h4>
+
+                              <p className="text-[11px] text-slate-400 line-clamp-2 mt-0.5 leading-tight">
+                                {product.description || 'Sem descrição cadastrada.'}
+                              </p>
+
+                              <div className="mt-1.5 flex items-baseline gap-2">
+                                <span className="text-sm font-black text-brand-gold">
+                                  R$ {product.price?.toFixed(2).replace('.', ',')}
+                                </span>
+                                {product.originalPrice && (
+                                  <span className="text-[10px] text-slate-500 line-through">
+                                    R$ {product.originalPrice?.toFixed(2).replace('.', ',')}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Action Toolbar */}
+                          <div className="pt-2.5 border-t border-dark-700/80 flex items-center justify-between gap-1">
+                            <div className="flex items-center gap-1">
+                              {/* Toggle Availability */}
+                              <button
+                                type="button"
+                                onClick={() => handleToggleProductAvailability(product.id)}
+                                className={`px-2 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-colors cursor-pointer ${
+                                  isAvailable
+                                    ? 'bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25 border border-emerald-500/30'
+                                    : 'bg-rose-500/20 text-rose-300 hover:bg-rose-500/30 border border-rose-500/30'
+                                }`}
+                                title={isAvailable ? 'Clique para pausar (esgotado)' : 'Clique para ativar (disponível)'}
+                              >
+                                {isAvailable ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+                                <span>{isAvailable ? 'Disponível' : 'Pausado'}</span>
+                              </button>
+
+                              {/* Toggle Promo */}
+                              <button
+                                type="button"
+                                onClick={() => handleToggleProductPromo(product.id)}
+                                className={`px-2 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-colors cursor-pointer ${
+                                  hasPromo
+                                    ? 'bg-amber-400/20 text-amber-300 border border-amber-400/40 hover:bg-amber-400/30'
+                                    : 'bg-dark-900 text-slate-400 hover:text-amber-300 hover:bg-dark-750'
+                                }`}
+                                title="Ativar ou desativar selo promocional"
+                              >
+                                <Sparkles className="w-3 h-3" />
+                                <span>{hasPromo ? 'Promoção' : '+ Promo'}</span>
+                              </button>
+                            </div>
+
+                            <div className="flex items-center gap-1">
+                              {/* Duplicate */}
+                              <button
+                                type="button"
+                                onClick={() => handleDuplicateProduct(product)}
+                                className="p-1.5 rounded-lg bg-dark-900 hover:bg-dark-750 text-slate-300 hover:text-white transition-colors cursor-pointer"
+                                title="Duplicar produto"
+                              >
+                                <Copy className="w-3.5 h-3.5" />
+                              </button>
+
+                              {/* Edit */}
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEditProduct(product)}
+                                className="px-2.5 py-1 rounded-lg bg-brand-gold/15 hover:bg-brand-gold/30 text-brand-gold border border-brand-gold/30 font-bold text-xs flex items-center gap-1 transition-colors cursor-pointer"
+                                title="Editar produto completo"
+                              >
+                                <Edit2 className="w-3 h-3" />
+                                <span>Editar</span>
+                              </button>
+
+                              {/* Delete */}
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteProduct(product.id, product.name)}
+                                className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/25 text-rose-400 hover:text-rose-200 transition-colors cursor-pointer"
+                                title="Excluir produto do cardápio"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {filteredAdminProducts.length === 0 && (
+                    <div className="text-center py-12 bg-dark-800/40 rounded-2xl border border-dark-700">
+                      <p className="text-sm text-slate-400">Nenhum produto encontrado para estes filtros.</p>
+                      <button
+                        type="button"
+                        onClick={() => { setMenuSearch(''); setMenuCategoryFilter('todos'); }}
+                        className="mt-3 px-3 py-1.5 rounded-xl bg-brand-gold text-dark-950 font-bold text-xs hover:bg-amber-400 cursor-pointer"
+                      >
+                        Limpar Filtros
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* SUBTAB 2: PROMOÇÕES, BANNERS & CUPONS */}
+              {menuSubTab === 'promos' && (
+                <div className="mt-5 space-y-6">
+                  {/* Banner de Destaque no Topo do Site */}
+                  <form onSubmit={handleSavePromoSettings} className="p-5 rounded-2xl bg-dark-800/60 border border-dark-700 space-y-4">
+                    <div className="flex items-center justify-between pb-3 border-b border-dark-700">
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="w-5 h-5 text-amber-400" />
+                        <div>
+                          <h3 className="text-sm font-bold text-white">Faixa / Banner Promocional no Topo do Site</h3>
+                          <p className="text-xs text-slate-400">Aparece em destaque no topo da página de delivery para todos os clientes.</p>
+                        </div>
+                      </div>
+                      
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={tempBannerActive}
+                          onChange={(e) => setTempBannerActive(e.target.checked)}
+                          className="w-4 h-4 accent-amber-400 cursor-pointer"
+                        />
+                        <span className={`text-xs font-bold ${tempBannerActive ? 'text-emerald-400' : 'text-slate-400'}`}>
+                          {tempBannerActive ? 'Ativo no Site' : 'Desativado'}
+                        </span>
+                      </label>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1">
+                        Texto do Banner Promocional:
+                      </label>
+                      <input
+                        type="text"
+                        value={tempBannerText}
+                        onChange={(e) => setTempBannerText(e.target.value)}
+                        placeholder="Ex: 🔥 Borda de Catupiry GRÁTIS em todas as pizzas hoje + Entrega Rápida!"
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-dark-900 border border-dark-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand-gold"
+                      />
+                    </div>
+
+                    {/* Banner Preview */}
+                    {tempBannerActive && tempBannerText && (
+                      <div className="pt-2">
+                        <span className="text-[10px] text-slate-400 font-bold block mb-1">Prévia de como os clientes verão:</span>
+                        <div className="bg-gradient-to-r from-amber-600 via-brand-gold to-amber-500 text-dark-950 font-black text-xs py-2 px-4 rounded-xl text-center shadow-md flex items-center justify-center gap-2">
+                          <Sparkles className="w-4 h-4 fill-dark-950 text-dark-950" />
+                          <span>{tempBannerText}</span>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="pt-4 border-t border-dark-700">
+                      <div className="flex items-center justify-between pb-3 border-b border-dark-700 mb-4">
+                        <div className="flex items-center gap-2">
+                          <Tag className="w-5 h-5 text-brand-gold" />
+                          <div>
+                            <h3 className="text-sm font-bold text-white">Cupom de Desconto</h3>
+                            <p className="text-xs text-slate-400">Cupom ativo para clientes utilizarem no checkout.</p>
+                          </div>
+                        </div>
+
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={tempCouponActive}
+                            onChange={(e) => setTempCouponActive(e.target.checked)}
+                            className="w-4 h-4 accent-amber-400 cursor-pointer"
+                          />
+                          <span className={`text-xs font-bold ${tempCouponActive ? 'text-emerald-400' : 'text-slate-400'}`}>
+                            {tempCouponActive ? 'Cupom Ativo' : 'Desativado'}
+                          </span>
+                        </label>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-300 mb-1">Código do Cupom:</label>
+                          <input
+                            type="text"
+                            value={tempCouponCode}
+                            onChange={(e) => setTempCouponCode(e.target.value.toUpperCase())}
+                            placeholder="Ex: ELSHADDAY10"
+                            className="w-full px-3 py-2 rounded-xl bg-dark-900 border border-dark-700 text-xs font-mono font-bold text-brand-gold uppercase"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-300 mb-1">Desconto (%):</label>
+                          <input
+                            type="number"
+                            min="1"
+                            max="90"
+                            value={tempCouponDiscount}
+                            onChange={(e) => setTempCouponDiscount(e.target.value)}
+                            placeholder="Ex: 10"
+                            className="w-full px-3 py-2 rounded-xl bg-dark-900 border border-dark-700 text-xs text-white"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-300 mb-1">Pedido Mínimo (R$):</label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="5"
+                            value={tempCouponMinOrder}
+                            onChange={(e) => setTempCouponMinOrder(e.target.value)}
+                            placeholder="Ex: 50"
+                            className="w-full px-3 py-2 rounded-xl bg-dark-900 border border-dark-700 text-xs text-white"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end pt-3">
+                      <button
+                        type="submit"
+                        className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-brand-gold to-amber-400 text-dark-950 font-black text-xs hover:brightness-110 shadow-glow-gold cursor-pointer"
+                      >
+                        Salvar Promoções & Cupons
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              )}
+
+              {/* SUBTAB 3: DADOS DO RESTAURANTE & WHATSAPP */}
+              {menuSubTab === 'store' && (
+                <form onSubmit={handleSaveStoreSettings} className="mt-5 p-5 rounded-2xl bg-dark-800/60 border border-dark-700 space-y-4">
+                  <div className="flex items-center gap-2 pb-3 border-b border-dark-700">
+                    <Store className="w-5 h-5 text-brand-gold" />
+                    <div>
+                      <h3 className="text-sm font-bold text-white">Dados da Loja & WhatsApp de Pedidos</h3>
+                      <p className="text-xs text-slate-400">Configure o número para onde os pedidos caem e os dados de pagamento PIX.</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1">Nome da Loja:</label>
+                      <input
+                        type="text"
+                        value={tempStoreName}
+                        onChange={(e) => setTempStoreName(e.target.value)}
+                        className="w-full px-3.5 py-2 rounded-xl bg-dark-900 border border-dark-700 text-xs text-white"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1">Telefone WhatsApp (Apenas Números com DDD):</label>
+                      <input
+                        type="text"
+                        value={tempStorePhone}
+                        onChange={(e) => setTempStorePhone(e.target.value)}
+                        placeholder="Ex: 5569992228682"
+                        className="w-full px-3.5 py-2 rounded-xl bg-dark-900 border border-dark-700 text-xs text-white font-mono"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1">Telefone Formatado para Exibição:</label>
+                      <input
+                        type="text"
+                        value={tempStorePhoneFormatted}
+                        onChange={(e) => setTempStorePhoneFormatted(e.target.value)}
+                        placeholder="Ex: (69) 99222-8682"
+                        className="w-full px-3.5 py-2 rounded-xl bg-dark-900 border border-dark-700 text-xs text-white"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1">Tempo Estimado de Entrega:</label>
+                      <input
+                        type="text"
+                        value={tempStoreDeliveryTime}
+                        onChange={(e) => setTempStoreDeliveryTime(e.target.value)}
+                        placeholder="Ex: 45 - 75 min"
+                        className="w-full px-3.5 py-2 rounded-xl bg-dark-900 border border-dark-700 text-xs text-white"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1">Chave PIX:</label>
+                      <input
+                        type="text"
+                        value={tempStorePixKey}
+                        onChange={(e) => setTempStorePixKey(e.target.value)}
+                        placeholder="Ex: 69992228682"
+                        className="w-full px-3.5 py-2 rounded-xl bg-dark-900 border border-dark-700 text-xs text-white font-mono"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1">Nome do Titular do PIX:</label>
+                      <input
+                        type="text"
+                        value={tempStorePixName}
+                        onChange={(e) => setTempStorePixName(e.target.value)}
+                        placeholder="Ex: El Shadday Delivery"
+                        className="w-full px-3.5 py-2 rounded-xl bg-dark-900 border border-dark-700 text-xs text-white"
+                      />
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <label className="block text-xs font-semibold text-slate-300 mb-1">Endereço da Loja:</label>
+                      <input
+                        type="text"
+                        value={tempStoreAddress}
+                        onChange={(e) => setTempStoreAddress(e.target.value)}
+                        placeholder="Ex: Rua Maceió, 2333 - Setor 03, Ariquemes - RO"
+                        className="w-full px-3.5 py-2 rounded-xl bg-dark-900 border border-dark-700 text-xs text-white"
+                      />
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <label className="block text-xs font-semibold text-slate-300 mb-1">Horário de Funcionamento:</label>
+                      <input
+                        type="text"
+                        value={tempStoreOpeningHours}
+                        onChange={(e) => setTempStoreOpeningHours(e.target.value)}
+                        placeholder="Ex: Terça a Domingo: 09:00 às 23:00 (Segunda fechado)"
+                        className="w-full px-3.5 py-2 rounded-xl bg-dark-900 border border-dark-700 text-xs text-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end pt-3">
+                    <button
+                      type="submit"
+                      className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-brand-gold to-amber-400 text-dark-950 font-black text-xs hover:brightness-110 shadow-glow-gold cursor-pointer"
+                    >
+                      Salvar Dados da Loja
+                    </button>
+                  </div>
+                </form>
+              )}
+
+            </div>
+
+          </div>
+        )}
+
+        {/* ============================================================== */}
+        {/* VIEW 4: BUFFET PHOTO GALLERY MANAGEMENT                        */}
         {/* ============================================================== */}
         {activeAdminTab === 'gallery' && (
           <div className="space-y-6 animate-fade-in">
@@ -2219,6 +3091,237 @@ export function AdminDashboard({
                 Ver na Cozinha (KDS)
               </button>
             </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* MODAL: CRIAR OU EDITAR PRODUTO                                */}
+      {/* ============================================================== */}
+      {isProductModalOpen && (
+        <div className="fixed inset-0 z-50 bg-dark-950/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 animate-fadeIn overflow-y-auto">
+          <div className="bg-dark-900 border border-dark-750 w-full max-w-2xl rounded-3xl p-5 sm:p-7 shadow-2xl my-8 max-h-[90vh] overflow-y-auto">
+            
+            <div className="flex items-center justify-between pb-4 border-b border-dark-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-brand-gold/15 text-brand-gold flex items-center justify-center border border-brand-gold/30">
+                  {editingProduct ? <Edit2 className="w-5 h-5" /> : <Plus className="w-5 h-5 stroke-[3]" />}
+                </div>
+                <div>
+                  <h3 className="font-display font-extrabold text-base sm:text-lg text-white">
+                    {editingProduct ? `Editar: ${editingProduct.name}` : 'Criar Novo Produto / Item'}
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    {editingProduct ? 'Atualize as informações, fotos ou valores deste item' : 'Preencha os dados para cadastrar um novo item no cardápio'}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsProductModalOpen(false)}
+                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-dark-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveProduct} className="space-y-4 mt-4">
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                
+                {/* Nome do Produto */}
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-bold text-slate-200 mb-1">
+                    Nome do Produto *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={prodFormName}
+                    onChange={(e) => setProdFormName(e.target.value)}
+                    placeholder="Ex: Combo Família Especial + 10 Esfirras"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-dark-800 border border-dark-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand-gold"
+                  />
+                </div>
+
+                {/* Categoria */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-200 mb-1">
+                    Categoria *
+                  </label>
+                  <select
+                    value={prodFormCategory}
+                    onChange={(e) => setProdFormCategory(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-dark-800 border border-dark-700 text-xs text-white focus:outline-none focus:border-brand-gold cursor-pointer"
+                  >
+                    {CATEGORIES.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Preço de Venda */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-200 mb-1">
+                    Preço de Venda (R$) *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={prodFormPrice}
+                    onChange={(e) => setProdFormPrice(e.target.value)}
+                    placeholder="Ex: 65,00"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-dark-800 border border-dark-700 text-xs text-white font-mono font-bold focus:outline-none focus:border-brand-gold"
+                  />
+                </div>
+
+                {/* Preço Original (Riscado) */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-200 mb-1">
+                    Preço Original / De (R$) <span className="text-[10px] text-slate-400 font-normal">(Opcional para desconto)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={prodFormOriginalPrice}
+                    onChange={(e) => setProdFormOriginalPrice(e.target.value)}
+                    placeholder="Ex: 75,00"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-dark-800 border border-dark-700 text-xs text-white font-mono focus:outline-none focus:border-brand-gold"
+                  />
+                </div>
+
+                {/* Badge Promocional */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-200 mb-1">
+                    Etiqueta / Badge <span className="text-[10px] text-slate-400 font-normal">(Opcional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={prodFormBadge}
+                    onChange={(e) => setProdFormBadge(e.target.value)}
+                    placeholder="Ex: Mais Vendido 🔥, Promoção, Especial"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-dark-800 border border-dark-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand-gold"
+                  />
+                </div>
+
+                {/* Descrição */}
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-bold text-slate-200 mb-1">
+                    Descrição dos Ingredientes / Tamanho
+                  </label>
+                  <textarea
+                    rows="2"
+                    value={prodFormDescription}
+                    onChange={(e) => setProdFormDescription(e.target.value)}
+                    placeholder="Ex: 1 Pizza Família de 8 fatias com até 2 sabores à sua escolha + 10 esfirras sortidas quentinhas."
+                    className="w-full px-3.5 py-2 rounded-xl bg-dark-800 border border-dark-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand-gold"
+                  />
+                </div>
+
+                {/* Detalhes / Rendimento */}
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-bold text-slate-200 mb-1">
+                    Detalhes de Rendimento <span className="text-[10px] text-slate-400 font-normal">(Opcional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={prodFormDetails}
+                    onChange={(e) => setProdFormDetails(e.target.value)}
+                    placeholder="Ex: Serve 3 a 4 pessoas com muito sabor."
+                    className="w-full px-3.5 py-2 rounded-xl bg-dark-800 border border-dark-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand-gold"
+                  />
+                </div>
+
+                {/* URL da Foto */}
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-bold text-slate-200 mb-1">
+                    URL da Foto do Produto
+                  </label>
+                  <input
+                    type="url"
+                    value={prodFormImage}
+                    onChange={(e) => setProdFormImage(e.target.value)}
+                    placeholder="https://..."
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-dark-800 border border-dark-700 text-xs text-white font-mono placeholder-slate-500 focus:outline-none focus:border-brand-gold"
+                  />
+                  {prodFormImage && (
+                    <div className="mt-2 flex items-center gap-3">
+                      <span className="text-[10px] text-slate-400 font-bold">Prévia da imagem:</span>
+                      <img
+                        src={prodFormImage}
+                        alt="Prévia"
+                        className="w-14 h-14 object-cover rounded-xl border border-dark-700"
+                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Switches */}
+                <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-dark-800">
+                  <label className="flex items-center gap-2.5 p-3 rounded-xl bg-dark-800/60 border border-dark-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={prodFormIsAvailable}
+                      onChange={(e) => setProdFormIsAvailable(e.target.checked)}
+                      className="w-4 h-4 accent-emerald-400 cursor-pointer"
+                    />
+                    <div>
+                      <div className="text-xs font-bold text-white">Disponível</div>
+                      <div className="text-[10px] text-slate-400">Em estoque na loja</div>
+                    </div>
+                  </label>
+
+                  <label className="flex items-center gap-2.5 p-3 rounded-xl bg-dark-800/60 border border-dark-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={prodFormIsPromo}
+                      onChange={(e) => setProdFormIsPromo(e.target.checked)}
+                      className="w-4 h-4 accent-amber-400 cursor-pointer"
+                    />
+                    <div>
+                      <div className="text-xs font-bold text-amber-300">Destaque Promoção</div>
+                      <div className="text-[10px] text-slate-400">Exibir na prateleira</div>
+                    </div>
+                  </label>
+
+                  <label className="flex items-center gap-2.5 p-3 rounded-xl bg-dark-800/60 border border-dark-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={prodFormBordaGratis}
+                      onChange={(e) => setProdFormBordaGratis(e.target.checked)}
+                      className="w-4 h-4 accent-amber-400 cursor-pointer"
+                    />
+                    <div>
+                      <div className="text-xs font-bold text-white">Borda Grátis</div>
+                      <div className="text-[10px] text-slate-400">Selo de Catupiry</div>
+                    </div>
+                  </label>
+                </div>
+
+              </div>
+
+              {/* Botões do Modal */}
+              <div className="pt-4 border-t border-dark-800 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setIsProductModalOpen(false)}
+                  className="px-4 py-2.5 rounded-xl bg-dark-800 hover:bg-dark-750 text-slate-300 text-xs font-semibold cursor-pointer"
+                >
+                  Cancelar
+                </button>
+
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-brand-gold to-amber-400 text-dark-950 font-black text-xs hover:brightness-110 shadow-glow-gold cursor-pointer flex items-center gap-1.5"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>{editingProduct ? 'Salvar Alterações' : 'Cadastrar Produto'}</span>
+                </button>
+              </div>
+
+            </form>
 
           </div>
         </div>

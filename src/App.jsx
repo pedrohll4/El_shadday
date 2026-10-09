@@ -1,6 +1,12 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
-import { BRANCHES, DEFAULT_BRANCH_ID } from './data/branchesData';
-import { PRODUCTS, CATEGORIES, RESTAURANT_INFO } from './data/menuData';
+import { 
+  PRODUCTS, 
+  CATEGORIES, 
+  RESTAURANT_INFO,
+  getStoredProducts,
+  getStoredPromoSettings,
+  getStoredRestaurantInfo
+} from './data/menuData';
 import { Header } from './components/Header';
 import { RestaurantStoreHeader } from './components/RestaurantStoreHeader';
 import { PromotionsShelf } from './components/PromotionsShelf';
@@ -94,6 +100,48 @@ export default function App() {
 
   const [activeCategory, setActiveCategory] = useState(CATEGORIES[0].id);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Dynamic Menu, Promos and Store Info
+  const [products, setProducts] = useState(() => getStoredProducts());
+  const [promoSettings, setPromoSettings] = useState(() => getStoredPromoSettings());
+  const [restaurantInfo, setRestaurantInfo] = useState(() => getStoredRestaurantInfo());
+
+  // Real-time synchronization for products, promos and restaurant info
+  useEffect(() => {
+    const handleProductsSync = (e) => {
+      if (e?.detail && Array.isArray(e.detail) && e.detail.length > 0) {
+        setProducts(e.detail);
+      } else {
+        setProducts(getStoredProducts());
+      }
+    };
+    const handlePromosSync = (e) => {
+      if (e?.detail) {
+        setPromoSettings(e.detail);
+      } else {
+        setPromoSettings(getStoredPromoSettings());
+      }
+    };
+    const handleInfoSync = (e) => {
+      if (e?.detail) {
+        setRestaurantInfo(e.detail);
+      } else {
+        setRestaurantInfo(getStoredRestaurantInfo());
+      }
+    };
+
+    window.addEventListener('delivery_products_updated', handleProductsSync);
+    window.addEventListener('delivery_promos_updated', handlePromosSync);
+    window.addEventListener('delivery_restaurant_info_updated', handleInfoSync);
+    window.addEventListener('storage', handleProductsSync);
+
+    return () => {
+      window.removeEventListener('delivery_products_updated', handleProductsSync);
+      window.removeEventListener('delivery_promos_updated', handlePromosSync);
+      window.removeEventListener('delivery_restaurant_info_updated', handleInfoSync);
+      window.removeEventListener('storage', handleProductsSync);
+    };
+  }, []);
 
   // Kitchen & Admin State
   const [allOrders, setAllOrders] = useState(() => getInitialOrders());
@@ -498,12 +546,14 @@ export default function App() {
   const searchResults = useMemo(() => {
     if (!searchQuery.trim()) return [];
     const query = searchQuery.toLowerCase().trim();
-    return PRODUCTS.filter(p => 
-      p.name.toLowerCase().includes(query) ||
-      p.description?.toLowerCase().includes(query) ||
-      p.details?.toLowerCase().includes(query)
+    return products.filter(p => 
+      p.isAvailable !== false && (
+        p.name.toLowerCase().includes(query) ||
+        p.description?.toLowerCase().includes(query) ||
+        p.details?.toLowerCase().includes(query)
+      )
     );
-  }, [searchQuery]);
+  }, [searchQuery, products]);
 
   // Cart summary
   const totalCartCount = cartItems.reduce((acc, item) => acc + item.quantity, 0);
@@ -577,6 +627,19 @@ export default function App() {
         onOpenAdmin={handleOpenAdminTrigger}
       />
 
+      {/* 1.1 Top Promotional Announcement Banner */}
+      {promoSettings.bannerActive && promoSettings.bannerText && (
+        <div className="bg-gradient-to-r from-amber-600 via-brand-gold to-amber-500 text-dark-950 font-black text-xs sm:text-sm py-2 px-4 text-center shadow-md flex items-center justify-center gap-2">
+          <Sparkles className="w-4 h-4 fill-dark-950 text-dark-950" />
+          <span>{promoSettings.bannerText}</span>
+          {promoSettings.couponActive && promoSettings.couponCode && (
+            <span className="hidden sm:inline-block ml-2 px-2 py-0.5 rounded-full bg-dark-950 text-brand-gold text-[10px] font-mono tracking-wider font-extrabold uppercase">
+              Cupom: {promoSettings.couponCode} ({promoSettings.couponDiscountPercent}% OFF)
+            </span>
+          )}
+        </div>
+      )}
+
       {/* 2. Restaurant Profile & iFood Header (Cover, Avatar, Ratings, Delivery Switcher) */}
       <RestaurantStoreHeader
         activeBranch={activeBranch}
@@ -588,6 +651,7 @@ export default function App() {
 
       {/* 2.1 Promotions & Highlights Shelf */}
       <PromotionsShelf
+        products={products}
         onOpenBoxBuilder={(prod) => {
           setSelectedBoxForBuilder(prod);
           setIsBoxBuilderOpen(true);
@@ -611,6 +675,7 @@ export default function App() {
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
           onScrollToBuffet={scrollToBuffet}
+          products={products}
         />
       </div>
 
@@ -687,7 +752,7 @@ export default function App() {
             ) : (
               /* CONTINUOUS FLOW MODE: All categories displayed in full sequence! */
               CATEGORIES.map((cat) => {
-                const categoryProducts = PRODUCTS.filter(p => p.categoryId === cat.id);
+                const categoryProducts = products.filter(p => p.categoryId === cat.id && p.isAvailable !== false);
                 if (categoryProducts.length === 0) return null;
 
                 return (

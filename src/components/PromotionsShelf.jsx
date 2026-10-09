@@ -6,15 +6,21 @@ export function PromotionsShelf({
   onOpenBoxBuilder, 
   onOpenPizzaCustomizer, 
   onOpenComboCustomizer,
-  onAddToCart 
+  onAddToCart,
+  products
 }) {
-  // Select top highlight products
-  const highlights = PRODUCTS.filter(p => 
-    p.id === 'caixa-20-esfirras' || 
-    p.id === 'combo-1-fm-10esf' || 
-    p.id === 'combo-2-pizzas-gg' ||
-    p.id === 'pizza-familia'
-  );
+  const allProducts = (products && products.length > 0) ? products : PRODUCTS;
+  // Select top highlight products or products marked as promotion / with discount
+  const highlights = allProducts.filter(p => 
+    p.isAvailable !== false && (
+      p.isPromo || 
+      (p.originalPrice && p.originalPrice > p.price) ||
+      p.id === 'caixa-20-esfirras' || 
+      p.id === 'combo-1-fm-10esf' || 
+      p.id === 'combo-2-pizzas-gg' ||
+      p.id === 'pizza-familia'
+    )
+  ).slice(0, 8);
 
   const handleAction = (product) => {
     if (product.isBox) {

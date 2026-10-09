@@ -18,7 +18,8 @@ export function CategoryNav({
   onSelectCategory, 
   searchQuery, 
   onSearchChange,
-  onScrollToBuffet
+  onScrollToBuffet,
+  products
 }) {
   return (
     <div className="sticky top-[104px] sm:top-20 z-30 bg-dark-950/95 backdrop-blur-md border-b border-dark-800 py-2 sm:py-2.5 shadow-xl transition-all w-full max-w-full">
@@ -60,7 +61,8 @@ export function CategoryNav({
           {CATEGORIES.map((cat) => {
             const Icon = ICONS_MAP[cat.icon] || Flame;
             const isActive = activeCategory === cat.id;
-            const itemCount = PRODUCTS.filter(p => p.categoryId === cat.id).length;
+            const allProds = products || PRODUCTS;
+            const itemCount = allProds.filter(p => p.categoryId === cat.id && p.isAvailable !== false).length;
 
             return (
               <button

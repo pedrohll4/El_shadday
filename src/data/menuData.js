@@ -571,3 +571,91 @@ export const PIZZA_FLAVORS = [
   "Vegetariana da Casa",
   "Brócolis com Alho e Queijo"
 ];
+
+export const DEFAULT_PROMO_SETTINGS = {
+  bannerActive: true,
+  bannerText: "🔥 Hoje: Borda de Catupiry GRÁTIS em todas as pizzas + Esfirras quentinhas!",
+  bannerLink: "#menu",
+  couponActive: true,
+  couponCode: "ELSHADDAY10",
+  couponDiscountPercent: 10,
+  minOrderValueForCoupon: 50.00
+};
+
+export function getStoredProducts() {
+  try {
+    const saved = localStorage.getItem("el_shadday_delivery_products_v2");
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+  } catch (e) {
+    console.error("Error reading stored products:", e);
+  }
+  return PRODUCTS;
+}
+
+export function saveStoredProducts(products) {
+  try {
+    localStorage.setItem("el_shadday_delivery_products_v2", JSON.stringify(products));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent("delivery_products_updated", { detail: products }));
+    }
+  } catch (e) {
+    console.error("Error saving stored products:", e);
+  }
+}
+
+export function getStoredPromoSettings() {
+  try {
+    const saved = localStorage.getItem("el_shadday_delivery_promos_v2");
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed && typeof parsed === 'object') {
+        return { ...DEFAULT_PROMO_SETTINGS, ...parsed };
+      }
+    }
+  } catch (e) {
+    console.error("Error reading promo settings:", e);
+  }
+  return DEFAULT_PROMO_SETTINGS;
+}
+
+export function saveStoredPromoSettings(settings) {
+  try {
+    localStorage.setItem("el_shadday_delivery_promos_v2", JSON.stringify(settings));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent("delivery_promos_updated", { detail: settings }));
+    }
+  } catch (e) {
+    console.error("Error saving promo settings:", e);
+  }
+}
+
+export function getStoredRestaurantInfo() {
+  try {
+    const saved = localStorage.getItem("el_shadday_delivery_restaurant_info_v2");
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed && typeof parsed === 'object') {
+        return { ...RESTAURANT_INFO, ...parsed };
+      }
+    }
+  } catch (e) {
+    console.error("Error reading restaurant info:", e);
+  }
+  return RESTAURANT_INFO;
+}
+
+export function saveStoredRestaurantInfo(info) {
+  try {
+    localStorage.setItem("el_shadday_delivery_restaurant_info_v2", JSON.stringify(info));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent("delivery_restaurant_info_updated", { detail: info }));
+    }
+  } catch (e) {
+    console.error("Error saving restaurant info:", e);
+  }
+}
