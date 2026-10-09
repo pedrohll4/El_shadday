@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import { BRANCHES, DEFAULT_BRANCH_ID } from './data/branchesData';
 import { 
   PRODUCTS, 
   CATEGORIES, 
