@@ -1,5 +1,27 @@
 import { createClient } from '@supabase/supabase-js';
 
+const checkUrlParams = () => {
+  if (typeof window !== 'undefined') {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const urlParam = params.get('sb_url') || params.get('supabase_url');
+      const keyParam = params.get('sb_key') || params.get('supabase_key');
+      if (urlParam && keyParam) {
+        localStorage.setItem('el_shadday_supabase_url', urlParam.trim());
+        localStorage.setItem('el_shadday_supabase_anon_key', keyParam.trim());
+        // Clean URL params from address bar without reloading
+        const cleanUrl = window.location.pathname + window.location.hash;
+        window.history.replaceState({}, '', cleanUrl);
+        return { url: urlParam.trim(), key: keyParam.trim() };
+      }
+    } catch (e) {}
+  }
+  return null;
+};
+
+// Check if credentials came via URL query params (e.g. from 1-click sync link)
+checkUrlParams();
+
 const getEnvOrStored = (envKey, storageKey) => {
   const envVal = import.meta.env[envKey];
   if (envVal && !envVal.includes('placeholder')) return envVal;
@@ -54,6 +76,19 @@ export function clearCustomSupabaseConfig() {
   } catch (e) {
     console.error('Error clearing custom supabase config:', e);
   }
+}
+
+export function setAndInitSupabase(url, key) {
+  try {
+    if (url && key) {
+      const prev = localStorage.getItem('el_shadday_supabase_url');
+      localStorage.setItem('el_shadday_supabase_url', url.trim());
+      localStorage.setItem('el_shadday_supabase_anon_key', key.trim());
+      if (prev !== url.trim()) {
+        window.location.reload();
+      }
+    }
+  } catch (e) {}
 }
 
 if (!isSupabaseConfigured) {

@@ -72,6 +72,12 @@ export async function dispatchConfigSync(type, data) {
           pizza_flavors: data,
           updated_at: new Date().toISOString()
         });
+      } else if (type === 'GALLERY_UPDATE') {
+        await supabase.from('company_settings').upsert({
+          id: 'el_shadday_config',
+          buffet_gallery: data,
+          updated_at: new Date().toISOString()
+        });
       }
     } catch (err) {
       console.warn('⚠️ Supabase config sync error:', err);
@@ -80,6 +86,12 @@ export async function dispatchConfigSync(type, data) {
 
   // 3. Dispatch to Global Cloud Pub/Sub (instant cross-device sync)
   try {
+    const rawJson = JSON.stringify(payload);
+    // ntfy.sh accepts small payloads (<4KB). If payload contains base64 images or large lists, send lightweight ping
+    const bodyToSend = rawJson.length > 3500 
+      ? JSON.stringify({ type: `${type}_PING`, updatedAt: payload.updatedAt }) 
+      : rawJson;
+
     await fetch(NTFY_CONFIG_URL, {
       method: 'POST',
       headers: {
@@ -87,7 +99,7 @@ export async function dispatchConfigSync(type, data) {
         'Priority': 'default',
         'Tags': 'gear,arrows_counterclockwise'
       },
-      body: JSON.stringify(payload),
+      body: bodyToSend,
       keepalive: true
     });
     console.log(`✅ [Cloud Sync] ${type} sincronizado na nuvem global!`);
@@ -119,7 +131,15 @@ export async function fetchCloudConfigHistory() {
         if (entry.event === 'message' && entry.message) {
           const parsed = JSON.parse(entry.message);
           if (parsed && parsed.type) {
-            if (parsed.type === 'PRODUCTS_UPDATE' && Array.isArray(parsed.data)) {
+            if (parsed.type === 'SUPABASE_CONFIG_SYNC' && parsed.data?.url && parsed.data?.key) {
+              if (typeof window !== 'undefined') {
+                const current = localStorage.getItem('el_shadday_supabase_url');
+                if (!current) {
+                  localStorage.setItem('el_shadday_supabase_url', parsed.data.url);
+                  localStorage.setItem('el_shadday_supabase_anon_key', parsed.data.key);
+                }
+              }
+            } else if (parsed.type === 'PRODUCTS_UPDATE' && Array.isArray(parsed.data)) {
               latestProducts = parsed.data;
             } else if (parsed.type === 'GALLERY_UPDATE' && Array.isArray(parsed.data)) {
               latestGallery = parsed.data;
@@ -184,7 +204,32 @@ export function subscribeToConfigEvents({ onProductsUpdate, onGalleryUpdate, onP
             const data = JSON.parse(payload.message);
             if (!data || !data.type) return;
 
-            if (data.type === 'PRODUCTS_UPDATE' && Array.isArray(data.data)) {
+            if (data.type === 'SUPABASE_CONFIG_SYNC' && data.data?.url && data.data?.key) {
+              if (typeof window !== 'undefined') {
+                const cur = localStorage.getItem('el_shadday_supabase_url');
+                if (!cur) {
+                  localStorage.setItem('el_shadday_supabase_url', data.data.url);
+                  localStorage.setItem('el_shadday_supabase_anon_key', data.data.key);
+                  window.location.reload();
+                }
+              }
+            } else if (data.type === 'GALLERY_UPDATE_PING' || data.type === 'GALLERY_PING') {
+              if (isSupabaseConfigured && supabase) {
+                supabase.from('buffet_gallery').select('*').order('position', { ascending: true }).then(({ data: galData }) => {
+                  if (Array.isArray(galData) && galData.length > 0) {
+                    saveStoredBuffetGallery(galData);
+                    if (onGalleryUpdate) onGalleryUpdate(galData);
+                  } else {
+                    supabase.from('company_settings').select('buffet_gallery').eq('id', 'el_shadday_config').single().then(({ data: cs }) => {
+                      if (Array.isArray(cs?.buffet_gallery)) {
+                        saveStoredBuffetGallery(cs.buffet_gallery);
+                        if (onGalleryUpdate) onGalleryUpdate(cs.buffet_gallery);
+                      }
+                    });
+                  }
+                });
+              }
+            } else if (data.type === 'PRODUCTS_UPDATE' && Array.isArray(data.data)) {
               saveStoredProducts(data.data);
               if (onProductsUpdate) onProductsUpdate(data.data);
             } else if (data.type === 'GALLERY_UPDATE' && Array.isArray(data.data)) {

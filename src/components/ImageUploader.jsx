@@ -11,6 +11,7 @@ import {
   getVideoPosterUrl,
   formatBytes 
 } from '../utils/imageCompressor';
+import { uploadMediaToSupabaseStorage } from '../services/storageService';
 
 export function ImageUploader({
   value = '',
@@ -53,13 +54,18 @@ export function ImageUploader({
         setProcessingStatus('Processando e gerando prévia do vídeo...');
         const result = await processVideoFile(file, { maxSizeBytes: 30 * 1024 * 1024 });
 
+        // Tenta hospedar no Supabase Storage para transmissão rápida em todos os celulares
+        setProcessingStatus('Enviando para a nuvem...');
+        const storageUrl = await uploadMediaToSupabaseStorage(file, 'videos');
+        const finalUrl = storageUrl || result.dataUrl;
+
         setMediaInfo({
           type: 'video',
           size: result.sizeFormatted,
-          dimensions: 'Vídeo MP4/WebM'
+          dimensions: storageUrl ? 'Hospedado na Nuvem (Supabase)' : 'Vídeo MP4/WebM'
         });
 
-        onChange(result.dataUrl, { 
+        onChange(finalUrl, { 
           isVideo: true, 
           type: 'video', 
           thumbnail: result.thumbnail 
@@ -73,6 +79,10 @@ export function ImageUploader({
           mimeType: 'image/webp'
         });
 
+        // Tenta hospedar no Supabase Storage se disponível
+        const storageUrl = await uploadMediaToSupabaseStorage(file, 'images');
+        const finalUrl = storageUrl || result.dataUrl;
+
         setMediaInfo({
           type: 'image',
           original: result.originalSizeFormatted,
@@ -81,10 +91,10 @@ export function ImageUploader({
           dimensions: `${result.width}x${result.height}px`
         });
 
-        onChange(result.dataUrl, { 
+        onChange(finalUrl, { 
           isVideo: false, 
           type: 'image', 
-          thumbnail: result.dataUrl 
+          thumbnail: finalUrl 
         });
       } else {
         throw new Error('Formato não suportado. Por favor, envie uma foto (JPG, PNG, WEBP) ou vídeo (MP4, WebM, MOV).');

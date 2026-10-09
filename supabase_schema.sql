@@ -52,9 +52,14 @@ CREATE TABLE IF NOT EXISTS public.buffet_gallery (
     subtitle TEXT,
     category TEXT NOT NULL DEFAULT 'churrasco',
     tag TEXT DEFAULT 'Buffet El Shadday',
+    type TEXT DEFAULT 'image', -- 'image' ou 'video'
+    thumbnail TEXT,
     position INTEGER DEFAULT 0,
     created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
+
+ALTER TABLE public.buffet_gallery ADD COLUMN IF NOT EXISTS type TEXT DEFAULT 'image';
+ALTER TABLE public.buffet_gallery ADD COLUMN IF NOT EXISTS thumbnail TEXT;
 
 CREATE INDEX IF NOT EXISTS idx_gallery_category ON public.buffet_gallery (category);
 
@@ -99,6 +104,7 @@ CREATE TABLE IF NOT EXISTS public.company_settings (
     menu_products JSONB DEFAULT '[]'::jsonb,
     promo_settings JSONB DEFAULT '{}'::jsonb,
     pizza_flavors JSONB DEFAULT '[]'::jsonb,
+    buffet_gallery JSONB DEFAULT '[]'::jsonb,
     card_machine_notice TEXT DEFAULT '⚠️ Pagamentos no cartão (débito ou crédito) possuem taxa da maquininha cobrada pela operadora. Consulte as condições na entrega.',
     card_machine_notice_active BOOLEAN DEFAULT true,
     card_machine_settings JSONB DEFAULT '{}'::jsonb,
@@ -109,6 +115,7 @@ CREATE TABLE IF NOT EXISTS public.company_settings (
 ALTER TABLE public.company_settings ADD COLUMN IF NOT EXISTS menu_products JSONB DEFAULT '[]'::jsonb;
 ALTER TABLE public.company_settings ADD COLUMN IF NOT EXISTS promo_settings JSONB DEFAULT '{}'::jsonb;
 ALTER TABLE public.company_settings ADD COLUMN IF NOT EXISTS pizza_flavors JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.company_settings ADD COLUMN IF NOT EXISTS buffet_gallery JSONB DEFAULT '[]'::jsonb;
 ALTER TABLE public.company_settings ADD COLUMN IF NOT EXISTS card_machine_notice TEXT DEFAULT '⚠️ Pagamentos no cartão (débito ou crédito) possuem taxa da maquininha cobrada pela operadora. Consulte as condições na entrega.';
 ALTER TABLE public.company_settings ADD COLUMN IF NOT EXISTS card_machine_notice_active BOOLEAN DEFAULT true;
 ALTER TABLE public.company_settings ADD COLUMN IF NOT EXISTS card_machine_settings JSONB DEFAULT '{}'::jsonb;

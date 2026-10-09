@@ -119,17 +119,44 @@ export function AdminDashboard({
     window.addEventListener('buffet_gallery_updated', handleGallerySync);
 
     if (isSupabaseConfigured && supabase) {
-      const localSaved = localStorage.getItem("el_shadday_buffet_gallery_v2");
       supabase
         .from('buffet_gallery')
         .select('*')
         .order('position', { ascending: true })
         .then(({ data, error }) => {
-          if (!error && Array.isArray(data) && localSaved === null) {
+          if (!error && Array.isArray(data) && data.length > 0) {
             setGalleryList(data);
             saveStoredBuffetGallery(data);
+          } else {
+            supabase
+              .from('company_settings')
+              .select('buffet_gallery')
+              .eq('id', 'el_shadday_config')
+              .single()
+              .then(({ data: csData }) => {
+                if (Array.isArray(csData?.buffet_gallery) && csData.buffet_gallery.length > 0) {
+                  setGalleryList(csData.buffet_gallery);
+                  saveStoredBuffetGallery(csData.buffet_gallery);
+                }
+              });
           }
         });
+
+      supabase
+        .channel('realtime_buffet_gallery_admin')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'buffet_gallery' }, () => {
+          supabase
+            .from('buffet_gallery')
+            .select('*')
+            .order('position', { ascending: true })
+            .then(({ data }) => {
+              if (Array.isArray(data)) {
+                setGalleryList(data);
+                saveStoredBuffetGallery(data);
+              }
+            });
+        })
+        .subscribe();
     }
 
     return () => {
@@ -164,7 +191,7 @@ export function AdminDashboard({
 
     if (isSupabaseConfigured && supabase) {
       try {
-        await supabase.from('buffet_gallery').insert({
+        const { error } = await supabase.from('buffet_gallery').upsert({
           id: newPhoto.id,
           url: newPhoto.url,
           title: newPhoto.title,
@@ -173,7 +200,12 @@ export function AdminDashboard({
           tag: newPhoto.tag,
           position: 0
         });
-      } catch (err) {}
+        if (error) {
+          console.warn('Aviso Supabase buffet_gallery:', error.message);
+        }
+      } catch (err) {
+        console.warn('Erro na inserção do Supabase:', err);
+      }
     }
 
     setNewPhotoUrl('');
@@ -181,12 +213,12 @@ export function AdminDashboard({
     setNewPhotoTitle('');
     setNewPhotoSubtitle('');
     setNewPhotoTag('');
-    setGalleryFeedback(isVid ? 'Vídeo adicionado à galeria com sucesso! 🎬' : 'Foto adicionada à galeria com sucesso! 📸');
+    setGalleryFeedback(isVid ? 'Vídeo adicionado e salvo na nuvem com sucesso! 🎬' : 'Foto adicionada e salva na nuvem com sucesso! 📸');
     setTimeout(() => setGalleryFeedback(''), 3500);
   };
 
   const handleDeletePhoto = async (photoId) => {
-    if (!window.confirm('Tem certeza que deseja remover esta foto?')) return;
+    if (!window.confirm('Tem certeza que deseja remover este item?')) return;
     const updated = galleryList.filter(p => p.id !== photoId);
     setGalleryList(updated);
     saveStoredBuffetGallery(updated);
@@ -197,12 +229,12 @@ export function AdminDashboard({
         await supabase.from('buffet_gallery').delete().eq('id', photoId);
       } catch (err) {}
     }
-    setGalleryFeedback('Foto removida!');
+    setGalleryFeedback('Item removido com sucesso!');
     setTimeout(() => setGalleryFeedback(''), 3500);
   };
 
   const handleClearAllPhotos = async () => {
-    if (!window.confirm('Tem certeza que deseja apagar TODAS as fotos da galeria? O carrossel ficará livre para você colocar apenas as suas fotos reais do Buffet.')) return;
+    if (!window.confirm('Tem certeza que deseja apagar TODAS as fotos e vídeos da galeria? O carrossel ficará livre para você colocar apenas as suas fotos reais do Buffet.')) return;
     setGalleryList([]);
     saveStoredBuffetGallery([]);
     dispatchConfigSync('GALLERY_UPDATE', []);
@@ -221,6 +253,22 @@ export function AdminDashboard({
     setGalleryList(INITIAL_BUFFET_GALLERY);
     saveStoredBuffetGallery(INITIAL_BUFFET_GALLERY);
     dispatchConfigSync('GALLERY_UPDATE', INITIAL_BUFFET_GALLERY);
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('buffet_gallery').delete().neq('id', '___none___');
+        await supabase.from('buffet_gallery').insert(
+          INITIAL_BUFFET_GALLERY.map((p, i) => ({
+            id: p.id,
+            url: p.url,
+            title: p.title,
+            subtitle: p.subtitle,
+            category: p.category,
+            tag: p.tag,
+            position: i
+          }))
+        );
+      } catch (err) {}
+    }
     setGalleryFeedback('Galeria restaurada para o padrão!');
     setTimeout(() => setGalleryFeedback(''), 3500);
   };
@@ -3764,19 +3812,35 @@ export function AdminDashboard({
                         <span className="text-[11px] text-slate-500">
                           {isSupabaseConfigured ? '✅ Conexão ativa.' : 'ℹ️ Deixe em branco se preferir usar a sincronização automática.'}
                         </span>
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           {customSupabaseUrl && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (window.confirm('Deseja desconectar as credenciais manuais do Supabase?')) {
-                                  clearCustomSupabaseConfig();
-                                }
-                              }}
-                              className="px-3 py-1.5 rounded-lg bg-dark-800 hover:bg-dark-700 text-slate-300 text-xs font-semibold cursor-pointer"
-                            >
-                              Limpar
-                            </button>
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (window.confirm('Deseja desconectar as credenciais manuais do Supabase?')) {
+                                    clearCustomSupabaseConfig();
+                                  }
+                                }}
+                                className="px-3 py-1.5 rounded-lg bg-dark-800 hover:bg-dark-700 text-slate-300 text-xs font-semibold cursor-pointer"
+                              >
+                                Limpar
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const syncLink = `${window.location.origin}${window.location.pathname}?sb_url=${encodeURIComponent(customSupabaseUrl.trim())}&sb_key=${encodeURIComponent(customSupabaseKey.trim())}`;
+                                  navigator.clipboard.writeText(syncLink);
+                                  alert('Link copiado com sucesso! 📲\n\nEnvie este link no seu WhatsApp e abra-o no celular. O celular conectará ao banco de dados na mesma hora!');
+                                }}
+                                className="px-3 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 text-xs font-bold cursor-pointer border border-emerald-500/30 flex items-center gap-1.5"
+                                title="Copiar link direto para conectar outro aparelho com 1 clique"
+                              >
+                                <Copy className="w-3.5 h-3.5" />
+                                <span>Copiar Link para Conectar no Celular</span>
+                              </button>
+                            </>
                           )}
                           <button
                             type="button"
@@ -3785,6 +3849,7 @@ export function AdminDashboard({
                                 alert('Por favor, informe a URL e a Anon Key do Supabase.');
                                 return;
                               }
+                              dispatchConfigSync('SUPABASE_CONFIG_SYNC', { url: customSupabaseUrl.trim(), key: customSupabaseKey.trim() });
                               saveCustomSupabaseConfig(customSupabaseUrl, customSupabaseKey);
                             }}
                             className="px-4 py-1.5 rounded-lg bg-brand-gold hover:bg-amber-400 text-dark-950 text-xs font-black cursor-pointer shadow-sm"
@@ -3792,6 +3857,10 @@ export function AdminDashboard({
                             Salvar Conexão Supabase
                           </button>
                         </div>
+                      </div>
+
+                      <div className="mt-2 p-2.5 rounded-lg bg-brand-gold/10 border border-brand-gold/20 text-[11px] text-amber-200/90 leading-relaxed">
+                        <strong>💡 Dica para a Vercel:</strong> Para que <em>qualquer</em> cliente ou aparelho novo acesse o banco de dados sem precisar de nenhum link, adicione <code>VITE_SUPABASE_URL</code> e <code>VITE_SUPABASE_ANON_KEY</code> nas <strong>Environment Variables</strong> do seu projeto na Vercel!
                       </div>
                     </div>
                   </div>

@@ -12,6 +12,7 @@ import {
   saveStoredRestaurantInfo,
   saveStoredPizzaFlavors
 } from './data/menuData';
+import { saveStoredBuffetGallery } from './buffet/buffetData';
 import { supabase, isSupabaseConfigured } from './services/supabaseClient';
 import { Header } from './components/Header';
 import { RestaurantStoreHeader } from './components/RestaurantStoreHeader';
@@ -154,6 +155,10 @@ export default function App() {
         .single()
         .then(({ data, error }) => {
           if (!error && data) {
+            if (Array.isArray(data.buffet_gallery)) {
+              saveStoredBuffetGallery(data.buffet_gallery);
+              window.dispatchEvent(new CustomEvent("buffet_gallery_updated", { detail: data.buffet_gallery }));
+            }
             if (Array.isArray(data.menu_products) && data.menu_products.length > 0) {
               setProducts(data.menu_products);
               saveStoredProducts(data.menu_products);
@@ -185,6 +190,32 @@ export default function App() {
             }
           }
         });
+
+      // Realtime subscription to company_settings across all devices
+      const channelSettings = supabase
+        .channel('realtime_company_settings_app')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'company_settings' }, (payload) => {
+          const freshData = payload.new;
+          if (freshData) {
+            if (Array.isArray(freshData.buffet_gallery)) {
+              saveStoredBuffetGallery(freshData.buffet_gallery);
+              window.dispatchEvent(new CustomEvent("buffet_gallery_updated", { detail: freshData.buffet_gallery }));
+            }
+            if (Array.isArray(freshData.menu_products)) {
+              setProducts(freshData.menu_products);
+              saveStoredProducts(freshData.menu_products);
+            }
+            if (Array.isArray(freshData.pizza_flavors)) {
+              saveStoredPizzaFlavors(freshData.pizza_flavors);
+              window.dispatchEvent(new CustomEvent("pizza_flavors_updated", { detail: freshData.pizza_flavors }));
+            }
+            if (freshData.promo_settings) {
+              setPromoSettings(freshData.promo_settings);
+              saveStoredPromoSettings(freshData.promo_settings);
+            }
+          }
+        })
+        .subscribe();
     }
 
     // Hydrate from Global Cloud Pub/Sub (Cross-device instant sync)

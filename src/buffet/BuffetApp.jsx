@@ -139,17 +139,47 @@ export function BuffetApp({ currentAppMode, onToggleAppMode }) {
     window.addEventListener('buffet_gallery_updated', handleGallerySync);
 
     if (isSupabaseConfigured && supabase) {
-      const localSaved = localStorage.getItem("el_shadday_buffet_gallery_v2");
+      // 1. Carrega fotos da tabela buffet_gallery
       supabase
         .from('buffet_gallery')
         .select('*')
         .order('position', { ascending: true })
         .then(({ data, error }) => {
-          if (!error && Array.isArray(data) && localSaved === null) {
+          if (!error && Array.isArray(data) && data.length > 0) {
             setGalleryPhotos(data);
             saveStoredBuffetGallery(data);
+          } else {
+            // Fallback: verificar se está salvo em company_settings
+            supabase
+              .from('company_settings')
+              .select('buffet_gallery')
+              .eq('id', 'el_shadday_config')
+              .single()
+              .then(({ data: csData }) => {
+                if (Array.isArray(csData?.buffet_gallery) && csData.buffet_gallery.length > 0) {
+                  setGalleryPhotos(csData.buffet_gallery);
+                  saveStoredBuffetGallery(csData.buffet_gallery);
+                }
+              });
           }
         });
+
+      // 2. Escuta alterações em tempo real na tabela buffet_gallery
+      supabase
+        .channel('realtime_buffet_gallery_buffetapp')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'buffet_gallery' }, () => {
+          supabase
+            .from('buffet_gallery')
+            .select('*')
+            .order('position', { ascending: true })
+            .then(({ data }) => {
+              if (Array.isArray(data)) {
+                setGalleryPhotos(data);
+                saveStoredBuffetGallery(data);
+              }
+            });
+        })
+        .subscribe();
     }
 
     // Carrega fotos mais recentes da nuvem pública (cross-device)
