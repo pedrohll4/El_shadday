@@ -74,6 +74,12 @@ export function BuffetHeader({
               O que Servimos
             </button>
             <button 
+              onClick={() => scrollToSection('galeria')}
+              className="text-xs uppercase tracking-[0.2em] font-medium text-slate-300 hover:text-[#E8D58A] transition-colors"
+            >
+              Galeria de Fotos
+            </button>
+            <button 
               onClick={() => scrollToSection('montador')}
               className="text-xs uppercase tracking-[0.2em] font-medium text-[#E8D58A] hover:text-[#FFF] transition-colors flex items-center gap-1.5 font-semibold"
             >
@@ -169,6 +175,12 @@ export function BuffetHeader({
               className="text-left py-2 px-3 rounded-lg text-sm uppercase tracking-wider text-slate-200 hover:bg-[#1A202A] hover:text-[#E8D58A]"
             >
               O Que Servimos
+            </button>
+            <button 
+              onClick={() => scrollToSection('galeria')}
+              className="text-left py-2 px-3 rounded-lg text-sm uppercase tracking-wider text-slate-200 hover:bg-[#1A202A] hover:text-[#E8D58A]"
+            >
+              Galeria de Fotos
             </button>
             <button 
               onClick={() => scrollToSection('montador')}

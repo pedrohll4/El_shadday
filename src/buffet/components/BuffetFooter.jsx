@@ -74,6 +74,14 @@ export function BuffetFooter({ company, onOpenAdmin, onScrollToSection }) {
               </li>
               <li>
                 <button 
+                  onClick={() => scrollTo('galeria')} 
+                  className="hover:text-[#E8D58A] transition-colors cursor-pointer"
+                >
+                  Galeria de Fotos
+                </button>
+              </li>
+              <li>
+                <button 
                   onClick={() => scrollTo('montador')} 
                   className="hover:text-[#E8D58A] text-[#D8B85A] font-semibold transition-colors cursor-pointer"
                 >
