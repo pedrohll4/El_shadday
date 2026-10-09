@@ -8,7 +8,7 @@ import {
   AlertCircle, X, ShieldAlert, Sparkles, CheckCheck,
   Camera, RotateCcw, Edit, Edit2, Eye, EyeOff, Tag, Percent,
   Utensils, ToggleLeft, ToggleRight, Save, Layers, CheckSquare,
-  Pizza, ArrowUpRight, Info, CreditCard
+  Pizza, ArrowUpRight, Info, CreditCard, Play, Film
 } from 'lucide-react';
 import { 
   RESTAURANT_INFO, 
@@ -43,6 +43,7 @@ import {
 } from '../services/supabaseClient';
 import { dispatchConfigSync } from '../services/configSyncService';
 import { ImageUploader } from './ImageUploader';
+import { isVideoUrl, getVideoPosterUrl } from '../utils/imageCompressor';
 
 export function AdminDashboard({ 
   orders, 
@@ -97,6 +98,7 @@ export function AdminDashboard({
   // Buffet Gallery Management States
   const [galleryList, setGalleryList] = useState(() => getStoredBuffetGallery());
   const [newPhotoUrl, setNewPhotoUrl] = useState('');
+  const [newPhotoMeta, setNewPhotoMeta] = useState(null);
   const [newPhotoTitle, setNewPhotoTitle] = useState('');
   const [newPhotoSubtitle, setNewPhotoSubtitle] = useState('');
   const [newPhotoCategory, setNewPhotoCategory] = useState('churrasco');
@@ -139,16 +141,21 @@ export function AdminDashboard({
   const handleAddPhoto = async (e) => {
     e.preventDefault();
     if (!newPhotoUrl.trim() || !newPhotoTitle.trim()) {
-      alert('Por favor, envie a foto e informe o título do prato.');
+      alert('Por favor, envie uma foto ou vídeo e informe o título.');
       return;
     }
+    const isVid = Boolean(newPhotoMeta?.isVideo || isVideoUrl(newPhotoUrl.trim()));
+    const poster = newPhotoMeta?.thumbnail || (isVid ? getVideoPosterUrl(newPhotoUrl.trim()) : null);
+
     const newPhoto = {
       id: 'gal_' + Date.now(),
       url: newPhotoUrl.trim(),
       title: newPhotoTitle.trim(),
-      subtitle: newPhotoSubtitle.trim() || 'Foto oficial do Buffet El Shadday',
+      subtitle: newPhotoSubtitle.trim() || (isVid ? 'Vídeo oficial do Buffet El Shadday' : 'Foto oficial do Buffet El Shadday'),
       category: newPhotoCategory,
-      tag: newPhotoTag.trim() || 'Buffet El Shadday'
+      tag: newPhotoTag.trim() || 'Buffet El Shadday',
+      type: isVid ? 'video' : 'image',
+      thumbnail: poster || (isVid ? '' : newPhotoUrl.trim())
     };
     const updated = [newPhoto, ...galleryList];
     setGalleryList(updated);
@@ -170,10 +177,11 @@ export function AdminDashboard({
     }
 
     setNewPhotoUrl('');
+    setNewPhotoMeta(null);
     setNewPhotoTitle('');
     setNewPhotoSubtitle('');
     setNewPhotoTag('');
-    setGalleryFeedback('Foto adicionada à galeria com sucesso!');
+    setGalleryFeedback(isVid ? 'Vídeo adicionado à galeria com sucesso! 🎬' : 'Foto adicionada à galeria com sucesso! 📸');
     setTimeout(() => setGalleryFeedback(''), 3500);
   };
 
@@ -3848,21 +3856,25 @@ export function AdminDashboard({
                 </div>
               )}
 
-              {/* Form to add new photo */}
+              {/* Form to add new photo or video */}
               <form onSubmit={handleAddPhoto} className="p-5 rounded-2xl bg-dark-950 border border-brand-gold/30 mb-8 space-y-4">
                 <h3 className="text-xs uppercase font-extrabold tracking-wider text-brand-gold flex items-center gap-2">
                   <Plus className="w-4 h-4 stroke-[3]" />
-                  <span>Cadastrar Nova Foto na Galeria</span>
+                  <span>Cadastrar Foto ou Vídeo na Galeria</span>
                 </h3>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
                   <div className="sm:col-span-2 lg:col-span-3">
                     <ImageUploader
                       value={newPhotoUrl}
-                      onChange={setNewPhotoUrl}
-                      label="Foto do Buffet / Prato / Evento *"
-                      description="Envie do dispositivo (otimizada em WebP ultraleve para economia de banco) ou insira uma URL."
-                      placeholder="https://exemplo.com/buffet-foto.jpg"
+                      onChange={(url, meta) => {
+                        setNewPhotoUrl(url);
+                        if (meta) setNewPhotoMeta(meta);
+                      }}
+                      label="Foto ou Vídeo do Buffet / Prato / Evento *"
+                      description="Envie foto (WebP) ou vídeo (MP4/WebM até 30MB) do dispositivo, ou insira uma URL (YouTube, Vimeo, MP4)."
+                      placeholder="https://exemplo.com/buffet.jpg ou link do YouTube Shorts"
+                      acceptVideo={true}
                     />
                   </div>
 
@@ -3927,7 +3939,7 @@ export function AdminDashboard({
                       className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-brand-gold to-amber-400 text-dark-950 font-black text-xs hover:brightness-110 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md"
                     >
                       <Plus className="w-4 h-4 stroke-[3]" />
-                      <span>Salvar Foto</span>
+                      <span>Salvar na Galeria</span>
                     </button>
                   </div>
                 </div>
@@ -3939,27 +3951,60 @@ export function AdminDashboard({
                   <div className="w-14 h-14 rounded-2xl bg-brand-gold/10 text-brand-gold flex items-center justify-center mx-auto border border-brand-gold/20">
                     <Camera className="w-7 h-7" />
                   </div>
-                  <h4 className="text-base font-bold text-white">Nenhuma foto cadastrada na galeria</h4>
+                  <h4 className="text-base font-bold text-white">Nenhuma mídia cadastrada na galeria</h4>
                   <p className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed">
-                    Todas as fotos padrão foram removidas. Adicione as suas fotos reais do Buffet El Shadday no formulário acima usando a opção <strong>"Do Dispositivo"</strong> ou <strong>"Link / URL"</strong>!
+                    Todas as fotos padrão foram removidas. Adicione as suas fotos ou vídeos reais do Buffet El Shadday no formulário acima usando a opção <strong>"Do Dispositivo"</strong> ou <strong>"Link / YouTube"</strong>!
                   </p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                   {galleryList.map((photo, idx) => {
                     const catObj = GALLERY_CATEGORIES.find(c => c.id === photo.category);
+                    const isVid = photo.type === 'video' || isVideoUrl(photo.url);
+                    const poster = photo.thumbnail || getVideoPosterUrl(photo.url);
+
                     return (
                       <div 
                         key={photo.id || idx}
                         className="group relative rounded-2xl overflow-hidden bg-dark-950 border border-dark-800 hover:border-brand-gold/50 transition-all flex flex-col shadow-sm"
                       >
-                        <div className="relative aspect-video w-full bg-black/40 overflow-hidden">
-                          <img
-                            src={photo.url}
-                            alt={photo.title}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                            loading="lazy"
-                          />
+                        <div className="relative aspect-video w-full bg-black/50 overflow-hidden flex items-center justify-center">
+                          {isVid ? (
+                            <>
+                              {poster ? (
+                                <img
+                                  src={poster}
+                                  alt={photo.title}
+                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                  loading="lazy"
+                                />
+                              ) : (
+                                <video
+                                  src={photo.url}
+                                  className="w-full h-full object-cover"
+                                  muted
+                                  playsInline
+                                />
+                              )}
+                              <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                                <div className="w-10 h-10 rounded-full bg-brand-gold text-dark-950 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                                  <Play className="w-5 h-5 fill-current ml-0.5" />
+                                </div>
+                              </div>
+                              <span className="absolute top-2 right-2 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-400 text-dark-950 shadow-sm flex items-center gap-1">
+                                <Film className="w-3 h-3" />
+                                Vídeo
+                              </span>
+                            </>
+                          ) : (
+                            <img
+                              src={photo.url}
+                              alt={photo.title}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              loading="lazy"
+                            />
+                          )}
+
                           <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-black/70 backdrop-blur-sm text-brand-gold border border-brand-gold/30">
                             {catObj ? catObj.label : photo.category}
                           </span>
@@ -3967,7 +4012,10 @@ export function AdminDashboard({
 
                         <div className="p-3.5 flex-1 flex flex-col justify-between">
                           <div>
-                            <h4 className="text-xs font-bold text-white line-clamp-1">{photo.title}</h4>
+                            <div className="flex items-center gap-1.5">
+                              {isVid && <Film className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />}
+                              <h4 className="text-xs font-bold text-white line-clamp-1">{photo.title}</h4>
+                            </div>
                             <p className="text-[11px] text-slate-400 line-clamp-1 mt-0.5">{photo.subtitle}</p>
                           </div>
 
@@ -3977,7 +4025,7 @@ export function AdminDashboard({
                               type="button"
                               onClick={() => handleDeletePhoto(photo.id)}
                               className="p-1.5 rounded-lg text-rose-400 hover:text-white hover:bg-rose-950/60 transition-colors cursor-pointer"
-                              title="Remover foto da galeria"
+                              title="Remover item da galeria"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>

@@ -15,7 +15,8 @@ import {
   Wine,
   ConciergeBell,
   Cake,
-  Eye
+  Eye,
+  Film
 } from 'lucide-react';
 import { GoldFiligree } from './ElShaddayLogo';
 import { 
@@ -23,6 +24,11 @@ import {
   INITIAL_BUFFET_GALLERY, 
   getStoredBuffetGallery 
 } from '../buffetData';
+import { 
+  isVideoUrl, 
+  getEmbedVideoUrl, 
+  getVideoPosterUrl 
+} from '../../utils/imageCompressor';
 
 const CATEGORY_ICONS = {
   all: Camera,
@@ -139,6 +145,9 @@ export function BuffetGallery({ galleryItems }) {
       { item: filteredPhotos[nextIndex], position: 'next', index: nextIndex }
     ];
   }, [filteredPhotos, currentIndex]);
+
+  const isVideoItem = (item) => Boolean(item && (item.type === 'video' || isVideoUrl(item.url)));
+  const getItemPoster = (item) => (item?.thumbnail || (item?.url ? getVideoPosterUrl(item.url) : null));
 
   return (
     <section id="galeria" className="py-16 sm:py-24 bg-[#11151B] text-slate-100 border-b border-[#2E3744] relative overflow-hidden">
@@ -300,18 +309,41 @@ export function BuffetGallery({ galleryItems }) {
               {/* Left/Prev Preview Card */}
               {visiblePhotos[0] && (
                 <div 
-                  onClick={() => {
-                    handlePrev();
-                  }}
+                  onClick={() => handlePrev()}
                   className="col-span-3 rounded-2xl overflow-hidden bg-[#181E27] border border-[#2A3442] opacity-50 hover:opacity-80 transition-all duration-300 cursor-pointer h-72 relative group"
                 >
-                  <img 
-                    src={visiblePhotos[0].item.url} 
-                    alt={visiblePhotos[0].item.title}
-                    className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
-                    loading="lazy"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-[#11151B] via-transparent to-transparent" />
+                  {isVideoItem(visiblePhotos[0].item) ? (
+                    <div className="w-full h-full relative bg-black">
+                      {getItemPoster(visiblePhotos[0].item) ? (
+                        <img 
+                          src={getItemPoster(visiblePhotos[0].item)} 
+                          alt={visiblePhotos[0].item.title}
+                          className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <video
+                          src={visiblePhotos[0].item.url}
+                          className="w-full h-full object-cover object-center"
+                          muted
+                          playsInline
+                        />
+                      )}
+                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                        <div className="w-8 h-8 rounded-full bg-black/70 border border-[#D8B85A]/50 text-[#E8D58A] flex items-center justify-center shadow-md">
+                          <Play className="w-4 h-4 fill-current ml-0.5" />
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <img 
+                      src={visiblePhotos[0].item.url} 
+                      alt={visiblePhotos[0].item.title}
+                      className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
+                      loading="lazy"
+                    />
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#11151B] via-transparent to-transparent pointer-events-none" />
                   <span className="absolute bottom-3 left-3 text-[11px] font-bold text-slate-300 truncate max-w-[85%]">
                     {visiblePhotos[0].item.title}
                   </span>
@@ -324,22 +356,57 @@ export function BuffetGallery({ galleryItems }) {
                   onClick={() => setLightboxIndex(visiblePhotos[1].index)}
                   className="col-span-6 rounded-3xl overflow-hidden bg-[#181E27] border-2 border-[#D8B85A] shadow-[0_0_35px_rgba(216,184,90,0.25)] h-96 relative group cursor-pointer transition-all duration-300"
                 >
-                  <img 
-                    src={visiblePhotos[1].item.url} 
-                    alt={visiblePhotos[1].item.title}
-                    className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-[#11151B] via-[#11151B]/30 to-transparent" />
+                  {isVideoItem(visiblePhotos[1].item) ? (
+                    getEmbedVideoUrl(visiblePhotos[1].item.url) ? (
+                      <div className="w-full h-full relative bg-black">
+                        <img 
+                          src={getItemPoster(visiblePhotos[1].item) || visiblePhotos[1].item.url} 
+                          alt={visiblePhotos[1].item.title}
+                          className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700"
+                        />
+                        <div className="absolute inset-0 bg-black/35 flex items-center justify-center">
+                          <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-[#D8B85A] to-amber-300 text-dark-950 flex items-center justify-center shadow-2xl group-hover:scale-110 transition-transform">
+                            <Play className="w-8 h-8 fill-current ml-1" />
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <video 
+                        src={visiblePhotos[1].item.url}
+                        poster={getItemPoster(visiblePhotos[1].item)}
+                        autoPlay
+                        muted
+                        loop
+                        playsInline
+                        className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700"
+                      />
+                    )
+                  ) : (
+                    <img 
+                      src={visiblePhotos[1].item.url} 
+                      alt={visiblePhotos[1].item.title}
+                      className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700"
+                    />
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#11151B] via-[#11151B]/30 to-transparent pointer-events-none" />
 
                   {/* Top Badges */}
-                  <div className="absolute top-4 left-4 right-4 flex items-center justify-between">
-                    <span className="px-3 py-1 rounded-full bg-[#11151B]/85 backdrop-blur-md text-[#E8D58A] border border-[#D8B85A]/40 text-xs font-bold uppercase tracking-wider">
-                      {visiblePhotos[1].item.tag || "El Shadday Buffet"}
-                    </span>
+                  <div className="absolute top-4 left-4 right-4 flex items-center justify-between pointer-events-none">
+                    <div className="flex items-center gap-2">
+                      <span className="px-3 py-1 rounded-full bg-[#11151B]/85 backdrop-blur-md text-[#E8D58A] border border-[#D8B85A]/40 text-xs font-bold uppercase tracking-wider">
+                        {visiblePhotos[1].item.tag || "El Shadday Buffet"}
+                      </span>
+                      {isVideoItem(visiblePhotos[1].item) && (
+                        <span className="px-2.5 py-1 rounded-full bg-amber-400 text-dark-950 text-xs font-black uppercase tracking-wider flex items-center gap-1 shadow-md">
+                          <Film className="w-3.5 h-3.5" />
+                          Vídeo
+                        </span>
+                      )}
+                    </div>
 
                     <button
                       type="button"
-                      className="w-9 h-9 rounded-full bg-[#11151B]/80 hover:bg-[#D8B85A] text-slate-300 hover:text-[#11151B] flex items-center justify-center transition-colors border border-[#2E3744]"
+                      className="w-9 h-9 rounded-full bg-[#11151B]/80 hover:bg-[#D8B85A] text-slate-300 hover:text-[#11151B] flex items-center justify-center transition-colors border border-[#2E3744] pointer-events-auto"
                       title="Ver em tela cheia"
                     >
                       <Maximize2 className="w-4 h-4" />
@@ -347,7 +414,7 @@ export function BuffetGallery({ galleryItems }) {
                   </div>
 
                   {/* Bottom Captions */}
-                  <div className="absolute bottom-0 left-0 right-0 p-6">
+                  <div className="absolute bottom-0 left-0 right-0 p-6 pointer-events-none">
                     <h3 className="font-serif text-xl sm:text-2xl font-bold text-white group-hover:text-[#E8D58A] transition-colors leading-snug">
                       {visiblePhotos[1].item.title}
                     </h3>
@@ -358,7 +425,7 @@ export function BuffetGallery({ galleryItems }) {
                     <div className="mt-3 pt-3 border-t border-[#2E3744]/80 flex items-center justify-between text-xs text-[#E8D58A]">
                       <span className="flex items-center gap-1 font-semibold">
                         <Sparkles className="w-3.5 h-3.5 text-[#D8B85A]" />
-                        Toque na imagem para ampliar
+                        {isVideoItem(visiblePhotos[1].item) ? 'Toque para assistir com som' : 'Toque na imagem para ampliar'}
                       </span>
                       <span className="text-[11px] text-slate-400 font-mono">
                         {visiblePhotos[1].index + 1} / {filteredPhotos.length}
@@ -371,18 +438,41 @@ export function BuffetGallery({ galleryItems }) {
               {/* Right/Next Preview Card */}
               {visiblePhotos[2] && (
                 <div 
-                  onClick={() => {
-                    handleNext();
-                  }}
+                  onClick={() => handleNext()}
                   className="col-span-3 rounded-2xl overflow-hidden bg-[#181E27] border border-[#2A3442] opacity-50 hover:opacity-80 transition-all duration-300 cursor-pointer h-72 relative group"
                 >
-                  <img 
-                    src={visiblePhotos[2].item.url} 
-                    alt={visiblePhotos[2].item.title}
-                    className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
-                    loading="lazy"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-[#11151B] via-transparent to-transparent" />
+                  {isVideoItem(visiblePhotos[2].item) ? (
+                    <div className="w-full h-full relative bg-black">
+                      {getItemPoster(visiblePhotos[2].item) ? (
+                        <img 
+                          src={getItemPoster(visiblePhotos[2].item)} 
+                          alt={visiblePhotos[2].item.title}
+                          className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <video
+                          src={visiblePhotos[2].item.url}
+                          className="w-full h-full object-cover object-center"
+                          muted
+                          playsInline
+                        />
+                      )}
+                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                        <div className="w-8 h-8 rounded-full bg-black/70 border border-[#D8B85A]/50 text-[#E8D58A] flex items-center justify-center shadow-md">
+                          <Play className="w-4 h-4 fill-current ml-0.5" />
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <img 
+                      src={visiblePhotos[2].item.url} 
+                      alt={visiblePhotos[2].item.title}
+                      className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
+                      loading="lazy"
+                    />
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#11151B] via-transparent to-transparent pointer-events-none" />
                   <span className="absolute bottom-3 left-3 text-[11px] font-bold text-slate-300 truncate max-w-[85%]">
                     {visiblePhotos[2].item.title}
                   </span>
@@ -397,23 +487,58 @@ export function BuffetGallery({ galleryItems }) {
                 onClick={() => setLightboxIndex(currentIndex)}
                 className="rounded-2xl overflow-hidden bg-[#181E27] border-2 border-[#D8B85A] shadow-xl h-80 relative group cursor-pointer"
               >
-                <img 
-                  src={currentPhoto.url} 
-                  alt={currentPhoto.title}
-                  className="w-full h-full object-cover object-center"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-[#11151B] via-[#11151B]/40 to-transparent" />
+                {isVideoItem(currentPhoto) ? (
+                  getEmbedVideoUrl(currentPhoto.url) ? (
+                    <div className="w-full h-full relative bg-black">
+                      <img 
+                        src={getItemPoster(currentPhoto) || currentPhoto.url} 
+                        alt={currentPhoto.title}
+                        className="w-full h-full object-cover object-center"
+                      />
+                      <div className="absolute inset-0 bg-black/35 flex items-center justify-center">
+                        <div className="w-14 h-14 rounded-full bg-gradient-to-tr from-[#D8B85A] to-amber-300 text-dark-950 flex items-center justify-center shadow-2xl">
+                          <Play className="w-7 h-7 fill-current ml-1" />
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <video 
+                      src={currentPhoto.url}
+                      poster={getItemPoster(currentPhoto)}
+                      autoPlay
+                      muted
+                      loop
+                      playsInline
+                      className="w-full h-full object-cover object-center"
+                    />
+                  )
+                ) : (
+                  <img 
+                    src={currentPhoto.url} 
+                    alt={currentPhoto.title}
+                    className="w-full h-full object-cover object-center"
+                  />
+                )}
+                <div className="absolute inset-0 bg-gradient-to-t from-[#11151B] via-[#11151B]/40 to-transparent pointer-events-none" />
 
-                <div className="absolute top-3 left-3 right-3 flex items-center justify-between">
-                  <span className="px-2.5 py-1 rounded-full bg-[#11151B]/85 text-[#E8D58A] border border-[#D8B85A]/40 text-[10px] font-bold uppercase tracking-wider">
-                    {currentPhoto.tag || "Buffet El Shadday"}
-                  </span>
+                <div className="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-none">
+                  <div className="flex items-center gap-1.5">
+                    <span className="px-2.5 py-1 rounded-full bg-[#11151B]/85 text-[#E8D58A] border border-[#D8B85A]/40 text-[10px] font-bold uppercase tracking-wider">
+                      {currentPhoto.tag || "Buffet El Shadday"}
+                    </span>
+                    {isVideoItem(currentPhoto) && (
+                      <span className="px-2 py-0.5 rounded-full bg-amber-400 text-dark-950 text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shadow-sm">
+                        <Film className="w-3 h-3" />
+                        Vídeo
+                      </span>
+                    )}
+                  </div>
                   <span className="px-2 py-0.5 rounded-full bg-[#11151B]/80 text-[10px] font-bold text-slate-300 border border-[#2E3744]">
                     {currentIndex + 1} de {filteredPhotos.length}
                   </span>
                 </div>
 
-                <div className="absolute bottom-0 left-0 right-0 p-4">
+                <div className="absolute bottom-0 left-0 right-0 p-4 pointer-events-none">
                   <h3 className="font-serif text-lg font-bold text-white leading-snug">
                     {currentPhoto.title}
                   </h3>
@@ -421,8 +546,8 @@ export function BuffetGallery({ galleryItems }) {
                     {currentPhoto.subtitle}
                   </p>
                   <span className="inline-flex items-center gap-1 text-[11px] text-[#E8D58A] mt-2 font-semibold">
-                    <Eye className="w-3.5 h-3.5" />
-                    Toque para ver em tela cheia
+                    {isVideoItem(currentPhoto) ? <Play className="w-3.5 h-3.5 fill-current" /> : <Eye className="w-3.5 h-3.5" />}
+                    {isVideoItem(currentPhoto) ? 'Toque para assistir com som' : 'Toque para ver em tela cheia'}
                   </span>
                 </div>
               </div>
@@ -479,64 +604,103 @@ export function BuffetGallery({ galleryItems }) {
         ======================================================== */}
         {viewMode === 'grid' && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 animate-fadeIn">
-            {filteredPhotos.map((foto, index) => (
-              <div 
-                key={foto.id}
-                onClick={() => setLightboxIndex(index)}
-                className="rounded-2xl bg-[#181E27] border border-[#2E3744] hover:border-[#D8B85A] overflow-hidden shadow-xl transition-all duration-300 group flex flex-col cursor-pointer hover:-translate-y-1"
-              >
-                <div className="relative h-56 w-full overflow-hidden bg-[#202630]">
-                  <img 
-                    src={foto.url} 
-                    alt={foto.title}
-                    className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
-                    loading="lazy"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-[#181E27] via-[#181E27]/20 to-transparent" />
+            {filteredPhotos.map((foto, index) => {
+              const isVid = isVideoItem(foto);
+              const poster = getItemPoster(foto);
 
-                  <span className="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-[#11151B]/80 backdrop-blur-md text-[#E8D58A] border border-[#D8B85A]/40 text-[10px] font-bold uppercase tracking-wider">
-                    {foto.tag}
-                  </span>
+              return (
+                <div 
+                  key={foto.id || index}
+                  onClick={() => setLightboxIndex(index)}
+                  className="rounded-2xl bg-[#181E27] border border-[#2E3744] hover:border-[#D8B85A] overflow-hidden shadow-xl transition-all duration-300 group flex flex-col cursor-pointer hover:-translate-y-1"
+                >
+                  <div className="relative h-56 w-full overflow-hidden bg-[#202630] flex items-center justify-center">
+                    {isVid ? (
+                      <>
+                        {poster ? (
+                          <img 
+                            src={poster} 
+                            alt={foto.title}
+                            className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <video 
+                            src={foto.url} 
+                            className="w-full h-full object-cover"
+                            muted
+                            playsInline
+                          />
+                        )}
+                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                          <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-[#D8B85A] to-amber-300 text-dark-950 flex items-center justify-center shadow-xl group-hover:scale-110 transition-transform">
+                            <Play className="w-6 h-6 fill-current ml-0.5" />
+                          </div>
+                        </div>
+                        <span className="absolute bottom-3 left-3 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-400 text-dark-950 shadow-sm flex items-center gap-1">
+                          <Film className="w-3 h-3" />
+                          Vídeo
+                        </span>
+                      </>
+                    ) : (
+                      <img 
+                        src={foto.url} 
+                        alt={foto.title}
+                        className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
+                        loading="lazy"
+                      />
+                    )}
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#181E27] via-[#181E27]/20 to-transparent pointer-events-none" />
 
-                  <span className="absolute bottom-3 right-3 px-2 py-0.5 rounded-md bg-[#11151B]/90 text-[10px] text-slate-300 border border-[#2E3744]">
-                    📸 #{index + 1}
-                  </span>
-                </div>
-
-                <div className="p-5 flex-1 flex flex-col justify-between">
-                  <div>
-                    <h4 className="font-serif text-lg font-bold text-white group-hover:text-[#E8D58A] transition-colors">
-                      {foto.title}
-                    </h4>
-                    <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                      {foto.subtitle}
-                    </p>
-                  </div>
-
-                  <div className="mt-4 pt-3 border-t border-[#2E3744] flex items-center justify-between text-[11px] text-[#E8D58A]">
-                    <span className="flex items-center gap-1 font-semibold">
-                      <Sparkles className="w-3.5 h-3.5 text-[#D8B85A]" />
-                      Incluso no evento
+                    <span className="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-[#11151B]/80 backdrop-blur-md text-[#E8D58A] border border-[#D8B85A]/40 text-[10px] font-bold uppercase tracking-wider">
+                      {foto.tag}
                     </span>
-                    <span className="text-[10px] text-slate-400 font-semibold group-hover:text-white">Ver foto</span>
+
+                    <span className="absolute bottom-3 right-3 px-2 py-0.5 rounded-md bg-[#11151B]/90 text-[10px] text-slate-300 border border-[#2E3744]">
+                      {isVid ? '🎬' : '📸'} #{index + 1}
+                    </span>
+                  </div>
+
+                  <div className="p-5 flex-1 flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        {isVid && <Film className="w-4 h-4 text-amber-400 flex-shrink-0" />}
+                        <h4 className="font-serif text-lg font-bold text-white group-hover:text-[#E8D58A] transition-colors line-clamp-1">
+                          {foto.title}
+                        </h4>
+                      </div>
+                      <p className="text-xs text-slate-400 mt-1 leading-relaxed line-clamp-2">
+                        {foto.subtitle}
+                      </p>
+                    </div>
+
+                    <div className="mt-4 pt-3 border-t border-[#2E3744] flex items-center justify-between text-[11px] text-[#E8D58A]">
+                      <span className="flex items-center gap-1 font-semibold">
+                        <Sparkles className="w-3.5 h-3.5 text-[#D8B85A]" />
+                        Incluso no evento
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-semibold group-hover:text-white">
+                        {isVid ? 'Assistir vídeo' : 'Ver foto'}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
         {/* Footer Reminder */}
         <div className="mt-12 text-center">
           <p className="text-xs text-slate-400 italic">
-            ✦ Espaço pronto para receber todas as 49 fotos oficiais do Buffet El Shadday. Editáveis via painel de controle.
+            ✦ Espaço pronto para receber todas as fotos e vídeos oficiais do Buffet El Shadday. Editáveis via painel de controle.
           </p>
         </div>
 
       </div>
 
       {/* ========================================================
-          MODAL LIGHTBOX (TELA CHEIA COM NAVEGAÇÃO)
+          MODAL LIGHTBOX (TELA CHEIA COM NAVEGAÇÃO E VÍDEOS)
       ======================================================== */}
       {lightboxIndex !== null && filteredPhotos[lightboxIndex] && (
         <div 
@@ -553,6 +717,12 @@ export function BuffetGallery({ galleryItems }) {
                 <span className="px-3 py-1 rounded-full bg-[#D8B85A]/15 border border-[#D8B85A]/40 text-[#E8D58A] text-xs font-bold uppercase tracking-wider">
                   {filteredPhotos[lightboxIndex].tag}
                 </span>
+                {isVideoItem(filteredPhotos[lightboxIndex]) && (
+                  <span className="px-2.5 py-1 rounded-full bg-amber-400 text-dark-950 text-xs font-black uppercase tracking-wider flex items-center gap-1 shadow-sm">
+                    <Film className="w-3.5 h-3.5" />
+                    Vídeo Oficial
+                  </span>
+                )}
                 <span className="text-xs text-slate-400 font-mono">
                   {lightboxIndex + 1} de {filteredPhotos.length}
                 </span>
@@ -568,19 +738,46 @@ export function BuffetGallery({ galleryItems }) {
               </button>
             </div>
 
-            {/* Image Stage with Prev/Next buttons */}
-            <div className="relative flex-1 bg-black/40 min-h-[300px] sm:min-h-[480px] max-h-[65vh] flex items-center justify-center overflow-hidden">
-              <img 
-                src={filteredPhotos[lightboxIndex].url} 
-                alt={filteredPhotos[lightboxIndex].title}
-                className="max-h-full max-w-full object-contain mx-auto select-none"
-              />
+            {/* Media Stage with Prev/Next buttons */}
+            <div className="relative flex-1 bg-black min-h-[300px] sm:min-h-[480px] max-h-[68vh] flex items-center justify-center overflow-hidden">
+              {isVideoItem(filteredPhotos[lightboxIndex]) ? (
+                getEmbedVideoUrl(filteredPhotos[lightboxIndex].url) ? (
+                  <div className="w-full h-full min-h-[320px] sm:min-h-[480px] max-h-[68vh] flex items-center justify-center bg-black">
+                    <iframe
+                      src={getEmbedVideoUrl(filteredPhotos[lightboxIndex].url)}
+                      title={filteredPhotos[lightboxIndex].title}
+                      className="w-full h-[55vh] sm:h-[68vh] border-0"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                    />
+                  </div>
+                ) : (
+                  <div className="w-full h-full max-h-[68vh] flex items-center justify-center bg-black">
+                    <video
+                      src={filteredPhotos[lightboxIndex].url}
+                      controls
+                      autoPlay
+                      playsInline
+                      poster={getItemPoster(filteredPhotos[lightboxIndex])}
+                      className="max-h-[68vh] max-w-full object-contain mx-auto"
+                    >
+                      Seu navegador não suporta reprodução de vídeo.
+                    </video>
+                  </div>
+                )
+              ) : (
+                <img 
+                  src={filteredPhotos[lightboxIndex].url} 
+                  alt={filteredPhotos[lightboxIndex].title}
+                  className="max-h-full max-w-full object-contain mx-auto select-none"
+                />
+              )}
 
               {/* Prev in Modal */}
               <button
                 type="button"
                 onClick={() => setLightboxIndex(curr => (curr - 1 + filteredPhotos.length) % filteredPhotos.length)}
-                className="absolute left-3 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-[#11151B]/80 hover:bg-[#D8B85A] text-white hover:text-[#11151B] border border-[#D8B85A]/40 flex items-center justify-center transition-all cursor-pointer shadow-xl"
+                className="absolute left-3 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-[#11151B]/80 hover:bg-[#D8B85A] text-white hover:text-[#11151B] border border-[#D8B85A]/40 flex items-center justify-center transition-all cursor-pointer shadow-xl z-20"
                 title="Anterior"
               >
                 <ChevronLeft className="w-6 h-6" />
@@ -590,7 +787,7 @@ export function BuffetGallery({ galleryItems }) {
               <button
                 type="button"
                 onClick={() => setLightboxIndex(curr => (curr + 1) % filteredPhotos.length)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-[#11151B]/80 hover:bg-[#D8B85A] text-white hover:text-[#11151B] border border-[#D8B85A]/40 flex items-center justify-center transition-all cursor-pointer shadow-xl"
+                className="absolute right-3 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-[#11151B]/80 hover:bg-[#D8B85A] text-white hover:text-[#11151B] border border-[#D8B85A]/40 flex items-center justify-center transition-all cursor-pointer shadow-xl z-20"
                 title="Próxima"
               >
                 <ChevronRight className="w-6 h-6" />

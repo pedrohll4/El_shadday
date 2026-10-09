@@ -8,7 +8,9 @@ import {
   ArrowRight,
   ShieldCheck,
   Flame,
-  Sparkles
+  Sparkles,
+  Play,
+  Film
 } from 'lucide-react';
 import { ElShaddayLogo } from '../buffet/components/ElShaddayLogo';
 import { 
@@ -22,6 +24,7 @@ import {
 } from '../buffet/buffetData';
 import { supabase, isSupabaseConfigured } from '../services/supabaseClient';
 import { fetchCloudConfigHistory, subscribeToConfigEvents } from '../services/configSyncService';
+import { isVideoUrl, getVideoPosterUrl } from '../utils/imageCompressor';
 
 export function BuffetSection({ onExploreFullBuffet }) {
   // Selected item IDs array
@@ -521,35 +524,70 @@ export function BuffetSection({ onExploreFullBuffet }) {
             Montagem real para casamentos, formaturas e comemorações exclusivas.
           </p>
 
-          {/* Mini Carrossel de 3 Fotos Rotativas */}
+          {/* Mini Carrossel de 3 Fotos / Vídeos Rotativos */}
           {galleryPhotos && galleryPhotos.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
               {[0, 1, 2].slice(0, Math.min(3, galleryPhotos.length)).map(offset => {
                 const photoIdx = (galleryIndex + offset) % galleryPhotos.length;
                 const photo = galleryPhotos[photoIdx];
                 if (!photo) return null;
+                const isVid = Boolean(photo.type === 'video' || isVideoUrl(photo.url));
+                const poster = photo.thumbnail || getVideoPosterUrl(photo.url);
+
                 return (
                   <div 
                     key={photo.id || offset}
                     onClick={onExploreFullBuffet}
                     className="group relative h-40 sm:h-44 rounded-xl overflow-hidden bg-[#0E1218] border border-[#2E3744] hover:border-[#D8B85A] transition-all cursor-pointer shadow-md"
                   >
-                    <img 
-                      src={photo.url} 
-                      alt={photo.title}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-                      loading="lazy"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#0E1218] via-transparent to-transparent" />
+                    {isVid ? (
+                      <div className="w-full h-full relative bg-black flex items-center justify-center">
+                        {poster ? (
+                          <img 
+                            src={poster} 
+                            alt={photo.title}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <video
+                            src={photo.url}
+                            className="w-full h-full object-cover"
+                            muted
+                            playsInline
+                          />
+                        )}
+                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                          <div className="w-9 h-9 rounded-full bg-brand-gold text-dark-950 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                            <Play className="w-4 h-4 fill-current ml-0.5" />
+                          </div>
+                        </div>
+                        <span className="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-amber-400 text-dark-950 font-black text-[9px] flex items-center gap-1 shadow-sm uppercase tracking-wider">
+                          <Film className="w-2.5 h-2.5" />
+                          Vídeo
+                        </span>
+                      </div>
+                    ) : (
+                      <img 
+                        src={photo.url} 
+                        alt={photo.title}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                        loading="lazy"
+                      />
+                    )}
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#0E1218] via-transparent to-transparent pointer-events-none" />
                     
                     <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-[#0E1218]/85 text-[#E8D58A] border border-[#D8B85A]/30 text-[9px] font-bold uppercase">
                       {photo.tag || 'Buffet'}
                     </span>
 
-                    <div className="absolute bottom-2 left-2 right-2 text-left">
-                      <h5 className="font-serif text-xs font-bold text-white truncate group-hover:text-[#E8D58A]">
-                        {photo.title}
-                      </h5>
+                    <div className="absolute bottom-2 left-2 right-2 text-left pointer-events-none">
+                      <div className="flex items-center gap-1">
+                        {isVid && <Film className="w-3 h-3 text-amber-400 flex-shrink-0" />}
+                        <h5 className="font-serif text-xs font-bold text-white truncate group-hover:text-[#E8D58A]">
+                          {photo.title}
+                        </h5>
+                      </div>
                       <p className="text-[10px] text-slate-400 truncate">
                         {photo.subtitle}
                       </p>
@@ -560,14 +598,14 @@ export function BuffetSection({ onExploreFullBuffet }) {
             </div>
           ) : (
             <div className="mt-4 p-6 rounded-2xl bg-[#0E1218] border border-[#2E3744] text-center text-xs text-slate-400">
-              Galeria em atualização • Fotos reais dos nossos eventos disponíveis no WhatsApp!
+              Galeria em atualização • Fotos e vídeos reais dos nossos eventos disponíveis no WhatsApp!
             </div>
           )}
 
           <div className="mt-3.5 flex items-center justify-between text-[11px] text-slate-400">
             <span className="flex items-center gap-1.5 text-slate-300">
               <Sparkles className="w-3.5 h-3.5 text-[#D8B85A]" />
-              <span>Fotos reais que mudam automaticamente a cada 3,5s</span>
+              <span>Fotos e vídeos reais que mudam automaticamente a cada 3,5s</span>
             </span>
             <span className="font-mono text-[#D8B85A] text-[10px] font-semibold">
               Foto {((galleryIndex % (galleryPhotos?.length || 1)) + 1)} de {galleryPhotos?.length || INITIAL_BUFFET_GALLERY.length}
