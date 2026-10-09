@@ -63,6 +63,12 @@ export function BuffetAdminDashboard({
     return [...INITIAL_BUFFET_GALLERY];
   });
 
+  useEffect(() => {
+    if (galleryPhotos && galleryPhotos.length > 0) {
+      setTempGallery([...galleryPhotos]);
+    }
+  }, [galleryPhotos]);
+
   // New photo inputs
   const [newPhotoUrl, setNewPhotoUrl] = useState('');
   const [newPhotoTitle, setNewPhotoTitle] = useState('');

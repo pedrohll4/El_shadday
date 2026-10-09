@@ -16,8 +16,11 @@ import {
   INITIAL_EVENT_TYPES,
   DEFAULT_CHURRASCO_OPTIONS,
   formatMeatList,
-  INITIAL_BUFFET_GALLERY
+  INITIAL_BUFFET_GALLERY,
+  getStoredBuffetGallery,
+  saveStoredBuffetGallery
 } from '../buffet/buffetData';
+import { supabase, isSupabaseConfigured } from '../services/supabaseClient';
 
 export function BuffetSection({ onExploreFullBuffet }) {
   // Selected item IDs array
@@ -63,15 +66,51 @@ export function BuffetSection({ onExploreFullBuffet }) {
     });
   };
 
+  // Sincronização em tempo real das fotos da galeria (localStorage + Supabase)
+  const [galleryPhotos, setGalleryPhotos] = useState(() => getStoredBuffetGallery());
+
+  useEffect(() => {
+    const handleGallerySync = (e) => {
+      if (e?.detail && Array.isArray(e.detail) && e.detail.length > 0) {
+        setGalleryPhotos(e.detail);
+      } else {
+        setGalleryPhotos(getStoredBuffetGallery());
+      }
+    };
+
+    window.addEventListener('storage', handleGallerySync);
+    window.addEventListener('buffet_gallery_updated', handleGallerySync);
+
+    // Carrega fotos atualizadas do Supabase
+    if (isSupabaseConfigured && supabase) {
+      supabase
+        .from('buffet_gallery')
+        .select('*')
+        .order('position', { ascending: true })
+        .then(({ data, error }) => {
+          if (!error && Array.isArray(data) && data.length > 0) {
+            setGalleryPhotos(data);
+            saveStoredBuffetGallery(data);
+          }
+        });
+    }
+
+    return () => {
+      window.removeEventListener('storage', handleGallerySync);
+      window.removeEventListener('buffet_gallery_updated', handleGallerySync);
+    };
+  }, []);
+
   // Rotating mini-gallery index
   const [galleryIndex, setGalleryIndex] = useState(0);
 
   useEffect(() => {
+    const total = galleryPhotos && galleryPhotos.length > 0 ? galleryPhotos.length : 1;
     const timer = setInterval(() => {
-      setGalleryIndex(prev => (prev + 1) % INITIAL_BUFFET_GALLERY.length);
+      setGalleryIndex(prev => (prev + 1) % total);
     }, 3500);
     return () => clearInterval(timer);
-  }, []);
+  }, [galleryPhotos]);
 
   // Client form data
   const [formData, setFormData] = useState({
@@ -469,11 +508,13 @@ export function BuffetSection({ onExploreFullBuffet }) {
           {/* Mini Carrossel de 3 Fotos Rotativas */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
             {[0, 1, 2].map(offset => {
-              const photoIdx = (galleryIndex + offset) % INITIAL_BUFFET_GALLERY.length;
-              const photo = INITIAL_BUFFET_GALLERY[photoIdx];
+              const activeList = galleryPhotos && galleryPhotos.length > 0 ? galleryPhotos : INITIAL_BUFFET_GALLERY;
+              const photoIdx = (galleryIndex + offset) % activeList.length;
+              const photo = activeList[photoIdx];
+              if (!photo) return null;
               return (
                 <div 
-                  key={offset}
+                  key={photo.id || offset}
                   onClick={onExploreFullBuffet}
                   className="group relative h-40 sm:h-44 rounded-xl overflow-hidden bg-[#0E1218] border border-[#2E3744] hover:border-[#D8B85A] transition-all cursor-pointer shadow-md"
                 >
@@ -486,7 +527,7 @@ export function BuffetSection({ onExploreFullBuffet }) {
                   <div className="absolute inset-0 bg-gradient-to-t from-[#0E1218] via-transparent to-transparent" />
                   
                   <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-[#0E1218]/85 text-[#E8D58A] border border-[#D8B85A]/30 text-[9px] font-bold uppercase">
-                    {photo.tag}
+                    {photo.tag || 'Buffet'}
                   </span>
 
                   <div className="absolute bottom-2 left-2 right-2 text-left">
@@ -508,7 +549,7 @@ export function BuffetSection({ onExploreFullBuffet }) {
               <span>Fotos reais que mudam automaticamente a cada 3,5s</span>
             </span>
             <span className="font-mono text-[#D8B85A] text-[10px] font-semibold">
-              Foto {galleryIndex + 1} de {INITIAL_BUFFET_GALLERY.length}
+              Foto {((galleryIndex % (galleryPhotos?.length || 1)) + 1)} de {galleryPhotos?.length || INITIAL_BUFFET_GALLERY.length}
             </span>
           </div>
         </div>

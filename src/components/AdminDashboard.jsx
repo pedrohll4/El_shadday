@@ -76,8 +76,19 @@ export function AdminDashboard({
   const [newPhotoTag, setNewPhotoTag] = useState('');
   const [galleryFeedback, setGalleryFeedback] = useState('');
 
-  // Sincronizar galeria com Supabase se configurado
+  // Sincronizar galeria com Supabase se configurado & escutar atualizações
   useEffect(() => {
+    const handleGallerySync = (e) => {
+      if (e?.detail && Array.isArray(e.detail) && e.detail.length > 0) {
+        setGalleryList(e.detail);
+      } else {
+        setGalleryList(getStoredBuffetGallery());
+      }
+    };
+
+    window.addEventListener('storage', handleGallerySync);
+    window.addEventListener('buffet_gallery_updated', handleGallerySync);
+
     if (isSupabaseConfigured && supabase) {
       supabase
         .from('buffet_gallery')
@@ -90,6 +101,11 @@ export function AdminDashboard({
           }
         });
     }
+
+    return () => {
+      window.removeEventListener('storage', handleGallerySync);
+      window.removeEventListener('buffet_gallery_updated', handleGallerySync);
+    };
   }, []);
 
   const handleAddPhoto = async (e) => {

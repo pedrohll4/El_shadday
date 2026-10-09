@@ -400,7 +400,11 @@ export function getStoredBuffetGallery() {
 export function saveStoredBuffetGallery(gallery) {
   try {
     localStorage.setItem("el_shadday_buffet_gallery_v2", JSON.stringify(gallery));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent("buffet_gallery_updated", { detail: gallery }));
+    }
   } catch (e) {
     console.error("Error saving buffet gallery:", e);
   }
 }
+

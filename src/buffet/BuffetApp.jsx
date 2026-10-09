@@ -124,8 +124,19 @@ export function BuffetApp({ currentAppMode, onToggleAppMode }) {
     saveStoredEventTypes(newEventTypes);
   };
 
-  // Fetch initial gallery from Supabase if configured
+  // Fetch initial gallery from Supabase if configured & listen to real-time events
   useEffect(() => {
+    const handleGallerySync = (e) => {
+      if (e?.detail && Array.isArray(e.detail) && e.detail.length > 0) {
+        setGalleryPhotos(e.detail);
+      } else {
+        setGalleryPhotos(getStoredBuffetGallery());
+      }
+    };
+
+    window.addEventListener('storage', handleGallerySync);
+    window.addEventListener('buffet_gallery_updated', handleGallerySync);
+
     if (isSupabaseConfigured && supabase) {
       supabase
         .from('buffet_gallery')
@@ -138,6 +149,11 @@ export function BuffetApp({ currentAppMode, onToggleAppMode }) {
           }
         });
     }
+
+    return () => {
+      window.removeEventListener('storage', handleGallerySync);
+      window.removeEventListener('buffet_gallery_updated', handleGallerySync);
+    };
   }, []);
 
   const handleSaveGalleryPhotos = async (newGallery) => {
