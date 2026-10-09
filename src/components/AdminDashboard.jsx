@@ -124,6 +124,24 @@ export function AdminDashboard({
       supabase.from('buffet_gallery').delete().in('id', ['gal_1', 'gal_2', 'gal_3', 'gal_4', 'gal_5', 'gal_6', 'gal_7', 'gal_8', 'gal_9', 'gal_10', 'gal_11', 'gal_12']).then(() => {});
       supabase.from('buffet_gallery').delete().like('url', '%unsplash.com%').then(() => {});
 
+      const loadFromCompanySettings = () => {
+        return supabase
+          .from('company_settings')
+          .select('buffet_gallery')
+          .eq('id', 'el_shadday_config')
+          .single()
+          .then(({ data: csData }) => {
+            if (Array.isArray(csData?.buffet_gallery)) {
+              const cleanCs = csData.buffet_gallery.filter(p => !isFakeGalleryItem(p));
+              if (cleanCs.length > 0) {
+                console.log('[AdminDashboard] Galeria carregada de company_settings:', cleanCs.length, 'itens');
+                setGalleryList(cleanCs);
+                saveStoredBuffetGallery(cleanCs);
+              }
+            }
+          });
+      };
+
       supabase
         .from('buffet_gallery')
         .select('*')
@@ -131,21 +149,17 @@ export function AdminDashboard({
         .then(({ data, error }) => {
           if (!error && Array.isArray(data)) {
             const clean = data.filter(p => !isFakeGalleryItem(p));
-            setGalleryList(clean);
-            saveStoredBuffetGallery(clean);
+            if (clean.length > 0) {
+              console.log('[AdminDashboard] Galeria carregada de buffet_gallery:', clean.length, 'itens');
+              setGalleryList(clean);
+              saveStoredBuffetGallery(clean);
+            } else {
+              console.log('[AdminDashboard] buffet_gallery vazia, tentando company_settings...');
+              loadFromCompanySettings();
+            }
           } else {
-            supabase
-              .from('company_settings')
-              .select('buffet_gallery')
-              .eq('id', 'el_shadday_config')
-              .single()
-              .then(({ data: csData }) => {
-                if (Array.isArray(csData?.buffet_gallery)) {
-                  const cleanCs = csData.buffet_gallery.filter(p => !isFakeGalleryItem(p));
-                  setGalleryList(cleanCs);
-                  saveStoredBuffetGallery(cleanCs);
-                }
-              });
+            console.warn('[AdminDashboard] Erro ao buscar buffet_gallery:', error?.message);
+            loadFromCompanySettings();
           }
         });
 

@@ -86,8 +86,26 @@ export function BuffetSection({ onExploreFullBuffet }) {
     window.addEventListener('storage', handleGallerySync);
     window.addEventListener('buffet_gallery_updated', handleGallerySync);
 
-    // Carrega fotos atualizadas do Supabase
+    // Carrega fotos atualizadas do Supabase (tenta buffet_gallery + company_settings)
     if (isSupabaseConfigured && supabase) {
+      const loadFromCompanySettings = () => {
+        return supabase
+          .from('company_settings')
+          .select('buffet_gallery')
+          .eq('id', 'el_shadday_config')
+          .single()
+          .then(({ data: csData }) => {
+            if (Array.isArray(csData?.buffet_gallery)) {
+              const cleanCs = csData.buffet_gallery.filter(p => !isFakeGalleryItem(p));
+              if (cleanCs.length > 0) {
+                console.log('[BuffetSection] Galeria carregada de company_settings:', cleanCs.length, 'itens');
+                setGalleryPhotos(cleanCs);
+                saveStoredBuffetGallery(cleanCs);
+              }
+            }
+          });
+      };
+
       supabase
         .from('buffet_gallery')
         .select('*')
@@ -95,21 +113,19 @@ export function BuffetSection({ onExploreFullBuffet }) {
         .then(({ data, error }) => {
           if (!error && Array.isArray(data)) {
             const clean = data.filter(p => !isFakeGalleryItem(p));
-            setGalleryPhotos(clean);
-            saveStoredBuffetGallery(clean);
+            if (clean.length > 0) {
+              console.log('[BuffetSection] Galeria carregada de buffet_gallery:', clean.length, 'itens');
+              setGalleryPhotos(clean);
+              saveStoredBuffetGallery(clean);
+            } else {
+              // Tabela existe mas está vazia — tenta company_settings como fallback
+              console.log('[BuffetSection] buffet_gallery vazia, tentando company_settings...');
+              loadFromCompanySettings();
+            }
           } else {
-            supabase
-              .from('company_settings')
-              .select('buffet_gallery')
-              .eq('id', 'el_shadday_config')
-              .single()
-              .then(({ data: csData }) => {
-                if (Array.isArray(csData?.buffet_gallery)) {
-                  const cleanCs = csData.buffet_gallery.filter(p => !isFakeGalleryItem(p));
-                  setGalleryPhotos(cleanCs);
-                  saveStoredBuffetGallery(cleanCs);
-                }
-              });
+            // Tabela não existe ou erro — tenta company_settings
+            console.warn('[BuffetSection] Erro ao buscar buffet_gallery:', error?.message);
+            loadFromCompanySettings();
           }
         });
 

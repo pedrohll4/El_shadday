@@ -140,6 +140,24 @@ export function BuffetApp({ currentAppMode, onToggleAppMode }) {
     window.addEventListener('buffet_gallery_updated', handleGallerySync);
 
     if (isSupabaseConfigured && supabase) {
+      const loadFromCompanySettings = () => {
+        return supabase
+          .from('company_settings')
+          .select('buffet_gallery')
+          .eq('id', 'el_shadday_config')
+          .single()
+          .then(({ data: csData }) => {
+            if (Array.isArray(csData?.buffet_gallery)) {
+              const cleanCs = csData.buffet_gallery.filter(p => !isFakeGalleryItem(p));
+              if (cleanCs.length > 0) {
+                console.log('[BuffetApp] Galeria carregada de company_settings:', cleanCs.length, 'itens');
+                setGalleryPhotos(cleanCs);
+                saveStoredBuffetGallery(cleanCs);
+              }
+            }
+          });
+      };
+
       // 1. Carrega fotos da tabela buffet_gallery
       supabase
         .from('buffet_gallery')
@@ -148,22 +166,17 @@ export function BuffetApp({ currentAppMode, onToggleAppMode }) {
         .then(({ data, error }) => {
           if (!error && Array.isArray(data)) {
             const clean = data.filter(p => !isFakeGalleryItem(p));
-            setGalleryPhotos(clean);
-            saveStoredBuffetGallery(clean);
+            if (clean.length > 0) {
+              console.log('[BuffetApp] Galeria carregada de buffet_gallery:', clean.length, 'itens');
+              setGalleryPhotos(clean);
+              saveStoredBuffetGallery(clean);
+            } else {
+              console.log('[BuffetApp] buffet_gallery vazia, tentando company_settings...');
+              loadFromCompanySettings();
+            }
           } else {
-            // Fallback: verificar se está salvo em company_settings
-            supabase
-              .from('company_settings')
-              .select('buffet_gallery')
-              .eq('id', 'el_shadday_config')
-              .single()
-              .then(({ data: csData }) => {
-                if (Array.isArray(csData?.buffet_gallery)) {
-                  const cleanCs = csData.buffet_gallery.filter(p => !isFakeGalleryItem(p));
-                  setGalleryPhotos(cleanCs);
-                  saveStoredBuffetGallery(cleanCs);
-                }
-              });
+            console.warn('[BuffetApp] Erro ao buscar buffet_gallery:', error?.message);
+            loadFromCompanySettings();
           }
         });
 
