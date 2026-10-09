@@ -42,6 +42,7 @@ import {
   clearCustomSupabaseConfig 
 } from '../services/supabaseClient';
 import { dispatchConfigSync } from '../services/configSyncService';
+import { ImageUploader } from './ImageUploader';
 
 export function AdminDashboard({ 
   orders, 
@@ -3786,17 +3787,13 @@ export function AdminDashboard({
                 </h3>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
-                  <div className="sm:col-span-2 lg:col-span-1">
-                    <label className="block text-[11px] uppercase font-bold text-slate-300 mb-1">
-                      URL da Imagem *
-                    </label>
-                    <input
-                      type="url"
-                      placeholder="https://exemplo.com/foto.jpg"
+                  <div className="sm:col-span-2 lg:col-span-3">
+                    <ImageUploader
                       value={newPhotoUrl}
-                      onChange={(e) => setNewPhotoUrl(e.target.value)}
-                      required
-                      className="w-full px-3 py-2 rounded-xl bg-dark-900 border border-dark-750 text-white text-xs focus:outline-none focus:border-brand-gold"
+                      onChange={setNewPhotoUrl}
+                      label="Foto do Buffet / Prato / Evento *"
+                      description="Envie do dispositivo (otimizada em WebP ultraleve para economia de banco) ou insira uma URL."
+                      placeholder="https://exemplo.com/buffet-foto.jpg"
                     />
                   </div>
 
@@ -3831,19 +3828,6 @@ export function AdminDashboard({
 
                   <div>
                     <label className="block text-[11px] uppercase font-bold text-slate-300 mb-1">
-                      Subtítulo / Descrição Rápida
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Ex: Cortes nobres assados lentamente"
-                      value={newPhotoSubtitle}
-                      onChange={(e) => setNewPhotoSubtitle(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl bg-dark-900 border border-dark-750 text-white text-xs focus:outline-none focus:border-brand-gold"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] uppercase font-bold text-slate-300 mb-1">
                       Etiqueta / Tag (opcional)
                     </label>
                     <input
@@ -3855,28 +3839,29 @@ export function AdminDashboard({
                     />
                   </div>
 
+                  <div className="sm:col-span-2 lg:col-span-2">
+                    <label className="block text-[11px] uppercase font-bold text-slate-300 mb-1">
+                      Subtítulo / Descrição Rápida
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Ex: Cortes nobres assados lentamente"
+                      value={newPhotoSubtitle}
+                      onChange={(e) => setNewPhotoSubtitle(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl bg-dark-900 border border-dark-750 text-white text-xs focus:outline-none focus:border-brand-gold"
+                    />
+                  </div>
+
                   <div className="flex items-end">
                     <button
                       type="submit"
-                      className="w-full py-2 px-4 rounded-xl bg-gradient-to-r from-brand-gold to-amber-400 text-dark-950 font-black text-xs hover:brightness-110 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md"
+                      className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-brand-gold to-amber-400 text-dark-950 font-black text-xs hover:brightness-110 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md"
                     >
                       <Plus className="w-4 h-4 stroke-[3]" />
                       <span>Salvar Foto</span>
                     </button>
                   </div>
                 </div>
-
-                {newPhotoUrl.trim() && (
-                  <div className="pt-2 flex items-center gap-3">
-                    <span className="text-[11px] text-slate-400">Prévia da imagem:</span>
-                    <img 
-                      src={newPhotoUrl} 
-                      alt="Prévia" 
-                      className="w-12 h-12 object-cover rounded-lg border border-brand-gold/40"
-                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                    />
-                  </div>
-                )}
               </form>
 
               {/* Photos List Grid */}
@@ -4399,29 +4384,15 @@ export function AdminDashboard({
                   />
                 </div>
 
-                {/* URL da Foto */}
+                {/* Imagem do Produto (Upload do Dispositivo ou URL Externa) */}
                 <div className="sm:col-span-2">
-                  <label className="block text-xs font-bold text-slate-200 mb-1">
-                    URL da Foto do Produto
-                  </label>
-                  <input
-                    type="url"
+                  <ImageUploader
                     value={prodFormImage}
-                    onChange={(e) => setProdFormImage(e.target.value)}
-                    placeholder="https://..."
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-dark-800 border border-dark-700 text-xs text-white font-mono placeholder-slate-500 focus:outline-none focus:border-brand-gold"
+                    onChange={setProdFormImage}
+                    label="Foto do Produto"
+                    description="Envie uma imagem do seu dispositivo (otimizada automaticamente para gastar menos espaço no banco de dados) ou informe uma URL externa."
+                    placeholder="https://exemplo.com/foto-pizza.jpg"
                   />
-                  {prodFormImage && (
-                    <div className="mt-2 flex items-center gap-3">
-                      <span className="text-[10px] text-slate-400 font-bold">Prévia da imagem:</span>
-                      <img
-                        src={prodFormImage}
-                        alt="Prévia"
-                        className="w-14 h-14 object-cover rounded-xl border border-dark-700"
-                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                      />
-                    </div>
-                  )}
                 </div>
 
                 {/* Switches */}
