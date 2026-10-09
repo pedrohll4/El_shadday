@@ -164,6 +164,17 @@ export function BuffetGallery({ galleryItems }) {
           <p className="text-sm sm:text-base text-slate-300 font-light max-w-xl mx-auto">
             Acompanhe em detalhes a apresentação e o cuidado que levamos para casamentos, formaturas e eventos especiais.
           </p>
+
+          <div className="mt-4">
+            <a
+              href="#/admin"
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#181E27] hover:bg-[#202733] border border-[#D8B85A]/40 text-[#E8D58A] hover:text-white text-xs font-semibold transition-all shadow-sm cursor-pointer"
+              title="Acessar o painel para adicionar ou excluir fotos"
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5 text-[#D8B85A]" />
+              <span>Painel de Fotos: Adicionar / Remover Fotos</span>
+            </a>
+          </div>
         </div>
 
         {/* Category Filter Tabs */}

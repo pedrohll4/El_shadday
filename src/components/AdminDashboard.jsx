@@ -751,6 +751,33 @@ export function AdminDashboard({
         {activeAdminTab === 'kds' && (
           <div className="space-y-5 animate-fade-in">
             
+            {/* Quick Buffet Gallery Banner */}
+            <div className="bg-gradient-to-r from-amber-500/15 via-brand-gold/20 to-amber-500/15 border border-brand-gold/40 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-lg">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-brand-gold text-dark-950 flex items-center justify-center font-bold shadow-md">
+                  <Camera className="w-5 h-5 text-dark-950" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-white flex items-center gap-2">
+                    <span>Galeria de Fotos do Buffet</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-brand-gold text-dark-950 font-black">
+                      {galleryList.length} fotos cadastradas
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-300">
+                    Cadastre, visualize e remova as fotos do carrossel rotativo do Buffet El Shadday.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveAdminTab('gallery')}
+                className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-gradient-to-r from-brand-gold to-amber-400 hover:brightness-110 text-dark-950 font-black text-xs transition-transform active:scale-95 shadow-glow-gold cursor-pointer whitespace-nowrap"
+              >
+                Abrir Gerenciador de Fotos 📸
+              </button>
+            </div>
+
             {/* KPI Summary Cards */}
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 sm:gap-4">
               
