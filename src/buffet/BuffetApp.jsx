@@ -21,6 +21,7 @@ import { BuffetFloatingWhatsApp } from './components/BuffetFloatingWhatsApp';
 import { BuffetAdminLoginModal } from './components/BuffetAdminLoginModal';
 import { BuffetAdminDashboard } from './components/BuffetAdminDashboard';
 import { supabase, isSupabaseConfigured } from '../services/supabaseClient';
+import { fetchCloudConfigHistory, subscribeToConfigEvents, dispatchConfigSync } from '../services/configSyncService';
 
 export function BuffetApp({ currentAppMode, onToggleAppMode }) {
   // App Dynamic State (Editable & Persisted)
@@ -150,15 +151,30 @@ export function BuffetApp({ currentAppMode, onToggleAppMode }) {
         });
     }
 
+    // Carrega fotos mais recentes da nuvem pública (cross-device)
+    fetchCloudConfigHistory().then(cfg => {
+      if (cfg?.gallery && cfg.gallery.length > 0) {
+        setGalleryPhotos(cfg.gallery);
+      }
+    });
+
+    const unsubscribeGallery = subscribeToConfigEvents({
+      onGalleryUpdate: (gal) => {
+        if (gal && gal.length > 0) setGalleryPhotos(gal);
+      }
+    });
+
     return () => {
       window.removeEventListener('storage', handleGallerySync);
       window.removeEventListener('buffet_gallery_updated', handleGallerySync);
+      if (unsubscribeGallery) unsubscribeGallery();
     };
   }, []);
 
   const handleSaveGalleryPhotos = async (newGallery) => {
     setGalleryPhotos(newGallery);
     saveStoredBuffetGallery(newGallery);
+    dispatchConfigSync('GALLERY_UPDATE', newGallery);
 
     if (isSupabaseConfigured && supabase) {
       try {

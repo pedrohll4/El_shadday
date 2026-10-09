@@ -35,6 +35,10 @@ import {
   fetchCloudOrdersHistory, 
   subscribeToKitchenEvents 
 } from './services/ordersSyncService';
+import { 
+  fetchCloudConfigHistory, 
+  subscribeToConfigEvents 
+} from './services/configSyncService';
 import { ShoppingBag, ArrowRight, Sparkles, ChevronRight, Phone, Search, ChefHat } from 'lucide-react';
 
 const getInitialOrders = () => {
@@ -160,11 +164,28 @@ export default function App() {
         });
     }
 
+    // Hydrate from Global Cloud Pub/Sub (Cross-device instant sync)
+    fetchCloudConfigHistory().then((cloudCfg) => {
+      if (cloudCfg) {
+        if (cloudCfg.products && cloudCfg.products.length > 0) setProducts(cloudCfg.products);
+        if (cloudCfg.promos) setPromoSettings(cloudCfg.promos);
+        if (cloudCfg.store) setRestaurantInfo(cloudCfg.store);
+      }
+    });
+
+    // Real-time live subscription across devices
+    const unsubscribeConfig = subscribeToConfigEvents({
+      onProductsUpdate: (prods) => setProducts(prods),
+      onPromosUpdate: (promos) => setPromoSettings(promos),
+      onStoreUpdate: (store) => setRestaurantInfo(store)
+    });
+
     return () => {
       window.removeEventListener('delivery_products_updated', handleProductsSync);
       window.removeEventListener('delivery_promos_updated', handlePromosSync);
       window.removeEventListener('delivery_restaurant_info_updated', handleInfoSync);
       window.removeEventListener('storage', handleProductsSync);
+      if (unsubscribeConfig) unsubscribeConfig();
     };
   }, []);
 

@@ -27,7 +27,13 @@ import {
   getStoredBuffetGallery, 
   saveStoredBuffetGallery 
 } from '../buffet/buffetData';
-import { supabase, isSupabaseConfigured } from '../services/supabaseClient';
+import { 
+  supabase, 
+  isSupabaseConfigured,
+  saveCustomSupabaseConfig,
+  clearCustomSupabaseConfig 
+} from '../services/supabaseClient';
+import { dispatchConfigSync } from '../services/configSyncService';
 
 export function AdminDashboard({ 
   orders, 
@@ -137,6 +143,7 @@ export function AdminDashboard({
     const updated = [newPhoto, ...galleryList];
     setGalleryList(updated);
     saveStoredBuffetGallery(updated);
+    dispatchConfigSync('GALLERY_UPDATE', updated);
 
     if (isSupabaseConfigured && supabase) {
       try {
@@ -165,6 +172,7 @@ export function AdminDashboard({
     const updated = galleryList.filter(p => p.id !== photoId);
     setGalleryList(updated);
     saveStoredBuffetGallery(updated);
+    dispatchConfigSync('GALLERY_UPDATE', updated);
 
     if (isSupabaseConfigured && supabase) {
       try {
@@ -179,6 +187,7 @@ export function AdminDashboard({
     if (!window.confirm('Deseja restaurar as fotos padrão do Buffet?')) return;
     setGalleryList(INITIAL_BUFFET_GALLERY);
     saveStoredBuffetGallery(INITIAL_BUFFET_GALLERY);
+    dispatchConfigSync('GALLERY_UPDATE', INITIAL_BUFFET_GALLERY);
     setGalleryFeedback('Galeria restaurada para o padrão!');
     setTimeout(() => setGalleryFeedback(''), 3500);
   };
@@ -231,6 +240,14 @@ export function AdminDashboard({
   const [tempStorePixKey, setTempStorePixKey] = useState(restaurantSettings.pixKey || '69992228682');
   const [tempStorePixName, setTempStorePixName] = useState(restaurantSettings.pixName || 'El Shadday Delivery');
   const [tempStoreOpeningHours, setTempStoreOpeningHours] = useState(restaurantSettings.openingHours || '');
+
+  // Supabase Custom Config State
+  const [customSupabaseUrl, setCustomSupabaseUrl] = useState(() => {
+    try { return localStorage.getItem('el_shadday_supabase_url') || ''; } catch (e) { return ''; }
+  });
+  const [customSupabaseKey, setCustomSupabaseKey] = useState(() => {
+    try { return localStorage.getItem('el_shadday_supabase_anon_key') || ''; } catch (e) { return ''; }
+  });
 
   // Menu Feedback Toast
   const [menuFeedback, setMenuFeedback] = useState('');
@@ -391,6 +408,7 @@ export function AdminDashboard({
     setProductsList(updated);
     saveStoredProducts(updated);
     syncProductsToCloud(updated);
+    dispatchConfigSync('PRODUCTS_UPDATE', updated);
     setIsProductModalOpen(false);
   };
 
@@ -406,6 +424,7 @@ export function AdminDashboard({
     setProductsList(updated);
     saveStoredProducts(updated);
     syncProductsToCloud(updated);
+    dispatchConfigSync('PRODUCTS_UPDATE', updated);
   };
 
   const handleToggleProductPromo = (prodId) => {
@@ -434,6 +453,7 @@ export function AdminDashboard({
     setProductsList(updated);
     saveStoredProducts(updated);
     syncProductsToCloud(updated);
+    dispatchConfigSync('PRODUCTS_UPDATE', updated);
   };
 
   const handleDuplicateProduct = (prod) => {
@@ -446,6 +466,7 @@ export function AdminDashboard({
     setProductsList(updated);
     saveStoredProducts(updated);
     syncProductsToCloud(updated);
+    dispatchConfigSync('PRODUCTS_UPDATE', updated);
     triggerMenuToast(`Cópia de "${prod.name}" criada com sucesso!`);
   };
 
@@ -455,6 +476,7 @@ export function AdminDashboard({
     setProductsList(updated);
     saveStoredProducts(updated);
     syncProductsToCloud(updated);
+    dispatchConfigSync('PRODUCTS_UPDATE', updated);
     triggerMenuToast(`Produto removido do cardápio!`);
   };
 
@@ -463,6 +485,7 @@ export function AdminDashboard({
     setProductsList(PRODUCTS);
     saveStoredProducts(PRODUCTS);
     syncProductsToCloud(PRODUCTS);
+    dispatchConfigSync('PRODUCTS_UPDATE', PRODUCTS);
     triggerMenuToast('Cardápio restaurado para o padrão original!');
   };
 
@@ -479,6 +502,7 @@ export function AdminDashboard({
     setPromoSettings(newSettings);
     saveStoredPromoSettings(newSettings);
     syncPromosToCloud(newSettings);
+    dispatchConfigSync('PROMOS_UPDATE', newSettings);
     triggerMenuToast('Promoções e Cupons salvos com sucesso!');
   };
 
@@ -497,6 +521,7 @@ export function AdminDashboard({
     };
     setRestaurantSettings(newStore);
     saveStoredRestaurantInfo(newStore);
+    dispatchConfigSync('STORE_UPDATE', newStore);
     triggerMenuToast('Dados do restaurante atualizados com sucesso!');
   };
 
@@ -2550,7 +2575,8 @@ export function AdminDashboard({
 
               {/* SUBTAB 3: DADOS DO RESTAURANTE & WHATSAPP */}
               {menuSubTab === 'store' && (
-                <form onSubmit={handleSaveStoreSettings} className="mt-5 p-5 rounded-2xl bg-dark-800/60 border border-dark-700 space-y-4">
+                <>
+                  <form onSubmit={handleSaveStoreSettings} className="mt-5 p-5 rounded-2xl bg-dark-800/60 border border-dark-700 space-y-4">
                   <div className="flex items-center gap-2 pb-3 border-b border-dark-700">
                     <Store className="w-5 h-5 text-brand-gold" />
                     <div>
@@ -2657,7 +2683,93 @@ export function AdminDashboard({
                     </button>
                   </div>
                 </form>
-              )}
+
+                {/* Cloud & Supabase Sync Status Card */}
+                <div className="mt-8 pt-6 border-t border-dark-800">
+                  <div className="p-5 rounded-2xl bg-dark-900 border border-dark-750">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <div className={`w-2.5 h-2.5 rounded-full ${isSupabaseConfigured ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400 animate-pulse'}`} />
+                          <h4 className="text-sm font-bold text-white">
+                            {isSupabaseConfigured ? 'Banco de Dados Supabase Conectado' : 'Sincronização em Nuvem em Tempo Real Ativa (Global)'}
+                          </h4>
+                        </div>
+                        <p className="text-xs text-slate-400 mt-1">
+                          {isSupabaseConfigured 
+                            ? 'Todas as alterações de cardápio, fotos e pedidos estão salvas permanentemente no banco de dados e sincronizadas com todos os celulares e computadores.'
+                            : 'O sistema está sincronizando em tempo real entre celulares, tablets e computadores via canal de nuvem global. Para persistência permanente de longo prazo no banco de dados, você pode adicionar a chave do Supabase abaixo.'}
+                        </p>
+                      </div>
+                      <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${isSupabaseConfigured ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'}`}>
+                        {isSupabaseConfigured ? 'Nuvem Conectada' : 'Nuvem Tempo Real Ativa'}
+                      </span>
+                    </div>
+
+                    <div className="bg-dark-950/70 rounded-xl p-4 border border-dark-800/80 space-y-3">
+                      <p className="text-xs font-semibold text-slate-300">
+                        Configuração do Supabase (Opcional - Persistência Permanente):
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-400 mb-1">Project URL (https://...):</label>
+                          <input
+                            type="text"
+                            value={customSupabaseUrl}
+                            onChange={(e) => setCustomSupabaseUrl(e.target.value)}
+                            placeholder="https://seu-projeto.supabase.co"
+                            className="w-full px-3 py-2 rounded-xl bg-dark-900 border border-dark-700 text-xs text-white font-mono"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-400 mb-1">Anon Key (Public API Key):</label>
+                          <input
+                            type="password"
+                            value={customSupabaseKey}
+                            onChange={(e) => setCustomSupabaseKey(e.target.value)}
+                            placeholder="eyJhbGciOiJIUz..."
+                            className="w-full px-3 py-2 rounded-xl bg-dark-900 border border-dark-700 text-xs text-white font-mono"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between pt-1">
+                        <span className="text-[11px] text-slate-500">
+                          {isSupabaseConfigured ? '✅ Conexão ativa.' : 'ℹ️ Deixe em branco se preferir usar a sincronização automática.'}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          {customSupabaseUrl && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (window.confirm('Deseja desconectar as credenciais manuais do Supabase?')) {
+                                  clearCustomSupabaseConfig();
+                                }
+                              }}
+                              className="px-3 py-1.5 rounded-lg bg-dark-800 hover:bg-dark-700 text-slate-300 text-xs font-semibold cursor-pointer"
+                            >
+                              Limpar
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!customSupabaseUrl.trim() || !customSupabaseKey.trim()) {
+                                alert('Por favor, informe a URL e a Anon Key do Supabase.');
+                                return;
+                              }
+                              saveCustomSupabaseConfig(customSupabaseUrl, customSupabaseKey);
+                            }}
+                            className="px-4 py-1.5 rounded-lg bg-brand-gold hover:bg-amber-400 text-dark-950 text-xs font-black cursor-pointer shadow-sm"
+                          >
+                            Salvar Conexão Supabase
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
 
             </div>
 

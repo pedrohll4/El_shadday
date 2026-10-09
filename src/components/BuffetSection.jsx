@@ -21,6 +21,7 @@ import {
   saveStoredBuffetGallery
 } from '../buffet/buffetData';
 import { supabase, isSupabaseConfigured } from '../services/supabaseClient';
+import { fetchCloudConfigHistory, subscribeToConfigEvents } from '../services/configSyncService';
 
 export function BuffetSection({ onExploreFullBuffet }) {
   // Selected item IDs array
@@ -95,9 +96,23 @@ export function BuffetSection({ onExploreFullBuffet }) {
         });
     }
 
+    // Carrega fotos mais recentes da nuvem pública (cross-device)
+    fetchCloudConfigHistory().then(cfg => {
+      if (cfg?.gallery && cfg.gallery.length > 0) {
+        setGalleryPhotos(cfg.gallery);
+      }
+    });
+
+    const unsubscribeGallery = subscribeToConfigEvents({
+      onGalleryUpdate: (gal) => {
+        if (gal && gal.length > 0) setGalleryPhotos(gal);
+      }
+    });
+
     return () => {
       window.removeEventListener('storage', handleGallerySync);
       window.removeEventListener('buffet_gallery_updated', handleGallerySync);
+      if (unsubscribeGallery) unsubscribeGallery();
     };
   }, []);
 
