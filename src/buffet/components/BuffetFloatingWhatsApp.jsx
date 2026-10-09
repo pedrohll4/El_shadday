@@ -4,7 +4,7 @@ import { MessageCircle, X } from 'lucide-react';
 export function BuffetFloatingWhatsApp({ company }) {
   const [showTooltip, setShowTooltip] = useState(true);
 
-  const phone = company.phone ? company.phone.replace(/\D/g, '') : '5569992000000';
+  const phone = company.phone ? company.phone.replace(/\D/g, '') : '5569992228682';
   const defaultText = `Olá, ${company.shortName || 'El Shadday'}! Gostaria de conversar sobre um buffet para meu evento.`;
   const whatsappUrl = `https://wa.me/${phone}?text=${encodeURIComponent(defaultText)}`;
 

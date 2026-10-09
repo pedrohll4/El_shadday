@@ -24,7 +24,12 @@ import {
   Sparkle,
   Info
 } from 'lucide-react';
-import { saveQuoteToHistory } from '../buffetData';
+import { 
+  saveQuoteToHistory,
+  DEFAULT_CHURRASCO_OPTIONS,
+  formatMeatList
+} from '../buffetData';
+import { supabase, isSupabaseConfigured } from '../../services/supabaseClient';
 
 // Category icon map helper
 const CATEGORY_ICONS = {
@@ -67,6 +72,39 @@ export function BuffetBuilder({
     } catch (e) {}
   }, [selectedItemIds]);
 
+  // Selected churrasco meats array (Carne, Frango, Toscana, Porco Assado)
+  const [selectedChurrascoMeats, setSelectedChurrascoMeats] = useState(() => {
+    try {
+      const saved = localStorage.getItem('el_shadday_churrasco_meats');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return DEFAULT_CHURRASCO_OPTIONS.map(o => o.label);
+  });
+
+  // Keep localStorage updated when churrasco meats change
+  useEffect(() => {
+    try {
+      localStorage.setItem('el_shadday_churrasco_meats', JSON.stringify(selectedChurrascoMeats));
+    } catch (e) {}
+  }, [selectedChurrascoMeats]);
+
+  // Toggle specific meat in churrasco
+  const handleToggleChurrascoMeat = (meatLabel) => {
+    setSelectedChurrascoMeats(prev => {
+      let updated;
+      if (prev.includes(meatLabel)) {
+        if (prev.length === 1) return prev; // Mantenha ao menos uma opção
+        updated = prev.filter(m => m !== meatLabel);
+      } else {
+        updated = [...prev, meatLabel];
+      }
+      return updated;
+    });
+  };
+
   // Event details state
   const [eventDetails, setEventDetails] = useState(() => {
     try {
@@ -98,11 +136,17 @@ export function BuffetBuilder({
   // Toggle item selection
   const handleToggleItem = (itemId) => {
     setSelectedItemIds(prev => {
-      if (prev.includes(itemId)) {
-        return prev.filter(id => id !== itemId);
-      } else {
-        return [...prev, itemId];
+      const isRemoving = prev.includes(itemId);
+      const updated = isRemoving
+        ? prev.filter(id => id !== itemId)
+        : [...prev, itemId];
+
+      // Se selecionou churrasco e não havia carnes marcadas, restaura todas
+      if (!isRemoving && itemId === 'pp_churrasco_assados' && selectedChurrascoMeats.length === 0) {
+        setSelectedChurrascoMeats(DEFAULT_CHURRASCO_OPTIONS.map(o => o.label));
       }
+
+      return updated;
     });
   };
 
@@ -209,7 +253,11 @@ export function BuffetBuilder({
 
         msg += `${icon} *${group.category.name}:*\n`;
         group.items.forEach(item => {
-          msg += `- ${item.name}\n`;
+          if (item.id === 'pp_churrasco_assados' && selectedChurrascoMeats.length > 0) {
+            msg += `- Churrasco (${formatMeatList(selectedChurrascoMeats)})\n`;
+          } else {
+            msg += `- ${item.name}\n`;
+          }
         });
         msg += `\n`;
       });
@@ -228,7 +276,7 @@ export function BuffetBuilder({
   // Send to WhatsApp handler
   const handleSendToWhatsApp = () => {
     const message = generateWhatsAppMessage();
-    const phone = company.phone ? company.phone.replace(/\D/g, '') : '5569992000000';
+    const phone = company.phone ? company.phone.replace(/\D/g, '') : '5569992228682';
     const whatsappUrl = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
 
     // Store in history
@@ -245,10 +293,35 @@ export function BuffetBuilder({
       totalItens: totalSelectedCount,
       itens: selectedByCategory.map(g => ({
         categoria: g.category.name,
-        itens: g.items.map(i => i.name)
+        itens: g.items.map(i => {
+          if (i.id === 'pp_churrasco_assados' && selectedChurrascoMeats.length > 0) {
+            return `Churrasco (${formatMeatList(selectedChurrascoMeats)})`;
+          }
+          return i.name;
+        })
       }))
     };
     saveQuoteToHistory(quoteRecord);
+
+    // Persist to Supabase if configured
+    if (isSupabaseConfigured && supabase) {
+      try {
+        supabase.from('buffet_quotes').insert({
+          id: quoteRecord.id,
+          client_name: quoteRecord.cliente,
+          client_phone: quoteRecord.whatsapp,
+          event_type: quoteRecord.tipoEvento,
+          guests_count: parseInt(quoteRecord.convidados, 10) || 1,
+          event_date: quoteRecord.dataEvento || null,
+          selected_items: quoteRecord.itens,
+          meat_selection: selectedChurrascoMeats,
+          status: 'PENDENTE',
+          created_at: quoteRecord.createdAt
+        }).then(({ error }) => {
+          if (error) console.warn('Supabase buffet_quotes insert:', error.message);
+        });
+      } catch (e) {}
+    }
 
     if (onQuoteSent) onQuoteSent(quoteRecord);
 
@@ -479,15 +552,18 @@ export function BuffetBuilder({
                     .filter(item => item.active !== false)
                     .map(item => {
                       const isSelected = selectedItemIds.includes(item.id);
+                      const isChurrasco = item.id === 'pp_churrasco_assados';
 
                       return (
                         <div
                           key={item.id}
                           onClick={() => handleToggleItem(item.id)}
                           className={`relative rounded-xl p-4 sm:p-5 transition-all duration-300 cursor-pointer select-none group ${
-                            isSelected
-                              ? 'bg-gradient-to-b from-[#202630] to-[#1C232E] border-2 border-[#D8B85A] shadow-[0_0_20px_rgba(216,184,90,0.25)] -translate-y-1'
-                              : 'bg-[#15191F] border border-[#2E3744] hover:border-[#D8B85A]/50 hover:bg-[#1A202A]'
+                            isSelected && isChurrasco
+                              ? 'sm:col-span-2 lg:col-span-3 bg-gradient-to-b from-[#202630] to-[#1C232E] border-2 border-[#D8B85A] shadow-[0_0_25px_rgba(216,184,90,0.3)]'
+                              : isSelected
+                                ? 'bg-gradient-to-b from-[#202630] to-[#1C232E] border-2 border-[#D8B85A] shadow-[0_0_20px_rgba(216,184,90,0.25)] -translate-y-1'
+                                : 'bg-[#15191F] border border-[#2E3744] hover:border-[#D8B85A]/50 hover:bg-[#1A202A]'
                           }`}
                         >
                           <div className="flex items-start justify-between gap-3">
@@ -498,9 +574,19 @@ export function BuffetBuilder({
                                 }`}>
                                   {item.name}
                                 </h4>
+                                {item.badge && (
+                                  <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
+                                    {item.badge}
+                                  </span>
+                                )}
                               </div>
                               <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                                {item.desc}
+                                {isChurrasco && isSelected
+                                  ? selectedChurrascoMeats.length > 0
+                                    ? `Carnes incluídas: ${formatMeatList(selectedChurrascoMeats)}`
+                                    : 'Escolha abaixo quais opções deseja incluir:'
+                                  : item.desc
+                                }
                               </p>
                             </div>
 
@@ -513,6 +599,62 @@ export function BuffetBuilder({
                               <Check className={`w-4 h-4 stroke-[3] ${isSelected ? 'text-[#15191F]' : 'opacity-0'}`} />
                             </div>
                           </div>
+
+                          {/* Sub-seleção para Churrasco: Carne, Frango, Toscana e Porco Assado */}
+                          {isSelected && isChurrasco && (
+                            <div 
+                              onClick={(e) => e.stopPropagation()} 
+                              className="mt-4 pt-4 border-t border-[#D8B85A]/30 cursor-default"
+                            >
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-2.5">
+                                <span className="text-xs font-bold text-[#E8D58A] flex items-center gap-1.5 uppercase tracking-wider">
+                                  <Flame className="w-4 h-4 text-[#D8B85A]" />
+                                  <span>Escolha se vai querer carne, frango, toscana e porco assado:</span>
+                                </span>
+                                <span className="text-[11px] text-[#D8B85A] font-semibold">
+                                  {selectedChurrascoMeats.length} selecionada(s)
+                                </span>
+                              </div>
+
+                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                                {DEFAULT_CHURRASCO_OPTIONS.map(opt => {
+                                  const isMeatSelected = selectedChurrascoMeats.includes(opt.label);
+                                  return (
+                                    <button
+                                      key={opt.id}
+                                      type="button"
+                                      onClick={() => handleToggleChurrascoMeat(opt.label)}
+                                      className={`p-3 rounded-xl text-left border transition-all cursor-pointer flex items-center gap-2.5 ${
+                                        isMeatSelected
+                                          ? 'bg-[#D8B85A]/20 border-[#D8B85A] text-white shadow-sm'
+                                          : 'bg-[#15191F] border-[#2E3744] text-slate-400 hover:border-slate-500'
+                                      }`}
+                                    >
+                                      <div className={`w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 ${
+                                        isMeatSelected
+                                          ? 'bg-[#D8B85A] text-[#15191F]'
+                                          : 'border border-slate-600 bg-transparent text-transparent'
+                                      }`}>
+                                        <Check className="w-3.5 h-3.5 stroke-[3]" />
+                                      </div>
+                                      <div className="min-w-0">
+                                        <span className="text-base mr-1.5">{opt.icon}</span>
+                                        <span className={`text-xs sm:text-sm font-bold ${isMeatSelected ? 'text-white' : 'text-slate-300'}`}>
+                                          {opt.label}
+                                        </span>
+                                      </div>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+
+                              {selectedChurrascoMeats.length === 0 && (
+                                <p className="text-[11px] text-amber-400 mt-2 font-medium">
+                                  ⚠️ Atenção: selecione ao menos uma opção para o churrasco.
+                                </p>
+                              )}
+                            </div>
+                          )}
 
                           {/* Bottom Selection Status */}
                           <div className="mt-4 pt-2.5 border-t border-[#2E3744]/70 flex items-center justify-between text-[11px]">
@@ -822,12 +964,22 @@ export function BuffetBuilder({
                           <span className="text-[10px] text-slate-400 font-sans font-normal">{group.items.length} itens</span>
                         </h5>
                         <ul className="mt-2 space-y-1">
-                          {group.items.map(item => (
-                            <li key={item.id} className="text-xs text-slate-200 flex items-center gap-1.5">
-                              <Check className="w-3 h-3 text-[#D8B85A] flex-shrink-0" />
-                              <span>{item.name}</span>
-                            </li>
-                          ))}
+                          {group.items.map(item => {
+                            const isChurrasco = item.id === 'pp_churrasco_assados';
+                            return (
+                              <li key={item.id} className="text-xs text-slate-200 flex items-start gap-1.5">
+                                <Check className="w-3 h-3 text-[#D8B85A] flex-shrink-0 mt-0.5" />
+                                <div>
+                                  <span>{item.name}</span>
+                                  {isChurrasco && selectedChurrascoMeats.length > 0 && (
+                                    <span className="text-[#E8D58A] font-medium block text-[11px]">
+                                      ({formatMeatList(selectedChurrascoMeats)})
+                                    </span>
+                                  )}
+                                </div>
+                              </li>
+                            );
+                          })}
                         </ul>
                       </div>
                     ))}

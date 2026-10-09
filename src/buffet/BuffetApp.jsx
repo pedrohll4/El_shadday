@@ -5,7 +5,9 @@ import {
   getStoredBuffetCategories, 
   saveStoredBuffetCategories, 
   getStoredEventTypes, 
-  saveStoredEventTypes 
+  saveStoredEventTypes,
+  getStoredBuffetGallery,
+  saveStoredBuffetGallery
 } from './buffetData';
 import { BuffetHeader } from './components/BuffetHeader';
 import { BuffetHero } from './components/BuffetHero';
@@ -18,12 +20,14 @@ import { BuffetFooter } from './components/BuffetFooter';
 import { BuffetFloatingWhatsApp } from './components/BuffetFloatingWhatsApp';
 import { BuffetAdminLoginModal } from './components/BuffetAdminLoginModal';
 import { BuffetAdminDashboard } from './components/BuffetAdminDashboard';
+import { supabase, isSupabaseConfigured } from '../services/supabaseClient';
 
 export function BuffetApp({ currentAppMode, onToggleAppMode }) {
   // App Dynamic State (Editable & Persisted)
   const [company, setCompany] = useState(() => getStoredBuffetCompany());
   const [categories, setCategories] = useState(() => getStoredBuffetCategories());
   const [eventTypes, setEventTypes] = useState(() => getStoredEventTypes());
+  const [galleryPhotos, setGalleryPhotos] = useState(() => getStoredBuffetGallery());
 
   // Admin session & modal state
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(() => {
@@ -120,6 +124,47 @@ export function BuffetApp({ currentAppMode, onToggleAppMode }) {
     saveStoredEventTypes(newEventTypes);
   };
 
+  // Fetch initial gallery from Supabase if configured
+  useEffect(() => {
+    if (isSupabaseConfigured && supabase) {
+      supabase
+        .from('buffet_gallery')
+        .select('*')
+        .order('position', { ascending: true })
+        .then(({ data, error }) => {
+          if (!error && Array.isArray(data) && data.length > 0) {
+            setGalleryPhotos(data);
+            saveStoredBuffetGallery(data);
+          }
+        });
+    }
+  }, []);
+
+  const handleSaveGalleryPhotos = async (newGallery) => {
+    setGalleryPhotos(newGallery);
+    saveStoredBuffetGallery(newGallery);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('buffet_gallery').delete().neq('id', 'placeholder_none');
+        if (newGallery.length > 0) {
+          const rows = newGallery.map((g, idx) => ({
+            id: g.id || `gal_${Date.now()}_${idx}`,
+            url: g.url,
+            title: g.title,
+            subtitle: g.subtitle || '',
+            category: g.category || 'churrasco',
+            tag: g.tag || '',
+            position: idx
+          }));
+          await supabase.from('buffet_gallery').insert(rows);
+        }
+      } catch (e) {
+        console.warn('Erro ao sincronizar galeria com Supabase:', e);
+      }
+    }
+  };
+
   // Scroll helpers
   const scrollTo = (id) => {
     const el = document.getElementById(id);
@@ -133,9 +178,11 @@ export function BuffetApp({ currentAppMode, onToggleAppMode }) {
         company={company}
         categories={categories}
         eventTypes={eventTypes}
+        galleryPhotos={galleryPhotos}
         onSaveCompany={handleSaveCompany}
         onSaveCategories={handleSaveCategories}
         onSaveEventTypes={handleSaveEventTypes}
+        onSaveGalleryPhotos={handleSaveGalleryPhotos}
         onLogout={handleAdminLogout}
         onBackToSite={handleBackToSiteFromAdmin}
         currentAppMode={currentAppMode}
@@ -183,8 +230,8 @@ export function BuffetApp({ currentAppMode, onToggleAppMode }) {
           onScrollToBuilder={() => scrollTo('montador')}
         />
 
-        {/* Section 3.1: Galeria de Fotos Reservada */}
-        <BuffetGallery />
+        {/* Section 3.1: Galeria de Fotos Dinâmica com Carrossel */}
+        <BuffetGallery galleryItems={galleryPhotos} />
 
         {/* Section 4: Montador de Orçamento (Principal Funcionalidade) */}
         <BuffetBuilder

@@ -131,7 +131,7 @@ export function BuffetMenuPreview({ categories = [], onScrollToBuilder }) {
                   <span>Prato Principal & Assados</span>
                 </h4>
                 <p className="text-xs text-slate-600 mt-2 leading-relaxed">
-                  Filé de Peito ao Molho Branco, Carne ao Molho Madeira, Coxa/Sobrecoxa Desossada e Recheada, Strogonoff de Frango e Carne, Porco Frito e Churrasco na brasa (Carne, Toscana e Frango).
+                  Filé de Peito ao Molho Branco, Carne ao Molho Madeira, Coxa/Sobrecoxa Desossada e Recheada, Strogonoff de Frango e Carne, Porco Frito e Churrasco na brasa (Carne, Frango, Toscana e Porco Assado).
                 </p>
               </div>
 

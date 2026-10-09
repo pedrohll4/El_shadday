@@ -1,16 +1,22 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Check, 
   MessageCircle, 
   ChevronRight, 
+  ChevronLeft,
   Camera, 
   ArrowRight,
-  ShieldCheck
+  ShieldCheck,
+  Flame,
+  Sparkles
 } from 'lucide-react';
 import { ElShaddayLogo } from '../buffet/components/ElShaddayLogo';
 import { 
   INITIAL_BUFFET_CATEGORIES, 
-  INITIAL_EVENT_TYPES 
+  INITIAL_EVENT_TYPES,
+  DEFAULT_CHURRASCO_OPTIONS,
+  formatMeatList,
+  INITIAL_BUFFET_GALLERY
 } from '../buffet/buffetData';
 
 export function BuffetSection({ onExploreFullBuffet }) {
@@ -23,6 +29,49 @@ export function BuffetSection({ onExploreFullBuffet }) {
       return [];
     }
   });
+
+  // Selected churrasco meats array (Carne, Frango, Toscana, Porco Assado)
+  const [selectedChurrascoMeats, setSelectedChurrascoMeats] = useState(() => {
+    try {
+      const saved = localStorage.getItem('el_shadday_churrasco_meats');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return DEFAULT_CHURRASCO_OPTIONS.map(o => o.label);
+  });
+
+  // Keep localStorage updated when churrasco meats change
+  useEffect(() => {
+    try {
+      localStorage.setItem('el_shadday_churrasco_meats', JSON.stringify(selectedChurrascoMeats));
+    } catch (e) {}
+  }, [selectedChurrascoMeats]);
+
+  // Toggle specific meat in churrasco
+  const handleToggleChurrascoMeat = (meatLabel) => {
+    setSelectedChurrascoMeats(prev => {
+      let updated;
+      if (prev.includes(meatLabel)) {
+        if (prev.length === 1) return prev; // Mantenha pelo menos uma opção
+        updated = prev.filter(m => m !== meatLabel);
+      } else {
+        updated = [...prev, meatLabel];
+      }
+      return updated;
+    });
+  };
+
+  // Rotating mini-gallery index
+  const [galleryIndex, setGalleryIndex] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setGalleryIndex(prev => (prev + 1) % INITIAL_BUFFET_GALLERY.length);
+    }, 3500);
+    return () => clearInterval(timer);
+  }, []);
 
   // Client form data
   const [formData, setFormData] = useState({
@@ -39,13 +88,19 @@ export function BuffetSection({ onExploreFullBuffet }) {
   // Toggle item selection
   const handleToggleItem = (itemId) => {
     setSelectedItemIds(prev => {
-      const updated = prev.includes(itemId)
+      const isRemoving = prev.includes(itemId);
+      const updated = isRemoving
         ? prev.filter(id => id !== itemId)
         : [...prev, itemId];
       
       try {
         localStorage.setItem('el_shadday_selected_items', JSON.stringify(updated));
       } catch (e) {}
+
+      // Se selecionou churrasco e não havia carnes marcadas, restaura todas
+      if (!isRemoving && itemId === 'pp_churrasco_assados' && selectedChurrascoMeats.length === 0) {
+        setSelectedChurrascoMeats(DEFAULT_CHURRASCO_OPTIONS.map(o => o.label));
+      }
 
       return updated;
     });
@@ -124,7 +179,11 @@ export function BuffetSection({ onExploreFullBuffet }) {
       selectedGrouped.forEach(group => {
         msg += `*${group.categoryName.toUpperCase()}:*\n`;
         group.items.forEach(item => {
-          msg += `• ${item.name}\n`;
+          if (item.id === 'pp_churrasco_assados' && selectedChurrascoMeats.length > 0) {
+            msg += `• Churrasco (${formatMeatList(selectedChurrascoMeats)})\n`;
+          } else {
+            msg += `• ${item.name}\n`;
+          }
         });
         msg += `\n`;
       });
@@ -222,9 +281,112 @@ export function BuffetSection({ onExploreFullBuffet }) {
                 </div>
 
                 {/* Grid de Itens: Compacto, limpo e bem dimensionado no celular */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   {category.items.map(item => {
                     const isSelected = selectedItemIds.includes(item.id);
+                    const isChurrasco = item.id === 'pp_churrasco_assados';
+
+                    if (isChurrasco && isSelected) {
+                      return (
+                        <div
+                          key={item.id}
+                          className="col-span-1 sm:col-span-2 rounded-xl bg-gradient-to-br from-[#1E2530] to-[#151B24] border-2 border-[#D8B85A] p-3.5 sm:p-4 shadow-lg transition-all animate-fadeIn"
+                        >
+                          {/* Topo do card de churrasco selecionado */}
+                          <div 
+                            onClick={() => handleToggleItem(item.id)}
+                            className="flex items-center justify-between gap-3 cursor-pointer select-none pb-2.5 border-b border-[#2E3744]"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="w-5 h-5 rounded-md bg-[#D8B85A] text-[#0E1218] flex items-center justify-center flex-shrink-0">
+                                <Check className="w-3.5 h-3.5 stroke-[3]" />
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs sm:text-base font-bold text-white">
+                                    {item.name}
+                                  </span>
+                                  <span className="flex-shrink-0 text-[10px] font-bold text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                                    Assados na Brasa
+                                  </span>
+                                </div>
+                                <p className="text-[11px] text-[#E8D58A] mt-0.5 font-medium">
+                                  {selectedChurrascoMeats.length > 0 
+                                    ? `Opções selecionadas: ${formatMeatList(selectedChurrascoMeats)}`
+                                    : 'Escolha abaixo quais opções deseja incluir:'
+                                  }
+                                </p>
+                              </div>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleToggleItem(item.id);
+                              }}
+                              className="text-[11px] text-slate-400 hover:text-rose-400 transition-colors font-medium px-2 py-1 rounded-lg hover:bg-rose-500/10 cursor-pointer"
+                            >
+                              Remover
+                            </button>
+                          </div>
+
+                          {/* Seleção das carnes: Carne, Frango, Toscana e Porco Assado */}
+                          <div className="mt-3">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-[11px] sm:text-xs uppercase tracking-wider font-bold text-[#E8D58A] flex items-center gap-1.5">
+                                <Flame className="w-3.5 h-3.5 text-[#D8B85A]" />
+                                <span>Escolha se vai querer:</span>
+                              </span>
+                              <span className="text-[10px] text-slate-400">
+                                (Marque ou desmarque)
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                              {DEFAULT_CHURRASCO_OPTIONS.map(opt => {
+                                const isMeatSelected = selectedChurrascoMeats.includes(opt.label);
+                                return (
+                                  <button
+                                    key={opt.id}
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleToggleChurrascoMeat(opt.label);
+                                    }}
+                                    className={`py-2 px-2.5 sm:px-3 rounded-lg text-left transition-all flex items-center gap-2 cursor-pointer border ${
+                                      isMeatSelected
+                                        ? 'bg-[#D8B85A]/15 border-[#D8B85A] text-white shadow-sm'
+                                        : 'bg-[#0E1218]/90 hover:bg-[#0E1218] border-[#2A3442] text-slate-400'
+                                    }`}
+                                  >
+                                    <div className={`w-4 h-4 rounded flex items-center justify-center flex-shrink-0 transition-colors ${
+                                      isMeatSelected
+                                        ? 'bg-[#D8B85A] text-[#0E1218]'
+                                        : 'border border-slate-600 bg-transparent text-transparent'
+                                    }`}>
+                                      <Check className="w-3 h-3 stroke-[3]" />
+                                    </div>
+                                    <span className="text-sm">{opt.icon}</span>
+                                    <span className={`text-xs font-semibold truncate ${
+                                      isMeatSelected ? 'text-white font-bold' : 'text-slate-300'
+                                    }`}>
+                                      {opt.label}
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+
+                            {selectedChurrascoMeats.length === 0 && (
+                              <p className="text-[11px] text-amber-400 mt-2 font-medium">
+                                ⚠️ Por favor, selecione ao menos uma opção para o churrasco.
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    }
 
                     return (
                       <button
@@ -248,11 +410,18 @@ export function BuffetSection({ onExploreFullBuffet }) {
 
                         {/* Nome do Item */}
                         <div className="flex-1 min-w-0 flex items-center justify-between gap-2">
-                          <span className={`text-xs sm:text-sm font-medium leading-snug truncate ${
-                            isSelected ? 'font-bold text-white' : 'text-slate-300'
-                          }`}>
-                            {item.name}
-                          </span>
+                          <div className="min-w-0">
+                            <span className={`text-xs sm:text-sm font-medium leading-snug block truncate ${
+                              isSelected ? 'font-bold text-white' : 'text-slate-300'
+                            }`}>
+                              {item.name}
+                            </span>
+                            {isChurrasco && (
+                              <span className="text-[10px] text-slate-400 block truncate">
+                                Carne, Frango, Toscana e Porco Assado
+                              </span>
+                            )}
+                          </div>
 
                           {item.isAssado && (
                             <span className="flex-shrink-0 text-[10px] font-bold text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
@@ -270,34 +439,77 @@ export function BuffetSection({ onExploreFullBuffet }) {
           })}
         </div>
 
-        {/* 4. Espaço Reservado para Fotos do Buffet (Discreto e Limpo) */}
+        {/* 4. Fotos do Buffet em Destaque Rotativo (Muda Sozinho sem Virar Testão) */}
         <div className="mt-10 rounded-2xl bg-[#151B24] border border-[#232B36] p-4 sm:p-6 text-center">
-          <div className="flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-wider text-[#D8B85A] mb-1">
-            <Camera className="w-4 h-4" />
-            <span>Fotos do Buffet</span>
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#D8B85A]">
+              <Camera className="w-4 h-4" />
+              <span>Fotos do Buffet em Ação</span>
+            </div>
+
+            {onExploreFullBuffet && (
+              <button
+                type="button"
+                onClick={onExploreFullBuffet}
+                className="text-xs text-[#D8B85A] hover:text-[#E8D58A] font-semibold inline-flex items-center gap-1 cursor-pointer hover:underline"
+              >
+                <span>Ver todas no carrossel</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
 
-          <h3 className="font-serif text-base sm:text-lg font-bold text-white">
-            Estrutura & Mesas Montadas
+          <h3 className="font-serif text-base sm:text-lg font-bold text-white text-left">
+            Estrutura, Prataria & Assados na Brasa
           </h3>
-          <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
-            Espaço reservado para as fotos oficiais dos nossos eventos e montagem de mesas.
+          <p className="text-xs text-slate-400 mt-0.5 text-left">
+            Montagem real para casamentos, formaturas e comemorações exclusivas.
           </p>
 
-          {/* Placeholders limpos e discretos */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-4">
-            <div className="h-24 sm:h-28 rounded-xl bg-[#0E1218] border border-dashed border-[#2E3744] flex flex-col items-center justify-center p-2 text-center text-slate-400">
-              <span className="text-[11px] font-medium text-slate-300">Rechauds & Pratos</span>
-              <span className="text-[9px] text-slate-400 mt-0.5">Fotos em breve</span>
-            </div>
-            <div className="h-24 sm:h-28 rounded-xl bg-[#0E1218] border border-dashed border-[#2E3744] flex flex-col items-center justify-center p-2 text-center text-slate-400">
-              <span className="text-[11px] font-medium text-slate-300">Prataria & Taças</span>
-              <span className="text-[9px] text-slate-400 mt-0.5">Fotos em breve</span>
-            </div>
-            <div className="col-span-2 sm:col-span-1 h-24 sm:h-28 rounded-xl bg-[#0E1218] border border-dashed border-[#2E3744] flex flex-col items-center justify-center p-2 text-center text-slate-400">
-              <span className="text-[11px] font-medium text-slate-300">Equipe & Serviço</span>
-              <span className="text-[9px] text-slate-400 mt-0.5">Fotos em breve</span>
-            </div>
+          {/* Mini Carrossel de 3 Fotos Rotativas */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
+            {[0, 1, 2].map(offset => {
+              const photoIdx = (galleryIndex + offset) % INITIAL_BUFFET_GALLERY.length;
+              const photo = INITIAL_BUFFET_GALLERY[photoIdx];
+              return (
+                <div 
+                  key={offset}
+                  onClick={onExploreFullBuffet}
+                  className="group relative h-40 sm:h-44 rounded-xl overflow-hidden bg-[#0E1218] border border-[#2E3744] hover:border-[#D8B85A] transition-all cursor-pointer shadow-md"
+                >
+                  <img 
+                    src={photo.url} 
+                    alt={photo.title}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                    loading="lazy"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#0E1218] via-transparent to-transparent" />
+                  
+                  <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-[#0E1218]/85 text-[#E8D58A] border border-[#D8B85A]/30 text-[9px] font-bold uppercase">
+                    {photo.tag}
+                  </span>
+
+                  <div className="absolute bottom-2 left-2 right-2 text-left">
+                    <h5 className="font-serif text-xs font-bold text-white truncate group-hover:text-[#E8D58A]">
+                      {photo.title}
+                    </h5>
+                    <p className="text-[10px] text-slate-400 truncate">
+                      {photo.subtitle}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="mt-3.5 flex items-center justify-between text-[11px] text-slate-400">
+            <span className="flex items-center gap-1.5 text-slate-300">
+              <Sparkles className="w-3.5 h-3.5 text-[#D8B85A]" />
+              <span>Fotos reais que mudam automaticamente a cada 3,5s</span>
+            </span>
+            <span className="font-mono text-[#D8B85A] text-[10px] font-semibold">
+              Foto {galleryIndex + 1} de {INITIAL_BUFFET_GALLERY.length}
+            </span>
           </div>
         </div>
 

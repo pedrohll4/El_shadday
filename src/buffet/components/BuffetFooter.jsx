@@ -97,7 +97,7 @@ export function BuffetFooter({ company, onOpenAdmin, onScrollToSection }) {
                   rel="noopener noreferrer"
                   className="hover:text-[#E8D58A] transition-colors"
                 >
-                  {company.phoneDisplay || "(69) 99200-0000"} (WhatsApp)
+                  {company.phoneDisplay || "(69) 99222-8682"} (WhatsApp)
                 </a>
               </li>
               <li className="flex items-center gap-2">

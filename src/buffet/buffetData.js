@@ -38,58 +38,137 @@ export const INITIAL_EVENT_TYPES = [
   "Outro"
 ];
 
-// Espaço reservado para as fotos oficiais do Buffet El Shadday.
-// Basta substituir as URLs abaixo pelas fotos que o cliente enviar!
-export const RESERVED_BUFFET_PHOTOS = [
+export const DEFAULT_CHURRASCO_OPTIONS = [
+  { id: "carne", label: "Carne", icon: "🥩" },
+  { id: "frango", label: "Frango", icon: "🍗" },
+  { id: "toscana", label: "Toscana", icon: "🌭" },
+  { id: "porco_assado", label: "Porco Assado", icon: "🍖" }
+];
+
+export function formatMeatList(meats = []) {
+  if (!meats || meats.length === 0) return '';
+  if (meats.length === 1) return meats[0];
+  if (meats.length === 2) return `${meats[0]} e ${meats[1]}`;
+  return `${meats.slice(0, -1).join(', ')} e ${meats[meats.length - 1]}`;
+}
+
+export function formatChurrascoLabel(meats = []) {
+  if (!meats || meats.length === 0) return 'Churrasco (Selecione as carnes)';
+  return `Churrasco (${formatMeatList(meats)})`;
+}
+
+export const GALLERY_CATEGORIES = [
+  { id: 'all', label: 'Todas' },
+  { id: 'churrasco', label: 'Churrasco & Carnes' },
+  { id: 'rechauds', label: 'Mesa & Rechauds' },
+  { id: 'prataria', label: 'Louças & Taças' },
+  { id: 'entradas', label: 'Entradas & Salgados' },
+  { id: 'sobremesas', label: 'Doces & Sobremesas' },
+  { id: 'equipe', label: 'Serviço & Garçons' }
+];
+
+// Galeria com suporte a todas as 49 fotos do Buffet El Shadday.
+// Fotos categorizadas com links otimizados que podem ser editados no painel ou banco.
+export const INITIAL_BUFFET_GALLERY = [
   {
-    id: "rechauds",
-    title: "Mesa de Pratos Quentes & Rechauds",
-    subtitle: "Estrutura térmica que mantém a temperatura perfeita do início ao fim",
+    id: "gal_1",
+    title: "Churrasco na Brasa com Cortes Nobres",
+    subtitle: "Picanha, cortes bovinos no ponto e linguiça toscana artesanal",
+    category: "churrasco",
+    tag: "Churrasco Nobre",
+    url: "https://images.unsplash.com/photo-1544025162-d76694265947?w=1000&auto=format&fit=crop&q=80"
+  },
+  {
+    id: "gal_2",
+    title: "Estrutura Térmica & Rechauds em Inox",
+    subtitle: "Pratos quentes mantidos na temperatura ideal durante todo o evento",
+    category: "rechauds",
     tag: "Rechauds & Buffet",
-    url: "https://images.unsplash.com/photo-1555244162-803834f70033?w=800&auto=format&fit=crop&q=80",
-    isReservedPlaceholder: true
+    url: "https://images.unsplash.com/photo-1555244162-803834f70033?w=1000&auto=format&fit=crop&q=80"
   },
   {
-    id: "prataria",
-    title: "Prataria Nobre, Taças & Talheres",
-    subtitle: "Mesa posta sofisticada com taças finas e talheres de alto padrão inclusos",
+    id: "gal_3",
+    title: "Prataria Nobre & Taças de Cristal",
+    subtitle: "Mesa posta sofisticada com talheres de alto padrão inclusos",
+    category: "prataria",
     tag: "Louças & Cristais",
-    url: "https://images.unsplash.com/photo-1519225421980-715cb0215aed?w=800&auto=format&fit=crop&q=80",
-    isReservedPlaceholder: true
+    url: "https://images.unsplash.com/photo-1519225421980-715cb0215aed?w=1000&auto=format&fit=crop&q=80"
   },
   {
-    id: "entradas",
-    title: "Entradas & Salgadinhos Variados",
-    subtitle: "Coxinhas, quibes, risoles e petiscos finos servidos quentinhos",
+    id: "gal_4",
+    title: "Entradas & Salgadinhos Finos",
+    subtitle: "Coxinhas crocantes, quibes, risoles e canapés servidos quentinhos",
+    category: "entradas",
     tag: "Entradas & Petiscos",
-    url: "https://images.unsplash.com/photo-1541544741938-0af808871cc0?w=800&auto=format&fit=crop&q=80",
-    isReservedPlaceholder: true
+    url: "https://images.unsplash.com/photo-1541544741938-0af808871cc0?w=1000&auto=format&fit=crop&q=80"
   },
   {
-    id: "churrasco",
-    title: "Churrasco & Carnes Nobres",
-    subtitle: "Cortes bovinos, toscana suculenta e frango dourados no ponto ideal",
-    tag: "Carnes & Assados",
-    url: "https://images.unsplash.com/photo-1544025162-d76694265947?w=800&auto=format&fit=crop&q=80",
-    isReservedPlaceholder: true
+    id: "gal_5",
+    title: "Assados Especiais & Frango Grelhado",
+    subtitle: "Sobrecoxas desossadas e frango dourado com tempero artesanal",
+    category: "churrasco",
+    tag: "Assados na Brasa",
+    url: "https://images.unsplash.com/photo-1598515214211-89d3c73ae83b?w=1000&auto=format&fit=crop&q=80"
   },
   {
-    id: "garcons",
+    id: "gal_6",
+    title: "Mesa de Sobremesas & Mousses Gourmet",
+    subtitle: "Mousses aerados de maracujá e cupuaçu com apresentação refinada",
+    category: "sobremesas",
+    tag: "Doces Artesanais",
+    url: "https://images.unsplash.com/photo-1551024709-8f23befc6f87?w=1000&auto=format&fit=crop&q=80"
+  },
+  {
+    id: "gal_7",
     title: "Equipe de Garçons Uniformizada",
-    subtitle: "Profissionais experientes, atenciosos e ágeis no atendimento",
-    tag: "Serviço de Salão",
-    url: "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&auto=format&fit=crop&q=80",
-    isReservedPlaceholder: true
+    subtitle: "Profissionais atenciosos, treinados e ágeis no atendimento",
+    category: "equipe",
+    tag: "Atendimento de Salão",
+    url: "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1000&auto=format&fit=crop&q=80"
   },
   {
-    id: "sobremesas",
-    title: "Mousses de Cupuaçu & Maracujá",
-    subtitle: "Sobremesas aeradas e refinadas preparadas artesanalmente",
-    tag: "Sobremesas",
-    url: "https://images.unsplash.com/photo-1551024709-8f23befc6f87?w=800&auto=format&fit=crop&q=80",
-    isReservedPlaceholder: true
+    id: "gal_8",
+    title: "Porco Assado Suculento & Pururuca",
+    subtitle: "Cortes suínos preparados na brasa com pele crocante e maciez",
+    category: "churrasco",
+    tag: "Porco Assado",
+    url: "https://images.unsplash.com/photo-1529692236671-f1f6cf9683ba?w=1000&auto=format&fit=crop&q=80"
+  },
+  {
+    id: "gal_9",
+    title: "Mesa de Saladas Tropicais Frescas",
+    subtitle: "Mix de folhas nobres, frutas da estação e vinagrete especial",
+    category: "rechauds",
+    tag: "Guarnições & Saladas",
+    url: "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=1000&auto=format&fit=crop&q=80"
+  },
+  {
+    id: "gal_10",
+    title: "Mesa Posta Completa para Casamento",
+    subtitle: "Arranjos florais, sousplat, taças para água, suco e espumante",
+    category: "prataria",
+    tag: "Decoração & Mesa",
+    url: "https://images.unsplash.com/photo-1465495976277-4387d4b0b4c6?w=1000&auto=format&fit=crop&q=80"
+  },
+  {
+    id: "gal_11",
+    title: "Tábua de Frios & Canapés Nobres",
+    subtitle: "Queijos selecionados, salames e frutas secas para recepção",
+    category: "entradas",
+    tag: "Petiscos de Recepção",
+    url: "https://images.unsplash.com/photo-1505253758473-96b3015f21c9?w=1000&auto=format&fit=crop&q=80"
+  },
+  {
+    id: "gal_12",
+    title: "Serviço Atencioso em Todas as Mesas",
+    subtitle: "Reposição constante de pratos, bebidas e recolhimento ágil",
+    category: "equipe",
+    tag: "Excelência El Shadday",
+    url: "https://images.unsplash.com/photo-1530103862676-de8c9debad1d?w=1000&auto=format&fit=crop&q=80"
   }
 ];
+
+export const RESERVED_BUFFET_PHOTOS = INITIAL_BUFFET_GALLERY;
 
 export const INITIAL_BUFFET_CATEGORIES = [
   {
@@ -116,7 +195,15 @@ export const INITIAL_BUFFET_CATEGORIES = [
       { id: "pp_strogonoff_frango", name: "Strogonoff de Frango", desc: "Strogonoff cremoso", active: true },
       { id: "pp_strogonoff_carne", name: "Strogonoff de Carne", desc: "Filé em tiras com molho especial", active: true },
       { id: "pp_porco_frito", name: "Porco Frito", desc: "Pedaços suínos fritos e crocantes", active: true },
-      { id: "pp_churrasco_assados", name: "Churrasco de: (Carne, toscana e Frango)", desc: "Assados na brasa", isAssado: true, badge: "Assados", active: true }
+      { 
+        id: "pp_churrasco_assados", 
+        name: "Churrasco", 
+        desc: "Assados na brasa (escolha: Carne, Frango, Toscana e Porco Assado)", 
+        isAssado: true, 
+        badge: "Assados", 
+        active: true,
+        churrascoOptions: ["Carne", "Frango", "Toscana", "Porco Assado"]
+      }
     ]
   },
   {
@@ -165,9 +252,26 @@ export const INITIAL_BUFFET_CATEGORIES = [
 // Helper to get company settings with localStorage persistence
 export function getStoredBuffetCompany() {
   try {
-    const saved = localStorage.getItem("el_shadday_buffet_company_v5");
+    const saved = localStorage.getItem("el_shadday_buffet_company_v6");
     if (saved) {
-      return { ...INITIAL_BUFFET_COMPANY, ...JSON.parse(saved) };
+      const parsed = JSON.parse(saved);
+      if (parsed.phone === '5569992000000' || !parsed.phone) {
+        parsed.phone = INITIAL_BUFFET_COMPANY.phone;
+        parsed.phoneDisplay = INITIAL_BUFFET_COMPANY.phoneDisplay;
+      }
+      return { ...INITIAL_BUFFET_COMPANY, ...parsed };
+    }
+    // Migration from v5
+    const oldSaved = localStorage.getItem("el_shadday_buffet_company_v5");
+    if (oldSaved) {
+      const parsed = JSON.parse(oldSaved);
+      if (parsed.phone === '5569992000000' || !parsed.phone) {
+        parsed.phone = INITIAL_BUFFET_COMPANY.phone;
+        parsed.phoneDisplay = INITIAL_BUFFET_COMPANY.phoneDisplay;
+      }
+      const upgraded = { ...INITIAL_BUFFET_COMPANY, ...parsed };
+      saveStoredBuffetCompany(upgraded);
+      return upgraded;
     }
   } catch (e) {
     console.error("Error reading stored company data:", e);
@@ -177,7 +281,7 @@ export function getStoredBuffetCompany() {
 
 export function saveStoredBuffetCompany(company) {
   try {
-    localStorage.setItem("el_shadday_buffet_company_v5", JSON.stringify(company));
+    localStorage.setItem("el_shadday_buffet_company_v6", JSON.stringify(company));
   } catch (e) {
     console.error("Error saving company data:", e);
   }
@@ -186,11 +290,34 @@ export function saveStoredBuffetCompany(company) {
 // Helper to get buffet categories & items with localStorage persistence
 export function getStoredBuffetCategories() {
   try {
-    const saved = localStorage.getItem("el_shadday_buffet_categories_v5");
+    const saved = localStorage.getItem("el_shadday_buffet_categories_v6");
     if (saved) {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed) && parsed.length > 0) {
         return parsed;
+      }
+    }
+    // Migration from v5 if present
+    const oldSaved = localStorage.getItem("el_shadday_buffet_categories_v5");
+    if (oldSaved) {
+      const parsed = JSON.parse(oldSaved);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const upgraded = parsed.map(cat => ({
+          ...cat,
+          items: (cat.items || []).map(item => {
+            if (item.id === 'pp_churrasco_assados') {
+              return {
+                ...item,
+                name: "Churrasco",
+                desc: "Assados na brasa (escolha: Carne, Frango, Toscana e Porco Assado)",
+                churrascoOptions: ["Carne", "Frango", "Toscana", "Porco Assado"]
+              };
+            }
+            return item;
+          })
+        }));
+        saveStoredBuffetCategories(upgraded);
+        return upgraded;
       }
     }
   } catch (e) {
@@ -201,7 +328,7 @@ export function getStoredBuffetCategories() {
 
 export function saveStoredBuffetCategories(categories) {
   try {
-    localStorage.setItem("el_shadday_buffet_categories_v5", JSON.stringify(categories));
+    localStorage.setItem("el_shadday_buffet_categories_v6", JSON.stringify(categories));
   } catch (e) {
     console.error("Error saving buffet categories:", e);
   }
@@ -251,5 +378,29 @@ export function saveQuoteToHistory(quote) {
     localStorage.setItem("el_shadday_buffet_quotes", JSON.stringify(updated.slice(0, 100)));
   } catch (e) {
     console.error("Error saving quote to history:", e);
+  }
+}
+
+// Helper to get buffet gallery photos with persistence
+export function getStoredBuffetGallery() {
+  try {
+    const saved = localStorage.getItem("el_shadday_buffet_gallery_v2");
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+  } catch (e) {
+    console.error("Error reading stored buffet gallery:", e);
+  }
+  return INITIAL_BUFFET_GALLERY;
+}
+
+export function saveStoredBuffetGallery(gallery) {
+  try {
+    localStorage.setItem("el_shadday_buffet_gallery_v2", JSON.stringify(gallery));
+  } catch (e) {
+    console.error("Error saving buffet gallery:", e);
   }
 }

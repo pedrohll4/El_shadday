@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Building2, 
   UtensilsCrossed, 
@@ -23,34 +23,52 @@ import {
   Salad,
   Wine,
   Cake,
-  ConciergeBell
+  ConciergeBell,
+  Camera,
+  Eye
 } from 'lucide-react';
 import { 
   INITIAL_BUFFET_COMPANY, 
   INITIAL_BUFFET_CATEGORIES, 
   INITIAL_EVENT_TYPES,
+  GALLERY_CATEGORIES,
+  INITIAL_BUFFET_GALLERY,
   getStoredQuoteHistory
 } from '../buffetData';
+import { supabase, isSupabaseConfigured } from '../../services/supabaseClient';
 
 export function BuffetAdminDashboard({
   company,
   categories,
   eventTypes,
+  galleryPhotos = [],
   onSaveCompany,
   onSaveCategories,
   onSaveEventTypes,
+  onSaveGalleryPhotos,
   onLogout,
   onBackToSite,
   currentAppMode,
   onToggleAppMode
 }) {
-  // Admin Tabs: 'company' | 'menu' | 'events' | 'quotes' | 'system'
+  // Admin Tabs: 'company' | 'menu' | 'events' | 'gallery' | 'quotes' | 'system'
   const [activeTab, setActiveTab] = useState('company');
 
   // Form states
   const [tempCompany, setTempCompany] = useState({ ...company });
   const [tempCategories, setTempCategories] = useState(JSON.parse(JSON.stringify(categories)));
   const [tempEventTypes, setTempEventTypes] = useState([...eventTypes]);
+  const [tempGallery, setTempGallery] = useState(() => {
+    if (galleryPhotos && galleryPhotos.length > 0) return [...galleryPhotos];
+    return [...INITIAL_BUFFET_GALLERY];
+  });
+
+  // New photo inputs
+  const [newPhotoUrl, setNewPhotoUrl] = useState('');
+  const [newPhotoTitle, setNewPhotoTitle] = useState('');
+  const [newPhotoSubtitle, setNewPhotoSubtitle] = useState('');
+  const [newPhotoCategory, setNewPhotoCategory] = useState('churrasco');
+  const [newPhotoTag, setNewPhotoTag] = useState('');
 
   // New item draft states
   const [selectedCategoryForAdd, setSelectedCategoryForAdd] = useState(categories[0]?.id || 'carnes');
@@ -67,6 +85,41 @@ export function BuffetAdminDashboard({
 
   // Quotes history
   const [quoteHistory, setQuoteHistory] = useState(() => getStoredQuoteHistory());
+
+  // Load cloud quotes from Supabase if configured
+  useEffect(() => {
+    if (isSupabaseConfigured && supabase) {
+      supabase
+        .from('buffet_quotes')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(100)
+        .then(({ data, error }) => {
+          if (!error && Array.isArray(data) && data.length > 0) {
+            const mapped = data.map(q => ({
+              id: q.id,
+              createdAt: q.created_at,
+              cliente: q.client_name,
+              whatsapp: q.client_phone,
+              tipoEvento: q.event_type,
+              dataEvento: q.event_date,
+              convidados: q.guests_count,
+              itens: q.selected_items || []
+            }));
+            setQuoteHistory(prev => {
+              const ids = new Set(prev.map(p => p.id));
+              const combined = [...prev];
+              for (const item of mapped) {
+                if (!ids.has(item.id)) {
+                  combined.push(item);
+                }
+              }
+              return combined;
+            });
+          }
+        });
+    }
+  }, []);
 
   // Save feedback state
   const [saveSuccessMsg, setSaveSuccessMsg] = useState('');
@@ -197,6 +250,48 @@ export function BuffetAdminDashboard({
     triggerSaveNotification('Tipo de evento removido!');
   };
 
+  // --- GALLERY HANDLERS ---
+  const handleAddPhoto = (e) => {
+    e.preventDefault();
+    if (!newPhotoUrl.trim() || !newPhotoTitle.trim()) {
+      alert('Por favor, informe a URL da imagem e o título.');
+      return;
+    }
+
+    const newPhoto = {
+      id: 'gal_' + Date.now(),
+      url: newPhotoUrl.trim(),
+      title: newPhotoTitle.trim(),
+      subtitle: newPhotoSubtitle.trim() || 'Foto oficial do Buffet El Shadday',
+      category: newPhotoCategory,
+      tag: newPhotoTag.trim() || 'Buffet El Shadday'
+    };
+
+    const updated = [newPhoto, ...tempGallery];
+    setTempGallery(updated);
+    if (onSaveGalleryPhotos) onSaveGalleryPhotos(updated);
+    setNewPhotoUrl('');
+    setNewPhotoTitle('');
+    setNewPhotoSubtitle('');
+    setNewPhotoTag('');
+    triggerSaveNotification('Nova foto adicionada à galeria!');
+  };
+
+  const handleDeletePhoto = (photoId) => {
+    if (!window.confirm('Tem certeza que deseja remover esta foto da galeria?')) return;
+    const updated = tempGallery.filter(p => p.id !== photoId);
+    setTempGallery(updated);
+    if (onSaveGalleryPhotos) onSaveGalleryPhotos(updated);
+    triggerSaveNotification('Foto removida da galeria!');
+  };
+
+  const handleResetGalleryToDefault = () => {
+    if (!window.confirm('Deseja restaurar as fotos padrão da galeria?')) return;
+    setTempGallery(INITIAL_BUFFET_GALLERY);
+    if (onSaveGalleryPhotos) onSaveGalleryPhotos(INITIAL_BUFFET_GALLERY);
+    triggerSaveNotification('Galeria restaurada para o padrão!');
+  };
+
   return (
     <div className="min-h-screen bg-[#15191F] text-slate-100 flex flex-col font-sans">
       
@@ -288,6 +383,23 @@ export function BuffetAdminDashboard({
           </button>
 
           <button
+            onClick={() => setActiveTab('gallery')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs uppercase tracking-wider font-semibold whitespace-nowrap transition-all cursor-pointer ${
+              activeTab === 'gallery'
+                ? 'bg-[#D8B85A] text-[#15191F] font-bold shadow'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-[#202630]'
+            }`}
+          >
+            <Camera className="w-4 h-4" />
+            <span>Galeria de Fotos</span>
+            <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+              activeTab === 'gallery' ? 'bg-[#15191F] text-[#E8D58A]' : 'bg-[#D8B85A] text-[#15191F]'
+            }`}>
+              {tempGallery.length}
+            </span>
+          </button>
+
+          <button
             onClick={() => setActiveTab('quotes')}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs uppercase tracking-wider font-semibold whitespace-nowrap transition-all cursor-pointer ${
               activeTab === 'quotes'
@@ -374,11 +486,11 @@ export function BuffetAdminDashboard({
                       type="text"
                       value={tempCompany.phone}
                       onChange={(e) => setTempCompany({ ...tempCompany, phone: e.target.value })}
-                      placeholder="Ex: 5569992000000"
+                      placeholder="Ex: 5569992228682"
                       className="w-full px-4 py-2.5 rounded-xl bg-[#202630] border border-[#2E3744] text-slate-100 text-sm focus:outline-none focus:border-[#D8B85A]"
                     />
                     <span className="text-[10px] text-slate-400 mt-1 block">
-                      Apenas números, com 55 na frente. Ex: 5569992000000
+                      Apenas números, com 55 na frente. Ex: 5569992228682
                     </span>
                   </div>
 
@@ -390,7 +502,7 @@ export function BuffetAdminDashboard({
                       type="text"
                       value={tempCompany.phoneDisplay}
                       onChange={(e) => setTempCompany({ ...tempCompany, phoneDisplay: e.target.value })}
-                      placeholder="Ex: (69) 99200-0000"
+                      placeholder="Ex: (69) 99222-8682"
                       className="w-full px-4 py-2.5 rounded-xl bg-[#202630] border border-[#2E3744] text-slate-100 text-sm focus:outline-none focus:border-[#D8B85A]"
                     />
                   </div>
@@ -822,6 +934,182 @@ export function BuffetAdminDashboard({
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {/* TAB: GALLERY PHOTOS */}
+        {activeTab === 'gallery' && (
+          <div className="space-y-6">
+            <div className="rounded-2xl bg-[#202630] border border-[#2E3744] p-6 sm:p-8 shadow-[0_10px_30px_rgba(0,0,0,0.5)]">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-6 border-b border-[#2E3744]">
+                <div>
+                  <h2 className="font-serif text-xl font-bold text-[#E8D58A] flex items-center gap-2">
+                    <Camera className="w-5 h-5 text-[#D8B85A]" />
+                    <span>Galeria Dinâmica de Fotos ({tempGallery.length})</span>
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Gerencie todas as fotos que alimentam o carrossel rotativo e a galeria completa do Buffet.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleResetGalleryToDefault}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#15191F] hover:bg-[#2A3442] text-xs font-semibold text-slate-300 hover:text-white border border-[#2E3744] transition-all cursor-pointer"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5 text-[#D8B85A]" />
+                    <span>Restaurar Fotos Padrão</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Form to add new photo */}
+              <form onSubmit={handleAddPhoto} className="p-5 rounded-2xl bg-[#15191F] border border-[#D8B85A]/30 mb-8 space-y-4">
+                <h3 className="text-sm font-bold uppercase tracking-wider text-[#E8D58A] flex items-center gap-2">
+                  <Plus className="w-4 h-4" />
+                  <span>Cadastrar Nova Foto</span>
+                </h3>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div className="sm:col-span-2 lg:col-span-1">
+                    <label className="block text-xs uppercase font-bold text-slate-300 mb-1">
+                      URL da Imagem *
+                    </label>
+                    <input
+                      type="url"
+                      placeholder="https://exemplo.com/foto.jpg"
+                      value={newPhotoUrl}
+                      onChange={(e) => setNewPhotoUrl(e.target.value)}
+                      required
+                      className="w-full px-3 py-2 rounded-xl bg-[#202630] border border-[#2E3744] text-slate-100 text-sm focus:outline-none focus:border-[#D8B85A]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs uppercase font-bold text-slate-300 mb-1">
+                      Título do Prato / Evento *
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Ex: Picanha Angus na Brasa"
+                      value={newPhotoTitle}
+                      onChange={(e) => setNewPhotoTitle(e.target.value)}
+                      required
+                      className="w-full px-3 py-2 rounded-xl bg-[#202630] border border-[#2E3744] text-slate-100 text-sm focus:outline-none focus:border-[#D8B85A]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs uppercase font-bold text-slate-300 mb-1">
+                      Categoria
+                    </label>
+                    <select
+                      value={newPhotoCategory}
+                      onChange={(e) => setNewPhotoCategory(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl bg-[#202630] border border-[#2E3744] text-slate-100 text-sm focus:outline-none focus:border-[#D8B85A]"
+                    >
+                      {GALLERY_CATEGORIES.filter(c => c.id !== 'todas').map(cat => (
+                        <option key={cat.id} value={cat.id}>{cat.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs uppercase font-bold text-slate-300 mb-1">
+                      Subtítulo / Descrição Rápida
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Ex: Cortes nobres assados lentamente"
+                      value={newPhotoSubtitle}
+                      onChange={(e) => setNewPhotoSubtitle(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl bg-[#202630] border border-[#2E3744] text-slate-100 text-sm focus:outline-none focus:border-[#D8B85A]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs uppercase font-bold text-slate-300 mb-1">
+                      Etiqueta / Tag (opcional)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Ex: Premium, Exclusivo"
+                      value={newPhotoTag}
+                      onChange={(e) => setNewPhotoTag(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl bg-[#202630] border border-[#2E3744] text-slate-100 text-sm focus:outline-none focus:border-[#D8B85A]"
+                    />
+                  </div>
+
+                  <div className="flex items-end">
+                    <button
+                      type="submit"
+                      className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-[#D8B85A] to-[#F3E5AB] text-[#15191F] font-bold text-sm hover:brightness-110 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Salvar na Galeria</span>
+                    </button>
+                  </div>
+                </div>
+
+                {newPhotoUrl.trim() && (
+                  <div className="pt-2 flex items-center gap-3">
+                    <span className="text-[11px] text-slate-400">Prévia da imagem:</span>
+                    <img 
+                      src={newPhotoUrl} 
+                      alt="Prévia" 
+                      className="w-12 h-12 object-cover rounded-lg border border-[#D8B85A]/40"
+                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                    />
+                  </div>
+                )}
+              </form>
+
+              {/* Photos List Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {tempGallery.map((photo, idx) => {
+                  const catObj = GALLERY_CATEGORIES.find(c => c.id === photo.category);
+                  return (
+                    <div 
+                      key={photo.id || idx}
+                      className="group relative rounded-xl overflow-hidden bg-[#15191F] border border-[#2E3744] hover:border-[#D8B85A]/50 transition-all flex flex-col shadow-sm"
+                    >
+                      <div className="relative aspect-video w-full bg-black/40 overflow-hidden">
+                        <img
+                          src={photo.url}
+                          alt={photo.title}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          loading="lazy"
+                        />
+                        <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-black/70 backdrop-blur-sm text-[#E8D58A] border border-[#D8B85A]/30">
+                          {catObj ? catObj.name : photo.category}
+                        </span>
+                      </div>
+
+                      <div className="p-3 flex-1 flex flex-col justify-between">
+                        <div>
+                          <h4 className="text-sm font-bold text-slate-100 line-clamp-1">{photo.title}</h4>
+                          <p className="text-xs text-slate-400 line-clamp-1 mt-0.5">{photo.subtitle}</p>
+                        </div>
+
+                        <div className="mt-3 pt-2 border-t border-[#2E3744] flex items-center justify-between">
+                          <span className="text-[10px] text-slate-500 font-mono">#{idx + 1}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleDeletePhoto(photo.id)}
+                            className="p-1.5 rounded-lg text-rose-400 hover:text-white hover:bg-rose-950/60 transition-colors cursor-pointer"
+                            title="Remover foto"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+            </div>
           </div>
         )}
 
