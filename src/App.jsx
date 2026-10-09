@@ -5,9 +5,12 @@ import {
   CATEGORIES, 
   RESTAURANT_INFO,
   getStoredProducts,
+  saveStoredProducts,
   getStoredPromoSettings,
+  saveStoredPromoSettings,
   getStoredRestaurantInfo
 } from './data/menuData';
+import { supabase, isSupabaseConfigured } from './services/supabaseClient';
 import { Header } from './components/Header';
 import { RestaurantStoreHeader } from './components/RestaurantStoreHeader';
 import { PromotionsShelf } from './components/PromotionsShelf';
@@ -135,6 +138,27 @@ export default function App() {
     window.addEventListener('delivery_promos_updated', handlePromosSync);
     window.addEventListener('delivery_restaurant_info_updated', handleInfoSync);
     window.addEventListener('storage', handleProductsSync);
+
+    // Hydrate products & promo settings from Supabase if configured
+    if (isSupabaseConfigured && supabase) {
+      supabase
+        .from('company_settings')
+        .select('*')
+        .eq('id', 'el_shadday_config')
+        .single()
+        .then(({ data, error }) => {
+          if (!error && data) {
+            if (Array.isArray(data.menu_products) && data.menu_products.length > 0) {
+              setProducts(data.menu_products);
+              saveStoredProducts(data.menu_products);
+            }
+            if (data.promo_settings && typeof data.promo_settings === 'object' && Object.keys(data.promo_settings).length > 0) {
+              setPromoSettings(data.promo_settings);
+              saveStoredPromoSettings(data.promo_settings);
+            }
+          }
+        });
+    }
 
     return () => {
       window.removeEventListener('delivery_products_updated', handleProductsSync);

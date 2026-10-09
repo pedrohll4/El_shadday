@@ -96,8 +96,14 @@ CREATE TABLE IF NOT EXISTS public.company_settings (
     banner_incluso TEXT DEFAULT 'JÁ INCLUSO GARÇONS, PRATARIA, TAÇAS, RECHAUDS E TALHERES',
     delivery_active BOOLEAN DEFAULT false,
     buffet_active BOOLEAN DEFAULT true,
+    menu_products JSONB DEFAULT '[]'::jsonb,
+    promo_settings JSONB DEFAULT '{}'::jsonb,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
+
+-- Garantir colunas se a tabela já existir no Supabase
+ALTER TABLE public.company_settings ADD COLUMN IF NOT EXISTS menu_products JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.company_settings ADD COLUMN IF NOT EXISTS promo_settings JSONB DEFAULT '{}'::jsonb;
 
 -- Inserir / Atualizar com os dados reais exatos
 INSERT INTO public.company_settings (

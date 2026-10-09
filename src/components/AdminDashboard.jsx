@@ -263,6 +263,27 @@ export function AdminDashboard({
     window.addEventListener('delivery_restaurant_info_updated', handleStoreSync);
     window.addEventListener('storage', handleProductsSync);
 
+    // Hydrate products & promo settings from Supabase if configured
+    if (isSupabaseConfigured && supabase) {
+      supabase
+        .from('company_settings')
+        .select('*')
+        .eq('id', 'el_shadday_config')
+        .single()
+        .then(({ data, error }) => {
+          if (!error && data) {
+            if (Array.isArray(data.menu_products) && data.menu_products.length > 0) {
+              setProductsList(data.menu_products);
+              saveStoredProducts(data.menu_products);
+            }
+            if (data.promo_settings && typeof data.promo_settings === 'object' && Object.keys(data.promo_settings).length > 0) {
+              setPromoSettings(data.promo_settings);
+              saveStoredPromoSettings(data.promo_settings);
+            }
+          }
+        });
+    }
+
     return () => {
       window.removeEventListener('delivery_products_updated', handleProductsSync);
       window.removeEventListener('delivery_promos_updated', handlePromosSync);
@@ -270,6 +291,30 @@ export function AdminDashboard({
       window.removeEventListener('storage', handleProductsSync);
     };
   }, []);
+
+  const syncProductsToCloud = async (prods) => {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('company_settings').upsert({
+          id: 'el_shadday_config',
+          menu_products: prods,
+          updated_at: new Date().toISOString()
+        });
+      } catch (err) {}
+    }
+  };
+
+  const syncPromosToCloud = async (promos) => {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('company_settings').upsert({
+          id: 'el_shadday_config',
+          promo_settings: promos,
+          updated_at: new Date().toISOString()
+        });
+      } catch (err) {}
+    }
+  };
 
   // Handlers for Products
   const handleOpenCreateProduct = () => {
@@ -345,6 +390,7 @@ export function AdminDashboard({
 
     setProductsList(updated);
     saveStoredProducts(updated);
+    syncProductsToCloud(updated);
     setIsProductModalOpen(false);
   };
 
@@ -359,6 +405,7 @@ export function AdminDashboard({
     });
     setProductsList(updated);
     saveStoredProducts(updated);
+    syncProductsToCloud(updated);
   };
 
   const handleToggleProductPromo = (prodId) => {
@@ -386,6 +433,7 @@ export function AdminDashboard({
     });
     setProductsList(updated);
     saveStoredProducts(updated);
+    syncProductsToCloud(updated);
   };
 
   const handleDuplicateProduct = (prod) => {
@@ -397,6 +445,7 @@ export function AdminDashboard({
     const updated = [cloned, ...productsList];
     setProductsList(updated);
     saveStoredProducts(updated);
+    syncProductsToCloud(updated);
     triggerMenuToast(`Cópia de "${prod.name}" criada com sucesso!`);
   };
 
@@ -405,6 +454,7 @@ export function AdminDashboard({
     const updated = productsList.filter(p => p.id !== prodId);
     setProductsList(updated);
     saveStoredProducts(updated);
+    syncProductsToCloud(updated);
     triggerMenuToast(`Produto removido do cardápio!`);
   };
 
@@ -412,6 +462,7 @@ export function AdminDashboard({
     if (!window.confirm('Deseja restaurar todos os produtos e preços para o padrão original da loja?')) return;
     setProductsList(PRODUCTS);
     saveStoredProducts(PRODUCTS);
+    syncProductsToCloud(PRODUCTS);
     triggerMenuToast('Cardápio restaurado para o padrão original!');
   };
 
@@ -427,6 +478,7 @@ export function AdminDashboard({
     };
     setPromoSettings(newSettings);
     saveStoredPromoSettings(newSettings);
+    syncPromosToCloud(newSettings);
     triggerMenuToast('Promoções e Cupons salvos com sucesso!');
   };
 
