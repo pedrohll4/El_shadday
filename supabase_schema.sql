@@ -240,3 +240,28 @@ BEGIN
     ALTER PUBLICATION supabase_realtime ADD TABLE public.company_settings;
   END IF;
 END $$;
+
+-- 7. CRIAR BUCKET PÚBLICO PARA FOTOS E VÍDEOS (SUPABASE STORAGE)
+INSERT INTO storage.buckets (id, name, public) 
+VALUES ('gallery', 'gallery', true)
+ON CONFLICT (id) DO NOTHING;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Acesso público a arquivos da galeria' AND tablename = 'objects' AND schemaname = 'storage') THEN
+    CREATE POLICY "Acesso público a arquivos da galeria" ON storage.objects FOR SELECT USING (bucket_id = 'gallery');
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Upload público de arquivos da galeria' AND tablename = 'objects' AND schemaname = 'storage') THEN
+    CREATE POLICY "Upload público de arquivos da galeria" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'gallery');
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Update público de arquivos da galeria' AND tablename = 'objects' AND schemaname = 'storage') THEN
+    CREATE POLICY "Update público de arquivos da galeria" ON storage.objects FOR UPDATE USING (bucket_id = 'gallery');
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Delete público de arquivos da galeria' AND tablename = 'objects' AND schemaname = 'storage') THEN
+    CREATE POLICY "Delete público de arquivos da galeria" ON storage.objects FOR DELETE USING (bucket_id = 'gallery');
+  END IF;
+END $$;
+

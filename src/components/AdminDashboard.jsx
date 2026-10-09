@@ -198,6 +198,8 @@ export function AdminDashboard({
           subtitle: newPhoto.subtitle,
           category: newPhoto.category,
           tag: newPhoto.tag,
+          type: newPhoto.type || 'image',
+          thumbnail: newPhoto.thumbnail || newPhoto.url,
           position: 0
         });
         if (error) {
