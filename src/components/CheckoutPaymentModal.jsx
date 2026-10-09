@@ -4,7 +4,7 @@ import {
   Copy, Clock, Loader2, ArrowRight, Lock, CheckCircle2, AlertCircle, Sparkles
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { RESTAURANT_INFO, ARIQUEMES_DISTRICTS } from '../data/menuData';
+import { RESTAURANT_INFO, ARIQUEMES_DISTRICTS, getStoredRestaurantInfo } from '../data/menuData';
 
 export function CheckoutPaymentModal({ 
   isOpen, 
@@ -13,6 +13,7 @@ export function CheckoutPaymentModal({
   orderDetails, 
   onPaymentSuccess 
 }) {
+  const [storeInfo] = useState(() => getStoredRestaurantInfo());
   const [selectedMethod, setSelectedMethod] = useState(orderDetails?.paymentMethod || 'pix');
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingStep, setProcessingStep] = useState('');
@@ -394,6 +395,16 @@ export function CheckoutPaymentModal({
                     </div>
                   </div>
                 </div>
+
+                {storeInfo?.cardMachineNoticeActive !== false && storeInfo?.cardMachineNotice && (
+                  <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+                    <div className="text-[11px] leading-relaxed">
+                      <span className="font-bold text-amber-300 block mb-0.5">Aviso sobre Taxa da Maquininha:</span>
+                      {storeInfo.cardMachineNotice}
+                    </div>
+                  </div>
+                )}
 
                 <div className="flex items-center gap-1.5 text-[11px] text-emerald-400 bg-emerald-500/10 p-2.5 rounded-xl border border-emerald-500/20">
                   <ShieldCheck className="w-4 h-4 flex-shrink-0" />

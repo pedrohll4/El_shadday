@@ -4,7 +4,7 @@ import {
   ArrowRight, AlertCircle, ShieldCheck, Copy, Check, 
   CreditCard, Banknote, QrCode, MessageCircle, Sparkles, Building2
 } from 'lucide-react';
-import { ARIQUEMES_DISTRICTS, RESTAURANT_INFO } from '../data/menuData';
+import { ARIQUEMES_DISTRICTS, RESTAURANT_INFO, getStoredRestaurantInfo, calculateCardMachineFee, getCardMachineNoticeText } from '../data/menuData';
 import { dispatchOrderToKitchen } from '../services/ordersSyncService';
 
 export function DeliveryCartDrawer({ 
@@ -19,6 +19,16 @@ export function DeliveryCartDrawer({
   initialDeliveryType = 'delivery'
 }) {
   const [deliveryType, setDeliveryType] = useState(initialDeliveryType); // 'delivery' | 'retirada'
+  const [storeInfo, setStoreInfo] = useState(() => getStoredRestaurantInfo());
+
+  React.useEffect(() => {
+    const handleStoreUpdate = (e) => {
+      if (e?.detail) setStoreInfo(e.detail);
+      else setStoreInfo(getStoredRestaurantInfo());
+    };
+    window.addEventListener('delivery_restaurant_info_updated', handleStoreUpdate);
+    return () => window.removeEventListener('delivery_restaurant_info_updated', handleStoreUpdate);
+  }, []);
 
   React.useEffect(() => {
     if (initialDeliveryType) {
@@ -32,6 +42,7 @@ export function DeliveryCartDrawer({
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('pix'); // 'pix' | 'cartao' | 'dinheiro'
+  const [cardOption, setCardOption] = useState('credito'); // 'credito' | 'debito'
   const [cashChange, setCashChange] = useState('');
   const [orderNotes, setOrderNotes] = useState('');
   const [copiedPix, setCopiedPix] = useState(false);
@@ -42,10 +53,16 @@ export function DeliveryCartDrawer({
   const currentDistrict = ARIQUEMES_DISTRICTS.find(d => d.id === selectedDistrict) || ARIQUEMES_DISTRICTS[0];
   const deliveryFee = deliveryType === 'delivery' ? currentDistrict.price : 0;
   const subtotal = cartItems.reduce((acc, item) => acc + (item.price * item.quantity), 0);
-  const total = subtotal + deliveryFee;
 
-  const pixKey = activeBranch?.pixKey || RESTAURANT_INFO.pixKey || '69992228682';
-  const restaurantPhone = activeBranch?.phone || RESTAURANT_INFO.phone || '5569992228682';
+  const cardSettings = storeInfo?.cardMachineSettings || RESTAURANT_INFO.cardMachineSettings;
+  const isCardFeeActive = cardSettings?.active !== false;
+  const cardFee = (paymentMethod === 'cartao' && isCardFeeActive && cardSettings?.autoAddToTotal)
+    ? calculateCardMachineFee(subtotal, cardSettings, cardOption)
+    : 0;
+  const total = subtotal + deliveryFee + cardFee;
+
+  const pixKey = activeBranch?.pixKey || storeInfo?.pixKey || RESTAURANT_INFO.pixKey || '69992228682';
+  const restaurantPhone = activeBranch?.phone || storeInfo?.phone || RESTAURANT_INFO.phone || '5569992228682';
 
   const handleCopyPix = () => {
     navigator.clipboard.writeText(pixKey);
@@ -114,7 +131,17 @@ export function DeliveryCartDrawer({
     // Payment method text
     let paymentText = 'PIX';
     if (paymentMethod === 'cartao') {
-      paymentText = 'Cartão de Crédito/Débito (Levar maquininha)';
+      const cardTypeLabel = cardOption === 'debito' ? 'Débito' : 'Crédito';
+      paymentText = `Cartão de ${cardTypeLabel} (Levar maquininha)`;
+      if (cardFee > 0) {
+        paymentText += `\n   ↳ 💳 *Taxa Maquininha:* + R$ ${cardFee.toFixed(2).replace('.', ',')}`;
+      }
+      if (isCardFeeActive) {
+        const noticeMsg = getCardMachineNoticeText(cardSettings);
+        if (noticeMsg) {
+          paymentText += `\n   ↳ ⚠️ *Aviso Taxa:* ${noticeMsg.replace(/⚠️\s*/g, '').trim()}`;
+        }
+      }
     } else if (paymentMethod === 'dinheiro') {
       paymentText = `Dinheiro ${cashChange ? `(Troco para R$ ${cashChange})` : '(Sem troco)'}`;
     }
@@ -149,6 +176,7 @@ ${itemsFormatted}
 ${deliveryText}
 ${orderNotes.trim() ? `\n📝 *Observações do Pedido:*\n${orderNotes.trim()}\n` : ''}
 💰 *Subtotal:* R$ ${subtotal.toFixed(2).replace('.', ',')}
+${cardFee > 0 ? `💳 *Taxa Maquininha (${cardOption === 'debito' ? 'Débito' : 'Crédito'}):* R$ ${cardFee.toFixed(2).replace('.', ',')}\n` : ''}🛵 *Taxa de Entrega:* ${deliveryFee > 0 ? `R$ ${deliveryFee.toFixed(2).replace('.', ',')}` : 'Grátis'}
 💳 *TOTAL A PAGAR: R$ ${total.toFixed(2).replace('.', ',')}*
 💵 *Forma de Pagamento:* ${paymentText}
 ${paymentMethod === 'pix' ? `\n⚠️ *COMPROVANTE DO PIX:* Segue em anexo nesta conversa!\n(Chave Pix utilizada: ${pixKey})` : ''}
@@ -172,11 +200,12 @@ Pedido gerado via Cardápio Digital El Shadday.`;
       reference: reference.trim(),
       subtotal,
       deliveryFee,
+      cardFee,
       total,
       paymentMethod: paymentMethod === 'pix' 
         ? 'PIX Instantâneo' 
         : paymentMethod === 'cartao' 
-        ? 'Cartão de Crédito/Débito' 
+        ? `Cartão de ${cardOption === 'debito' ? 'Débito' : 'Crédito'}${cardFee > 0 ? ` (Taxa +R$ ${cardFee.toFixed(2).replace('.', ',')})` : ''}`
         : `Dinheiro ${cashChange ? `(Troco p/ R$ ${cashChange})` : ''}`,
       paymentStatus: paymentMethod === 'pix' ? 'PAGO_APROVADO' : 'PENDENTE_COBRANCA',
       orderStatus: 'RECEBIDO_COZINHA',
@@ -656,10 +685,64 @@ Pedido gerado via Cardápio Digital El Shadday.`;
                   </div>
                 )}
 
-                {/* Cartão Info */}
+                {/* Cartão Info & Aviso de Taxa */}
                 {paymentMethod === 'cartao' && (
-                  <div className="p-2.5 rounded-xl bg-dark-950 text-[11px] text-slate-400 border border-dark-800">
-                    O entregador levará a máquina de cartão até você (Crédito ou Débito).
+                  <div className="space-y-2.5">
+                    <div className="p-3 rounded-xl bg-dark-950 border border-dark-800 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+                          <CreditCard className="w-3.5 h-3.5 text-brand-gold" />
+                          Tipo de Cartão na Maquininha:
+                        </span>
+                        <div className="flex items-center gap-1 bg-dark-900 p-0.5 rounded-lg border border-dark-750">
+                          <button
+                            type="button"
+                            onClick={() => setCardOption('debito')}
+                            className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                              cardOption === 'debito'
+                                ? 'bg-brand-gold text-dark-950 shadow-sm'
+                                : 'text-slate-400 hover:text-white'
+                            }`}
+                          >
+                            Débito
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setCardOption('credito')}
+                            className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                              cardOption === 'credito'
+                                ? 'bg-brand-gold text-dark-950 shadow-sm'
+                                : 'text-slate-400 hover:text-white'
+                            }`}
+                          >
+                            Crédito
+                          </button>
+                        </div>
+                      </div>
+
+                      <p className="text-[11px] text-slate-400 leading-tight">
+                        O entregador levará a máquina de cartão até você para pagamento na entrega.
+                      </p>
+                    </div>
+
+                    {isCardFeeActive && (
+                      <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs space-y-1.5">
+                        <div className="flex items-center justify-between font-bold text-amber-400 text-xs">
+                          <span className="flex items-center gap-1.5">
+                            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                            Aviso de Taxa da Maquininha:
+                          </span>
+                          {cardFee > 0 && (
+                            <span className="font-mono bg-amber-400/20 px-2 py-0.5 rounded text-amber-300 font-extrabold text-[11px]">
+                              + R$ {cardFee.toFixed(2).replace('.', ',')}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[11px] leading-relaxed text-amber-200/90 whitespace-pre-line">
+                          {getCardMachineNoticeText(cardSettings)}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -687,6 +770,16 @@ Pedido gerado via Cardápio Digital El Shadday.`;
                   {deliveryFee > 0 ? `R$ ${deliveryFee.toFixed(2).replace('.', ',')}` : 'Grátis'}
                 </span>
               </div>
+
+              {paymentMethod === 'cartao' && cardFee > 0 && (
+                <div className="flex items-center justify-between text-amber-300 font-semibold">
+                  <span className="flex items-center gap-1">
+                    <CreditCard className="w-3.5 h-3.5" />
+                    Taxa da Maquininha ({cardOption === 'debito' ? 'Débito' : 'Crédito'}):
+                  </span>
+                  <span className="font-bold">+ R$ {cardFee.toFixed(2).replace('.', ',')}</span>
+                </div>
+              )}
 
               <div className="flex items-center justify-between pt-1 border-t border-dark-800 font-extrabold text-base text-white">
                 <span>Total a Pagar:</span>

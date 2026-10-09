@@ -12,7 +12,19 @@ export const RESTAURANT_INFO = {
   pixName: "El Shadday Esfirraria",
   history: "Mais de 15 anos de tradição em Ariquemes! Pioneiros em caixas de esfirras artesanais, entregando sabor inesquecível e massas frescas todos os dias.",
   logoUrl: "https://assets.olaclick.app/companies/logos/67bb7c61-2505-4b36-a16c-6a4979bb3651.png",
-  bannerUrl: "https://assets.olaclick.app/companies/backgrounds/dfd052f1-d436-49bb-a996-f2f05ce0d456.webp"
+  bannerUrl: "https://assets.olaclick.app/companies/backgrounds/dfd052f1-d436-49bb-a996-f2f05ce0d456.webp",
+  cardMachineSettings: {
+    active: true,
+    type: 'percentage', // 'percentage' | 'fixed' | 'split'
+    percentageRate: 3.5, // taxa percentual ex: 3.5%
+    fixedRate: 2.00, // taxa fixa ex: R$ 2,00
+    debitRate: 2.0, // taxa débito ex: 2.0%
+    creditRate: 4.5, // taxa crédito ex: 4.5%
+    autoAddToTotal: true, // soma no total do pedido
+    customNotice: "⚠️ Pagamentos no cartão (débito ou crédito) possuem acréscimo referente à taxa da maquininha cobrada pela operadora."
+  },
+  cardMachineNotice: "⚠️ Pagamentos no cartão (débito ou crédito) possuem taxa da maquininha cobrada pela operadora. Consulte as condições na entrega.",
+  cardMachineNoticeActive: true
 };
 
 export const ARIQUEMES_DISTRICTS = [
@@ -559,18 +571,130 @@ export const PRODUCTS = [
   }
 ];
 
-export const PIZZA_FLAVORS = [
-  "Calabresa Especial com Cebola",
-  "Frango com Catupiry",
-  "Muçarela com Tomate e Manjericão",
-  "Bacon Crocante com Muçarela",
-  "Carne Moída Temperada",
-  "Calabresa Picadinha com Ervilha",
-  "Quatro Queijos Cremoso",
-  "Milho com Bacon",
-  "Vegetariana da Casa",
-  "Brócolis com Alho e Queijo"
+export const INITIAL_PIZZA_FLAVORS = [
+  {
+    id: "calabresa",
+    name: "Calabresa Especial com Cebola",
+    price: 40.00,
+    category: "salgadas",
+    description: "Molho de tomate artesanal, muçarela derretida, calabresa fatiada crocante, cebola e orégano.",
+    isAvailable: true
+  },
+  {
+    id: "frango-catupiry",
+    name: "Frango com Catupiry",
+    price: 40.00,
+    category: "salgadas",
+    description: "Peito de frango desfiado temperado, muçarela, o legítimo Catupiry cremoso e orégano.",
+    isAvailable: true
+  },
+  {
+    id: "mucarela",
+    name: "Muçarela com Tomate e Manjericão",
+    price: 35.00,
+    category: "salgadas",
+    description: "Muçarela de primeira qualidade, rodelas de tomate fresco selecionado, manjericão e orégano.",
+    isAvailable: true
+  },
+  {
+    id: "bacon-crocante",
+    name: "Bacon Crocante com Muçarela",
+    price: 40.00,
+    category: "salgadas",
+    description: "Cubos crocantes e dourados de bacon, queijo muçarela derretido e toque de orégano.",
+    isAvailable: true
+  },
+  {
+    id: "carne-moida",
+    name: "Carne Moída Temperada",
+    price: 40.00,
+    category: "salgadas",
+    description: "Carne moída de primeira muito bem refogada com especiarias da casa, queijo muçarela e orégano.",
+    isAvailable: true
+  },
+  {
+    id: "calabresa-picadinha",
+    name: "Calabresa Picadinha com Ervilha",
+    price: 40.00,
+    category: "salgadas",
+    description: "Calabresa especial picadinha, ervilhas frescas crocantes, muçarela derretida e orégano.",
+    isAvailable: true
+  },
+  {
+    id: "quatro-queijos",
+    name: "Quatro Queijos Cremoso",
+    price: 45.00,
+    category: "especiais",
+    description: "A harmonia perfeita entre muçarela especial, Catupiry cremoso, provolone defumado e parmesão.",
+    isAvailable: true
+  },
+  {
+    id: "milho-bacon",
+    name: "Milho com Bacon",
+    price: 40.00,
+    category: "salgadas",
+    description: "Milho verde doce e suculento, bacon dourado em cubos, queijo muçarela e orégano.",
+    isAvailable: true
+  },
+  {
+    id: "vegetariana",
+    name: "Vegetariana da Casa",
+    price: 40.00,
+    category: "salgadas",
+    description: "Milho verde, ervilhas frescas, azeitonas fatiadas, rodelas de tomate, cebola e muçarela.",
+    isAvailable: true
+  },
+  {
+    id: "brocolis-alho",
+    name: "Brócolis com Alho e Queijo",
+    price: 40.00,
+    category: "salgadas",
+    description: "Brócolis frescos salteados no azeite com alho dourado crocante e muçarela derretida.",
+    isAvailable: true
+  },
+  {
+    id: "carne-seca-catupiry",
+    name: "Carne Seca com Catupiry (Gourmet)",
+    price: 50.00,
+    category: "especiais",
+    description: "Carne seca desfiada de primeiríssima, cebola roxa fininha e generoso Catupiry cremoso.",
+    isAvailable: true
+  },
+  {
+    id: "camarao-especial",
+    name: "Camarão Especial com Cream Cheese (Nobre)",
+    price: 65.00,
+    category: "especiais",
+    description: "Camarões selecionados ao alho e azeite, cream cheese cremoso, muçarela e toque de cheiro-verde.",
+    isAvailable: true
+  },
+  {
+    id: "brigadeiro-gourmet",
+    name: "Brigadeiro Gourmet com Granulado",
+    price: 40.00,
+    category: "doces",
+    description: "Chocolate ao leite nobre cremoso, granulado de puro cacau e leve toque suave de queijo.",
+    isAvailable: true
+  },
+  {
+    id: "banana-canela",
+    name: "Banana com Canela e Leite Condensado",
+    price: 40.00,
+    category: "doces",
+    description: "Fatias de banana fresca, leite condensado artesanal, queijo muçarela e canela em pó.",
+    isAvailable: true
+  },
+  {
+    id: "romeu-julieta",
+    name: "Romeu e Julieta Nobre",
+    price: 40.00,
+    category: "doces",
+    description: "Goiabada cascão cremosa derretida harmonizada com abundância de queijo muçarela especial.",
+    isAvailable: true
+  }
 ];
+
+export const PIZZA_FLAVORS = INITIAL_PIZZA_FLAVORS.map(f => f.name);
 
 export const DEFAULT_PROMO_SETTINGS = {
   bannerActive: true,
@@ -640,7 +764,17 @@ export function getStoredRestaurantInfo() {
     if (saved) {
       const parsed = JSON.parse(saved);
       if (parsed && typeof parsed === 'object') {
-        return { ...RESTAURANT_INFO, ...parsed };
+        const mergedSettings = {
+          ...RESTAURANT_INFO.cardMachineSettings,
+          ...(parsed.cardMachineSettings || {})
+        };
+        return { 
+          ...RESTAURANT_INFO, 
+          ...parsed,
+          cardMachineSettings: mergedSettings,
+          cardMachineNotice: parsed.cardMachineNotice !== undefined ? parsed.cardMachineNotice : RESTAURANT_INFO.cardMachineNotice,
+          cardMachineNoticeActive: parsed.cardMachineNoticeActive !== undefined ? parsed.cardMachineNoticeActive : RESTAURANT_INFO.cardMachineNoticeActive
+        };
       }
     }
   } catch (e) {
@@ -659,3 +793,129 @@ export function saveStoredRestaurantInfo(info) {
     console.error("Error saving restaurant info:", e);
   }
 }
+
+export function getStoredPizzaFlavors() {
+  try {
+    const saved = localStorage.getItem("el_shadday_pizza_flavors_v2");
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        // Normaliza para garantir formato uniforme
+        return parsed.map((item, idx) => {
+          if (typeof item === 'string') {
+            return {
+              id: `flavor-${item.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
+              name: item,
+              price: 40.00,
+              category: 'salgadas',
+              description: '',
+              isAvailable: true
+            };
+          }
+          return {
+            id: item.id || `flavor-${Date.now()}-${idx}`,
+            name: item.name || '',
+            price: typeof item.price === 'number' ? item.price : (parseFloat(item.price) || 40.00),
+            category: item.category || 'salgadas',
+            description: item.description || '',
+            isAvailable: item.isAvailable !== false
+          };
+        });
+      }
+    }
+  } catch (e) {
+    console.error("Error reading stored pizza flavors:", e);
+  }
+  return INITIAL_PIZZA_FLAVORS;
+}
+
+export function saveStoredPizzaFlavors(flavors) {
+  try {
+    localStorage.setItem("el_shadday_pizza_flavors_v2", JSON.stringify(flavors));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent("pizza_flavors_updated", { detail: flavors }));
+    }
+  } catch (e) {
+    console.error("Error saving stored pizza flavors:", e);
+  }
+}
+
+/**
+ * Regra de cálculo de Pizza por Sabor (Regra do Estabelecimento):
+ * "Se eu pedir um sabor mais caro, vai agregar na pizza...
+ *  Se eu fizer uma pizza pequena de R$ 20 e pedir um valor de 120, a pizza vai ficar 120, que sempre vai puxar para o maior valor."
+ * 
+ * - Se os sabores tiverem preço igual ou inferior ao preço base da pizza, mantém o preço base.
+ * - Se algum sabor escolhido for maior que o preço base, puxa para o MAIOR valor entre os sabores escolhidos.
+ */
+export function calculatePizzaPrice(basePrice, selectedFlavors) {
+  const base = Number(basePrice) || 0;
+  if (!selectedFlavors || selectedFlavors.length === 0) {
+    return base;
+  }
+  
+  const flavorPrices = selectedFlavors.map(f => {
+    if (!f) return 0;
+    if (typeof f === 'object') {
+      return Number(f.price) || 0;
+    }
+    // Caso seja string, busca o sabor cadastrado
+    const stored = getStoredPizzaFlavors();
+    const found = stored.find(s => s.name === f);
+    return found ? (Number(found.price) || 0) : 0;
+  });
+
+  const maxFlavorPrice = Math.max(0, ...flavorPrices);
+  return Math.max(base, maxFlavorPrice);
+}
+
+/**
+ * Calcula o valor da taxa da maquininha de cartão
+ * @param {number} subtotal 
+ * @param {object} cardSettings 
+ * @param {'credito' | 'debito'} cardType 
+ * @returns {number}
+ */
+export function calculateCardMachineFee(subtotal, cardSettings, cardType = 'credito') {
+  if (!cardSettings || cardSettings.active === false) return 0;
+  const numSubtotal = Number(subtotal) || 0;
+  if (numSubtotal <= 0) return 0;
+
+  if (cardSettings.type === 'fixed') {
+    return Math.max(0, Number(cardSettings.fixedRate) || 0);
+  }
+  if (cardSettings.type === 'split') {
+    const rate = cardType === 'debito' 
+      ? (Number(cardSettings.debitRate) || 0) 
+      : (Number(cardSettings.creditRate) || 0);
+    return Math.round((numSubtotal * (rate / 100)) * 100) / 100;
+  }
+  // Padrão: 'percentage'
+  const rate = Number(cardSettings.percentageRate) || 0;
+  return Math.round((numSubtotal * (rate / 100)) * 100) / 100;
+}
+
+/**
+ * Retorna o texto formatado do aviso da taxa da maquininha
+ * @param {object} cardSettings 
+ * @returns {string}
+ */
+export function getCardMachineNoticeText(cardSettings) {
+  if (!cardSettings || cardSettings.active === false) return '';
+  if (cardSettings.customNotice && cardSettings.customNotice.trim()) {
+    return cardSettings.customNotice.trim();
+  }
+  if (cardSettings.type === 'fixed') {
+    const feeStr = (Number(cardSettings.fixedRate) || 0).toFixed(2).replace('.', ',');
+    return `⚠️ Pagamentos no cartão possuem taxa fixa de R$ ${feeStr} da maquininha cobrada pela operadora.`;
+  }
+  if (cardSettings.type === 'split') {
+    const debStr = (Number(cardSettings.debitRate) || 0).toString().replace('.', ',');
+    const credStr = (Number(cardSettings.creditRate) || 0).toString().replace('.', ',');
+    return `⚠️ Pagamentos na maquininha possuem taxa de ${debStr}% no Débito e ${credStr}% no Crédito cobrada pela operadora.`;
+  }
+  const pctStr = (Number(cardSettings.percentageRate) || 0).toString().replace('.', ',');
+  return `⚠️ Pagamentos no cartão possuem acréscimo de ${pctStr}% referente à taxa da maquininha cobrada pela operadora.`;
+}
+
+

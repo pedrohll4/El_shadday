@@ -7,20 +7,28 @@ import {
   MessageSquare, Phone, ShoppingBag, Store, Copy, ChevronRight,
   AlertCircle, X, ShieldAlert, Sparkles, CheckCheck,
   Camera, RotateCcw, Edit, Edit2, Eye, EyeOff, Tag, Percent,
-  Utensils, ToggleLeft, ToggleRight, Save, Layers, CheckSquare
+  Utensils, ToggleLeft, ToggleRight, Save, Layers, CheckSquare,
+  Pizza, ArrowUpRight, Info, CreditCard
 } from 'lucide-react';
 import { 
   RESTAURANT_INFO, 
   ARIQUEMES_DISTRICTS, 
   CATEGORIES, 
   PRODUCTS,
+  INITIAL_PIZZA_FLAVORS,
   getStoredProducts,
   saveStoredProducts,
   getStoredPromoSettings,
   saveStoredPromoSettings,
   getStoredRestaurantInfo,
-  saveStoredRestaurantInfo
+  saveStoredRestaurantInfo,
+  getStoredPizzaFlavors,
+  saveStoredPizzaFlavors,
+  calculatePizzaPrice,
+  calculateCardMachineFee,
+  getCardMachineNoticeText
 } from '../data/menuData';
+import { PizzaCustomizerModal } from './PizzaCustomizerModal';
 import { 
   GALLERY_CATEGORIES, 
   INITIAL_BUFFET_GALLERY, 
@@ -222,6 +230,23 @@ export function AdminDashboard({
   const [prodFormIsAvailable, setProdFormIsAvailable] = useState(true);
   const [prodFormIsPromo, setProdFormIsPromo] = useState(false);
   const [prodFormBordaGratis, setProdFormBordaGratis] = useState(false);
+  const [prodFormMaxSabores, setProdFormMaxSabores] = useState('2');
+  const [prodFormTamanho, setProdFormTamanho] = useState('Família (8 fatias)');
+
+  // Pizza Flavors Management State
+  const [pizzaFlavors, setPizzaFlavors] = useState(() => getStoredPizzaFlavors());
+  const [flavorSearch, setFlavorSearch] = useState('');
+  const [flavorCategoryFilter, setFlavorCategoryFilter] = useState('todos');
+  const [isFlavorModalOpen, setIsFlavorModalOpen] = useState(false);
+  const [editingFlavor, setEditingFlavor] = useState(null);
+  const [flavorFormName, setFlavorFormName] = useState('');
+  const [flavorFormPrice, setFlavorFormPrice] = useState('40.00');
+  const [flavorFormCategory, setFlavorFormCategory] = useState('salgadas');
+  const [flavorFormDescription, setFlavorFormDescription] = useState('');
+  const [flavorFormIsAvailable, setFlavorFormIsAvailable] = useState(true);
+
+  // PDV Custom Pizza Modal
+  const [pdvPizzaToCustomize, setPdvPizzaToCustomize] = useState(null);
 
   // Promo Form Fields
   const [tempBannerText, setTempBannerText] = useState(promoSettings.bannerText || '');
@@ -240,6 +265,25 @@ export function AdminDashboard({
   const [tempStorePixKey, setTempStorePixKey] = useState(restaurantSettings.pixKey || '69992228682');
   const [tempStorePixName, setTempStorePixName] = useState(restaurantSettings.pixName || 'El Shadday Delivery');
   const [tempStoreOpeningHours, setTempStoreOpeningHours] = useState(restaurantSettings.openingHours || '');
+  const [tempStoreCardMachineNotice, setTempStoreCardMachineNotice] = useState(
+    restaurantSettings.cardMachineNotice !== undefined 
+      ? restaurantSettings.cardMachineNotice 
+      : '⚠️ Pagamentos no cartão (débito ou crédito) possuem taxa da maquininha cobrada pela operadora. Consulte as condições na entrega.'
+  );
+  const [tempStoreCardMachineNoticeActive, setTempStoreCardMachineNoticeActive] = useState(
+    restaurantSettings.cardMachineNoticeActive !== false
+  );
+
+  // Card Machine Settings Form Fields
+  const currentCardSettings = restaurantSettings.cardMachineSettings || RESTAURANT_INFO.cardMachineSettings || {};
+  const [tempCardActive, setTempCardActive] = useState(currentCardSettings.active !== false);
+  const [tempCardType, setTempCardType] = useState(currentCardSettings.type || 'percentage');
+  const [tempCardPercentage, setTempCardPercentage] = useState(currentCardSettings.percentageRate !== undefined ? currentCardSettings.percentageRate.toString() : '3.5');
+  const [tempCardFixed, setTempCardFixed] = useState(currentCardSettings.fixedRate !== undefined ? currentCardSettings.fixedRate.toString() : '2.00');
+  const [tempCardDebit, setTempCardDebit] = useState(currentCardSettings.debitRate !== undefined ? currentCardSettings.debitRate.toString() : '2.0');
+  const [tempCardCredit, setTempCardCredit] = useState(currentCardSettings.creditRate !== undefined ? currentCardSettings.creditRate.toString() : '4.5');
+  const [tempCardAutoAdd, setTempCardAutoAdd] = useState(currentCardSettings.autoAddToTotal !== false);
+  const [tempCardCustomNotice, setTempCardCustomNotice] = useState(currentCardSettings.customNotice || '');
 
   // Supabase Custom Config State
   const [customSupabaseUrl, setCustomSupabaseUrl] = useState(() => {
@@ -257,7 +301,7 @@ export function AdminDashboard({
     setTimeout(() => setMenuFeedback(''), 3500);
   };
 
-  // Sync menu & promos across tabs/windows
+  // Sync menu & promos & pizza flavors across tabs/windows
   useEffect(() => {
     const handleProductsSync = (e) => {
       if (e?.detail && Array.isArray(e.detail) && e.detail.length > 0) {
@@ -271,16 +315,47 @@ export function AdminDashboard({
       else setPromoSettings(getStoredPromoSettings());
     };
     const handleStoreSync = (e) => {
-      if (e?.detail) setRestaurantSettings(e.detail);
-      else setRestaurantSettings(getStoredRestaurantInfo());
+      const data = e?.detail || getStoredRestaurantInfo();
+      setRestaurantSettings(data);
+      if (data) {
+        if (data.name !== undefined) setTempStoreName(data.name);
+        if (data.phone !== undefined) setTempStorePhone(data.phone);
+        if (data.phoneFormatted !== undefined) setTempStorePhoneFormatted(data.phoneFormatted);
+        if (data.address !== undefined) setTempStoreAddress(data.address);
+        if (data.deliveryTime !== undefined) setTempStoreDeliveryTime(data.deliveryTime);
+        if (data.pixKey !== undefined) setTempStorePixKey(data.pixKey);
+        if (data.pixName !== undefined) setTempStorePixName(data.pixName);
+        if (data.openingHours !== undefined) setTempStoreOpeningHours(data.openingHours);
+        if (data.cardMachineNotice !== undefined) setTempStoreCardMachineNotice(data.cardMachineNotice);
+        if (data.cardMachineNoticeActive !== undefined) setTempStoreCardMachineNoticeActive(data.cardMachineNoticeActive);
+        if (data.cardMachineSettings) {
+          const cs = data.cardMachineSettings;
+          if (cs.active !== undefined) setTempCardActive(cs.active);
+          if (cs.type !== undefined) setTempCardType(cs.type);
+          if (cs.percentageRate !== undefined) setTempCardPercentage(cs.percentageRate.toString());
+          if (cs.fixedRate !== undefined) setTempCardFixed(cs.fixedRate.toString());
+          if (cs.debitRate !== undefined) setTempCardDebit(cs.debitRate.toString());
+          if (cs.creditRate !== undefined) setTempCardCredit(cs.creditRate.toString());
+          if (cs.autoAddToTotal !== undefined) setTempCardAutoAdd(cs.autoAddToTotal);
+          if (cs.customNotice !== undefined) setTempCardCustomNotice(cs.customNotice);
+        }
+      }
+    };
+    const handleFlavorsSync = (e) => {
+      if (e?.detail && Array.isArray(e.detail)) {
+        setPizzaFlavors(e.detail);
+      } else {
+        setPizzaFlavors(getStoredPizzaFlavors());
+      }
     };
 
     window.addEventListener('delivery_products_updated', handleProductsSync);
     window.addEventListener('delivery_promos_updated', handlePromosSync);
     window.addEventListener('delivery_restaurant_info_updated', handleStoreSync);
+    window.addEventListener('pizza_flavors_updated', handleFlavorsSync);
     window.addEventListener('storage', handleProductsSync);
 
-    // Hydrate products & promo settings from Supabase if configured
+    // Hydrate products & promo settings & pizza flavors & store info from Supabase if configured
     if (isSupabaseConfigured && supabase) {
       supabase
         .from('company_settings')
@@ -297,6 +372,40 @@ export function AdminDashboard({
               setPromoSettings(data.promo_settings);
               saveStoredPromoSettings(data.promo_settings);
             }
+            if (Array.isArray(data.pizza_flavors) && data.pizza_flavors.length > 0) {
+              setPizzaFlavors(data.pizza_flavors);
+              saveStoredPizzaFlavors(data.pizza_flavors);
+            }
+            if (data.card_machine_notice !== undefined || data.name || data.card_machine_settings) {
+              const currentStore = getStoredRestaurantInfo();
+              const updatedStore = {
+                ...currentStore,
+                ...(data.name ? { name: data.name } : {}),
+                ...(data.phone ? { phone: data.phone } : {}),
+                ...(data.phone_display ? { phoneFormatted: data.phone_display } : {}),
+                ...(data.address ? { address: data.address } : {}),
+                ...(data.pix_key ? { pixKey: data.pix_key } : {}),
+                ...(data.pix_name ? { pixName: data.pix_name } : {}),
+                ...(data.card_machine_notice !== undefined ? { cardMachineNotice: data.card_machine_notice } : {}),
+                ...(data.card_machine_notice_active !== undefined ? { cardMachineNoticeActive: data.card_machine_notice_active } : {}),
+                ...(data.card_machine_settings ? { cardMachineSettings: data.card_machine_settings } : {})
+              };
+              setRestaurantSettings(updatedStore);
+              saveStoredRestaurantInfo(updatedStore);
+              if (updatedStore.cardMachineNotice !== undefined) setTempStoreCardMachineNotice(updatedStore.cardMachineNotice);
+              if (updatedStore.cardMachineNoticeActive !== undefined) setTempStoreCardMachineNoticeActive(updatedStore.cardMachineNoticeActive);
+              if (updatedStore.cardMachineSettings) {
+                const cs = updatedStore.cardMachineSettings;
+                if (cs.active !== undefined) setTempCardActive(cs.active);
+                if (cs.type !== undefined) setTempCardType(cs.type);
+                if (cs.percentageRate !== undefined) setTempCardPercentage(cs.percentageRate.toString());
+                if (cs.fixedRate !== undefined) setTempCardFixed(cs.fixedRate.toString());
+                if (cs.debitRate !== undefined) setTempCardDebit(cs.debitRate.toString());
+                if (cs.creditRate !== undefined) setTempCardCredit(cs.creditRate.toString());
+                if (cs.autoAddToTotal !== undefined) setTempCardAutoAdd(cs.autoAddToTotal);
+                if (cs.customNotice !== undefined) setTempCardCustomNotice(cs.customNotice);
+              }
+            }
           }
         });
     }
@@ -305,6 +414,7 @@ export function AdminDashboard({
       window.removeEventListener('delivery_products_updated', handleProductsSync);
       window.removeEventListener('delivery_promos_updated', handlePromosSync);
       window.removeEventListener('delivery_restaurant_info_updated', handleStoreSync);
+      window.removeEventListener('pizza_flavors_updated', handleFlavorsSync);
       window.removeEventListener('storage', handleProductsSync);
     };
   }, []);
@@ -347,6 +457,8 @@ export function AdminDashboard({
     setProdFormIsAvailable(true);
     setProdFormIsPromo(false);
     setProdFormBordaGratis(false);
+    setProdFormMaxSabores('2');
+    setProdFormTamanho('Família (8 fatias)');
     setIsProductModalOpen(true);
   };
 
@@ -363,6 +475,8 @@ export function AdminDashboard({
     setProdFormIsAvailable(prod.isAvailable !== false);
     setProdFormIsPromo(!!prod.isPromo || !!prod.originalPrice);
     setProdFormBordaGratis(!!prod.bordaGratis);
+    setProdFormMaxSabores(prod.maxSabores !== undefined ? prod.maxSabores.toString() : '2');
+    setProdFormTamanho(prod.tamanho || (prod.categoryId === 'pizzas' ? 'Família (8 fatias)' : ''));
     setIsProductModalOpen(true);
   };
 
@@ -393,7 +507,9 @@ export function AdminDashboard({
       isPromo: prodFormIsPromo,
       bordaGratis: prodFormBordaGratis,
       isBox: editingProduct ? editingProduct.isBox : (prodFormCategory === 'caixas'),
-      isPizzaCustomizer: editingProduct ? editingProduct.isPizzaCustomizer : (prodFormCategory === 'pizzas')
+      isPizzaCustomizer: editingProduct ? (editingProduct.isPizzaCustomizer ?? (prodFormCategory === 'pizzas')) : (prodFormCategory === 'pizzas'),
+      maxSabores: prodFormCategory === 'pizzas' ? (parseInt(prodFormMaxSabores) || 2) : editingProduct?.maxSabores,
+      tamanho: prodFormCategory === 'pizzas' ? (prodFormTamanho.trim() || 'Família (8 fatias)') : editingProduct?.tamanho
     };
 
     let updated;
@@ -517,13 +633,158 @@ export function AdminDashboard({
       deliveryTime: tempStoreDeliveryTime.trim(),
       pixKey: tempStorePixKey.trim(),
       pixName: tempStorePixName.trim(),
-      openingHours: tempStoreOpeningHours.trim()
+      openingHours: tempStoreOpeningHours.trim(),
+      cardMachineNotice: tempStoreCardMachineNotice.trim(),
+      cardMachineNoticeActive: tempStoreCardMachineNoticeActive
     };
     setRestaurantSettings(newStore);
     saveStoredRestaurantInfo(newStore);
     dispatchConfigSync('STORE_UPDATE', newStore);
-    triggerMenuToast('Dados do restaurante atualizados com sucesso!');
+    triggerMenuToast('Dados do restaurante e taxa da maquininha atualizados com sucesso!');
   };
+
+  const handleSaveCardMachineSettings = (e) => {
+    if (e) e.preventDefault();
+    const pctNum = parseFloat(tempCardPercentage.toString().replace(',', '.')) || 0;
+    const fixNum = parseFloat(tempCardFixed.toString().replace(',', '.')) || 0;
+    const debNum = parseFloat(tempCardDebit.toString().replace(',', '.')) || 0;
+    const credNum = parseFloat(tempCardCredit.toString().replace(',', '.')) || 0;
+
+    const newCardSettings = {
+      active: tempCardActive,
+      type: tempCardType,
+      percentageRate: pctNum,
+      fixedRate: fixNum,
+      debitRate: debNum,
+      creditRate: credNum,
+      autoAddToTotal: tempCardAutoAdd,
+      customNotice: tempCardCustomNotice.trim()
+    };
+
+    const noticeText = getCardMachineNoticeText(newCardSettings);
+
+    const newStore = {
+      ...restaurantSettings,
+      cardMachineSettings: newCardSettings,
+      cardMachineNotice: noticeText,
+      cardMachineNoticeActive: tempCardActive
+    };
+
+    setRestaurantSettings(newStore);
+    setTempStoreCardMachineNotice(noticeText);
+    setTempStoreCardMachineNoticeActive(tempCardActive);
+    saveStoredRestaurantInfo(newStore);
+    dispatchConfigSync('STORE_UPDATE', newStore);
+    triggerMenuToast('Taxa da maquininha salva e sincronizada com sucesso!');
+  };
+
+  // Handlers for Pizza Flavors
+  const handleOpenCreateFlavor = () => {
+    setEditingFlavor(null);
+    setFlavorFormName('');
+    setFlavorFormPrice('40.00');
+    setFlavorFormCategory('salgadas');
+    setFlavorFormDescription('');
+    setFlavorFormIsAvailable(true);
+    setIsFlavorModalOpen(true);
+  };
+
+  const handleOpenEditFlavor = (flavor) => {
+    setEditingFlavor(flavor);
+    setFlavorFormName(flavor.name || '');
+    setFlavorFormPrice(flavor.price !== undefined ? flavor.price.toString() : '40.00');
+    setFlavorFormCategory(flavor.category || 'salgadas');
+    setFlavorFormDescription(flavor.description || '');
+    setFlavorFormIsAvailable(flavor.isAvailable !== false);
+    setIsFlavorModalOpen(true);
+  };
+
+  const handleSaveFlavor = async (e) => {
+    e.preventDefault();
+    if (!flavorFormName.trim()) {
+      alert('Informe o nome do sabor.');
+      return;
+    }
+    const priceNum = parseFloat(flavorFormPrice.toString().replace(',', '.'));
+    if (isNaN(priceNum) || priceNum <= 0) {
+      alert('Informe um preço válido para o sabor (ex: 40.00 ou 120.00).');
+      return;
+    }
+
+    const savedFlavor = {
+      id: editingFlavor ? editingFlavor.id : `flavor_${Date.now()}`,
+      name: flavorFormName.trim(),
+      price: priceNum,
+      category: flavorFormCategory,
+      description: flavorFormDescription.trim(),
+      isAvailable: flavorFormIsAvailable
+    };
+
+    let updated;
+    if (editingFlavor) {
+      updated = pizzaFlavors.map(f => f.id === editingFlavor.id ? savedFlavor : f);
+      triggerMenuToast(`Sabor "${savedFlavor.name}" atualizado com sucesso!`);
+    } else {
+      updated = [...pizzaFlavors, savedFlavor];
+      triggerMenuToast(`Novo sabor "${savedFlavor.name}" cadastrado com sucesso!`);
+    }
+
+    setPizzaFlavors(updated);
+    saveStoredPizzaFlavors(updated);
+    dispatchConfigSync('PIZZA_FLAVORS_UPDATE', updated);
+    setIsFlavorModalOpen(false);
+  };
+
+  const handleToggleFlavorAvailability = (flavorId) => {
+    const updated = pizzaFlavors.map(f => {
+      if (f.id === flavorId) {
+        const nextState = f.isAvailable === false ? true : false;
+        triggerMenuToast(nextState ? `Sabor "${f.name}" ativado (disponível)!` : `Sabor "${f.name}" pausado (esgotado)!`);
+        return { ...f, isAvailable: nextState };
+      }
+      return f;
+    });
+    setPizzaFlavors(updated);
+    saveStoredPizzaFlavors(updated);
+    dispatchConfigSync('PIZZA_FLAVORS_UPDATE', updated);
+  };
+
+  const handleDeleteFlavor = (flavorId) => {
+    const flavor = pizzaFlavors.find(f => f.id === flavorId);
+    if (!window.confirm(`Tem certeza que deseja excluir o sabor "${flavor?.name || ''}"?`)) return;
+    const updated = pizzaFlavors.filter(f => f.id !== flavorId);
+    setPizzaFlavors(updated);
+    saveStoredPizzaFlavors(updated);
+    dispatchConfigSync('PIZZA_FLAVORS_UPDATE', updated);
+    triggerMenuToast('Sabor de pizza excluído.');
+  };
+
+  const handleResetFlavorsToDefault = () => {
+    if (!window.confirm('Deseja restaurar todos os sabores padrão de pizza e valores originais?')) return;
+    setPizzaFlavors(INITIAL_PIZZA_FLAVORS);
+    saveStoredPizzaFlavors(INITIAL_PIZZA_FLAVORS);
+    dispatchConfigSync('PIZZA_FLAVORS_UPDATE', INITIAL_PIZZA_FLAVORS);
+    triggerMenuToast('Sabores de pizza restaurados para o padrão com sucesso!');
+  };
+
+  // Filtered Pizza Flavors in Admin
+  const filteredAdminFlavors = useMemo(() => {
+    let list = pizzaFlavors;
+    if (flavorCategoryFilter === 'pausados') {
+      list = list.filter(f => f.isAvailable === false);
+    } else if (flavorCategoryFilter !== 'todos') {
+      list = list.filter(f => (f.category || 'salgadas') === flavorCategoryFilter);
+    }
+
+    if (flavorSearch.trim()) {
+      const q = flavorSearch.toLowerCase().trim();
+      list = list.filter(f => 
+        f.name.toLowerCase().includes(q) ||
+        (f.description || '').toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [pizzaFlavors, flavorCategoryFilter, flavorSearch]);
 
   // Filtered products in Admin
   const filteredAdminProducts = useMemo(() => {
@@ -1104,9 +1365,14 @@ export function AdminDashboard({
 
           <button
             type="button"
-            onClick={() => setActiveAdminTab('menu')}
+            onClick={() => {
+              setActiveAdminTab('menu');
+              if (menuSubTab === 'card-fee') {
+                setMenuSubTab('products');
+              }
+            }}
             className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
-              activeAdminTab === 'menu'
+              activeAdminTab === 'menu' && menuSubTab !== 'card-fee'
                 ? 'bg-brand-gold text-dark-950 shadow-glow-gold font-black'
                 : 'bg-dark-800 text-slate-300 hover:bg-dark-750 hover:text-white border border-dark-750'
             }`}
@@ -1114,10 +1380,41 @@ export function AdminDashboard({
             <Utensils className="w-4 h-4" />
             <span>Cardápio & Promoções</span>
             <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
-              activeAdminTab === 'menu' ? 'bg-dark-950 text-brand-gold' : 'bg-dark-900 text-slate-400'
+              activeAdminTab === 'menu' && menuSubTab !== 'card-fee' ? 'bg-dark-950 text-brand-gold' : 'bg-dark-900 text-slate-400'
             }`}>
               {productsList.length}
             </span>
+          </button>
+
+          {/* Botão de Acesso Direto: Taxa da Maquininha */}
+          <button
+            type="button"
+            onClick={() => {
+              setActiveAdminTab('menu');
+              setMenuSubTab('card-fee');
+            }}
+            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
+              activeAdminTab === 'menu' && menuSubTab === 'card-fee'
+                ? 'bg-gradient-to-r from-amber-400 to-brand-gold text-dark-950 shadow-glow-gold font-black ring-2 ring-amber-300'
+                : 'bg-amber-500/15 text-amber-300 hover:bg-amber-500/25 border border-amber-500/40'
+            }`}
+            title="Clique aqui para configurar a taxa da maquininha de cartão"
+          >
+            <CreditCard className="w-4 h-4 text-amber-400" />
+            <span>💳 Taxa da Maquininha</span>
+            {restaurantSettings.cardMachineSettings?.active ? (
+              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-500 text-dark-950 font-black">
+                {restaurantSettings.cardMachineSettings?.type === 'percentage'
+                  ? `${restaurantSettings.cardMachineSettings.percentageRate}%`
+                  : restaurantSettings.cardMachineSettings?.type === 'fixed'
+                  ? `R$ ${restaurantSettings.cardMachineSettings.fixedRate}`
+                  : 'Ativa'}
+              </span>
+            ) : (
+              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-dark-950/80 text-amber-400/80 border border-amber-500/30">
+                Ajustar
+              </span>
+            )}
           </button>
 
           <button
@@ -1750,7 +2047,7 @@ export function AdminDashboard({
                     return (
                       <div
                         key={prod.id}
-                        onClick={() => handleAddProductToPDV(prod, 1)}
+                        onClick={() => prod.isPizzaCustomizer ? setPdvPizzaToCustomize(prod) : handleAddProductToPDV(prod, 1)}
                         className={`p-2.5 rounded-2xl border transition-all cursor-pointer select-none flex items-center justify-between gap-2.5 ${
                           inCart
                             ? 'bg-brand-gold/10 border-brand-gold/60 shadow-sm'
@@ -1843,6 +2140,9 @@ export function AdminDashboard({
                         <div key={item.id} className="p-2 rounded-xl bg-dark-950 border border-dark-800 flex items-center justify-between gap-2">
                           <div className="min-w-0 flex-1">
                             <div className="text-xs font-bold text-white truncate">{item.name}</div>
+                            {item.description && (
+                              <div className="text-[10px] text-slate-400 truncate">{item.description}</div>
+                            )}
                             <div className="text-[11px] text-brand-gold">
                               R$ {(item.price * item.quantity).toFixed(2).replace('.', ',')}
                             </div>
@@ -2034,6 +2334,28 @@ export function AdminDashboard({
                         </div>
                       )}
 
+                      {(pdvPaymentMethod === 'debito' || pdvPaymentMethod === 'credito') && (
+                        <div className="pt-1 space-y-1.5">
+                          {restaurantSettings.cardMachineNoticeActive !== false && restaurantSettings.cardMachineNotice && (
+                            <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-300 flex items-start gap-1.5">
+                              <AlertCircle className="w-3.5 h-3.5 text-amber-400 flex-shrink-0 mt-0.5" />
+                              <span className="leading-tight">{restaurantSettings.cardMachineNotice}</span>
+                            </div>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveAdminTab('menu');
+                              setMenuSubTab('card-fee');
+                            }}
+                            className="text-[11px] font-bold text-amber-400 hover:text-amber-300 underline flex items-center gap-1 cursor-pointer"
+                          >
+                            <CreditCard className="w-3 h-3" />
+                            <span>Configurar / Alterar Valores da Taxa da Maquininha ⚙️</span>
+                          </button>
+                        </div>
+                      )}
+
                       {/* Payment Status Checkbox */}
                       <label className="flex items-center gap-2 pt-1 cursor-pointer select-none">
                         <input
@@ -2122,36 +2444,61 @@ export function AdminDashboard({
                   </div>
                   <div>
                     <h2 className="font-display font-extrabold text-base sm:text-lg text-white flex items-center gap-2">
-                      <span>Gestão Completa de Cardápio & Promoções</span>
+                      <span>Gestão Completa de Cardápio & Sabores</span>
                       <span className="text-[10px] px-2 py-0.5 rounded-full bg-brand-gold/20 text-brand-gold border border-brand-gold/30 font-bold">
-                        {productsList.length} itens
+                        {menuSubTab === 'flavors' ? `${pizzaFlavors.length} sabores` : `${productsList.length} itens`}
                       </span>
                     </h2>
                     <p className="text-xs text-slate-400">
-                      Crie novos itens, edite preços, pause produtos esgotados e configure promoções e cupons da loja.
+                      Crie novos itens, edite preços de pizzas e sabores individuais, pause produtos esgotados e configure promoções.
                     </p>
                   </div>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={handleOpenCreateProduct}
-                    className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-brand-gold to-amber-400 text-dark-950 font-black text-xs hover:brightness-110 shadow-glow-gold flex items-center gap-2 transition-transform active:scale-95 cursor-pointer"
-                  >
-                    <Plus className="w-4 h-4 stroke-[3]" />
-                    <span>+ Criar Novo Produto</span>
-                  </button>
+                  {menuSubTab === 'flavors' ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={handleOpenCreateFlavor}
+                        className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-brand-gold to-amber-400 text-dark-950 font-black text-xs hover:brightness-110 shadow-glow-gold flex items-center gap-2 transition-transform active:scale-95 cursor-pointer"
+                      >
+                        <Plus className="w-4 h-4 stroke-[3]" />
+                        <span>+ Novo Sabor de Pizza</span>
+                      </button>
 
-                  <button
-                    type="button"
-                    onClick={handleResetMenuToDefault}
-                    className="px-3 py-2 rounded-xl bg-dark-800 hover:bg-dark-750 text-slate-300 hover:text-white text-xs font-semibold border border-dark-700 flex items-center gap-1.5 transition-colors cursor-pointer"
-                    title="Restaurar o cardápio original"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5 text-brand-gold" />
-                    <span>Restaurar Padrão</span>
-                  </button>
+                      <button
+                        type="button"
+                        onClick={handleResetFlavorsToDefault}
+                        className="px-3 py-2 rounded-xl bg-dark-800 hover:bg-dark-750 text-slate-300 hover:text-white text-xs font-semibold border border-dark-700 flex items-center gap-1.5 transition-colors cursor-pointer"
+                        title="Restaurar os sabores padrão de pizza"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5 text-brand-gold" />
+                        <span>Restaurar Sabores Padrão</span>
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={handleOpenCreateProduct}
+                        className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-brand-gold to-amber-400 text-dark-950 font-black text-xs hover:brightness-110 shadow-glow-gold flex items-center gap-2 transition-transform active:scale-95 cursor-pointer"
+                      >
+                        <Plus className="w-4 h-4 stroke-[3]" />
+                        <span>+ Criar Novo Produto</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleResetMenuToDefault}
+                        className="px-3 py-2 rounded-xl bg-dark-800 hover:bg-dark-750 text-slate-300 hover:text-white text-xs font-semibold border border-dark-700 flex items-center gap-1.5 transition-colors cursor-pointer"
+                        title="Restaurar o cardápio original"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5 text-brand-gold" />
+                        <span>Restaurar Padrão</span>
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -2163,7 +2510,7 @@ export function AdminDashboard({
                 </div>
               )}
 
-              {/* Sub-tabs: Produtos | Promoções & Cupons | Dados do Restaurante */}
+              {/* Sub-tabs: Produtos | Sabores de Pizza | Promoções & Cupons | Dados do Restaurante */}
               <div className="flex items-center gap-2 mt-5 border-b border-dark-800 pb-3 overflow-x-auto scrollbar-none">
                 <button
                   type="button"
@@ -2176,6 +2523,35 @@ export function AdminDashboard({
                 >
                   <Package className="w-3.5 h-3.5" />
                   <span>Produtos & Preços ({productsList.length})</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setMenuSubTab('flavors')}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                    menuSubTab === 'flavors'
+                      ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
+                      : 'bg-dark-800/80 text-slate-400 hover:text-white hover:bg-dark-800'
+                  }`}
+                >
+                  <Pizza className="w-3.5 h-3.5" />
+                  <span>Sabores de Pizza ({pizzaFlavors.length})</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setMenuSubTab('card-fee')}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                    menuSubTab === 'card-fee'
+                      ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
+                      : 'bg-dark-800/80 text-slate-400 hover:text-white hover:bg-dark-800'
+                  }`}
+                >
+                  <CreditCard className="w-3.5 h-3.5 text-amber-400" />
+                  <span>💳 Taxa da Maquininha</span>
+                  {restaurantSettings.cardMachineSettings?.active && (
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                  )}
                 </button>
 
                 <button
@@ -2447,6 +2823,484 @@ export function AdminDashboard({
                 </div>
               )}
 
+              {/* SUBTAB: SABORES DE PIZZA & PRECIFICAÇÃO */}
+              {menuSubTab === 'flavors' && (
+                <div className="mt-5 space-y-5">
+                  {/* Informational Callout Box explaining the rule */}
+                  <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-amber-500/10 via-brand-gold/15 to-amber-500/10 border border-brand-gold/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-2xl bg-brand-gold/20 text-brand-gold flex items-center justify-center border border-brand-gold/30 flex-shrink-0 mt-0.5">
+                        <Flame className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className="font-display font-extrabold text-sm sm:text-base text-white flex items-center gap-2">
+                          <span>Regra do Maior Valor Ativa</span>
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-brand-gold/20 text-brand-gold font-bold border border-brand-gold/30">
+                            Automático
+                          </span>
+                        </h3>
+                        <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                          Ao montar uma pizza (ex: Família ou Gigante), o sistema puxa automaticamente para o <strong>MAIOR valor</strong> entre os sabores selecionados. Sabores com valor igual ou inferior ao preço base da pizza não geram acréscimo. Se o cliente escolher um sabor mais caro (ex: R$ 45, R$ 55, R$ 120), a pizza será cobrada por esse maior valor!
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Search and Filters */}
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                    <div className="relative flex-1 max-w-md">
+                      <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <input
+                        type="text"
+                        placeholder="Buscar sabor por nome ou ingredientes..."
+                        value={flavorSearch}
+                        onChange={(e) => setFlavorSearch(e.target.value)}
+                        className="w-full pl-9 pr-4 py-2 rounded-xl bg-dark-800 border border-dark-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand-gold"
+                      />
+                    </div>
+
+                    <div className="text-xs text-slate-400 flex items-center gap-2">
+                      <span>Exibindo:</span>
+                      <span className="font-mono text-brand-gold font-bold">{filteredAdminFlavors.length}</span>
+                      <span>de {pizzaFlavors.length} sabores</span>
+                    </div>
+                  </div>
+
+                  {/* Category Pills */}
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+                    <button
+                      type="button"
+                      onClick={() => setFlavorCategoryFilter('todos')}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold whitespace-nowrap transition-colors cursor-pointer ${
+                        flavorCategoryFilter === 'todos'
+                          ? 'bg-brand-gold text-dark-950 font-black'
+                          : 'bg-dark-800 text-slate-300 hover:bg-dark-750 hover:text-white'
+                      }`}
+                    >
+                      Todos ({pizzaFlavors.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFlavorCategoryFilter('salgadas')}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold whitespace-nowrap transition-colors cursor-pointer ${
+                        flavorCategoryFilter === 'salgadas'
+                          ? 'bg-brand-gold text-dark-950 font-black'
+                          : 'bg-dark-800 text-slate-300 hover:bg-dark-750 hover:text-white'
+                      }`}
+                    >
+                      Salgadas Tradicionais ({pizzaFlavors.filter(f => (f.category || 'salgadas') === 'salgadas').length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFlavorCategoryFilter('especiais')}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold whitespace-nowrap transition-colors cursor-pointer ${
+                        flavorCategoryFilter === 'especiais'
+                          ? 'bg-amber-400 text-dark-950 font-black'
+                          : 'bg-dark-800 text-amber-300 hover:bg-dark-750'
+                      }`}
+                    >
+                      Especiais & Nobres ⭐ ({pizzaFlavors.filter(f => f.category === 'especiais').length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFlavorCategoryFilter('doces')}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold whitespace-nowrap transition-colors cursor-pointer ${
+                        flavorCategoryFilter === 'doces'
+                          ? 'bg-pink-400 text-dark-950 font-black'
+                          : 'bg-dark-800 text-pink-300 hover:bg-dark-750'
+                      }`}
+                    >
+                      Doces 🍫 ({pizzaFlavors.filter(f => f.category === 'doces').length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFlavorCategoryFilter('pausados')}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold whitespace-nowrap transition-colors cursor-pointer ${
+                        flavorCategoryFilter === 'pausados'
+                          ? 'bg-red-500 text-white font-black'
+                          : 'bg-dark-800 text-red-400 hover:bg-dark-750'
+                      }`}
+                    >
+                      Esgotados / Pausados ({pizzaFlavors.filter(f => f.isAvailable === false).length})
+                    </button>
+                  </div>
+
+                  {/* Flavors Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                    {filteredAdminFlavors.map(flavor => {
+                      const isAvailable = flavor.isAvailable !== false;
+                      const priceNum = Number(flavor.price) || 0;
+
+                      return (
+                        <div
+                          key={flavor.id}
+                          className={`p-4 rounded-2xl border transition-all flex flex-col justify-between gap-3 ${
+                            !isAvailable
+                              ? 'bg-dark-950/60 border-dark-800/80 opacity-60'
+                              : 'bg-dark-850 border-dark-750 hover:border-brand-gold/40 shadow-sm'
+                          }`}
+                        >
+                          <div>
+                            <div className="flex items-start justify-between gap-2 mb-2">
+                              <h4 className="text-sm font-extrabold text-white leading-snug">
+                                {flavor.name}
+                              </h4>
+                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold flex-shrink-0 ${
+                                flavor.category === 'especiais'
+                                  ? 'bg-amber-400/20 text-amber-300 border border-amber-400/30'
+                                  : flavor.category === 'doces'
+                                  ? 'bg-pink-400/20 text-pink-300 border border-pink-400/30'
+                                  : 'bg-slate-800 text-slate-300 border border-slate-700'
+                              }`}>
+                                {flavor.category === 'especiais' ? 'Especial ⭐' : flavor.category === 'doces' ? 'Doce 🍫' : 'Tradicional'}
+                              </span>
+                            </div>
+
+                            {/* Preço do Sabor */}
+                            <div className="flex items-baseline gap-1.5 my-1.5">
+                              <span className="text-xs font-bold text-slate-400">Preço do Sabor:</span>
+                              <span className="text-lg font-black text-brand-gold">
+                                R$ {priceNum.toFixed(2).replace('.', ',')}
+                              </span>
+                            </div>
+
+                            {flavor.description && (
+                              <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">
+                                {flavor.description}
+                              </p>
+                            )}
+                          </div>
+
+                          {/* Footer Actions */}
+                          <div className="pt-3 border-t border-dark-800/80 flex items-center justify-between gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleToggleFlavorAvailability(flavor.id)}
+                              className={`px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer ${
+                                isAvailable
+                                  ? 'bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25 border border-emerald-500/30'
+                                  : 'bg-amber-500/15 text-amber-300 hover:bg-amber-500/25 border border-amber-500/30'
+                              }`}
+                              title={isAvailable ? 'Clique para pausar este sabor (esgotado)' : 'Clique para reativar este sabor'}
+                            >
+                              {isAvailable ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                              <span>{isAvailable ? 'Disponível' : 'Esgotado'}</span>
+                            </button>
+
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEditFlavor(flavor)}
+                                className="p-2 rounded-xl bg-dark-800 hover:bg-dark-750 text-slate-300 hover:text-brand-gold transition-colors cursor-pointer"
+                                title="Editar nome, preço ou ingredientes"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteFlavor(flavor.id)}
+                                className="p-2 rounded-xl bg-dark-800 hover:bg-red-950/40 text-slate-400 hover:text-red-400 transition-colors cursor-pointer"
+                                title="Excluir sabor"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {filteredAdminFlavors.length === 0 && (
+                    <div className="p-8 text-center bg-dark-850 rounded-2xl border border-dark-800 text-slate-400 text-xs">
+                      Nenhum sabor encontrado para o filtro atual.
+                      <button
+                        type="button"
+                        onClick={() => { setFlavorSearch(''); setFlavorCategoryFilter('todos'); }}
+                        className="mt-3 block mx-auto px-3 py-1.5 rounded-xl bg-brand-gold text-dark-950 font-bold text-xs hover:bg-amber-400 cursor-pointer"
+                      >
+                        Limpar Filtros
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* SUBTAB: TAXA DA MAQUININHA */}
+              {menuSubTab === 'card-fee' && (
+                <div className="mt-5 space-y-6 max-w-4xl">
+                  <div className="p-5 sm:p-6 rounded-2xl bg-dark-850 border border-dark-750 space-y-6">
+                    
+                    {/* Header */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-dark-800">
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500/20 to-brand-gold/10 border border-brand-gold/30 flex items-center justify-center text-brand-gold shadow-glow-gold/10">
+                          <CreditCard className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <h3 className="font-extrabold text-base text-white flex items-center gap-2">
+                            Definir Taxa da Maquininha de Cartão
+                            <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-black uppercase tracking-wider ${
+                              tempCardActive 
+                                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
+                                : 'bg-slate-800 text-slate-400 border border-slate-700'
+                            }`}>
+                              {tempCardActive ? 'Ativo no Cardápio' : 'Desativado'}
+                            </span>
+                          </h3>
+                          <p className="text-xs text-slate-400">
+                            Defina aqui a taxa que você cobra quando o cliente paga no cartão (Débito ou Crédito).
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Toggle Ativar / Desativar */}
+                      <label className="flex items-center gap-2.5 cursor-pointer select-none bg-dark-950 px-4 py-2.5 rounded-xl border border-dark-750 self-start sm:self-auto">
+                        <input
+                          type="checkbox"
+                          checked={tempCardActive}
+                          onChange={(e) => setTempCardActive(e.target.checked)}
+                          className="w-4 h-4 rounded text-brand-gold accent-brand-gold cursor-pointer"
+                        />
+                        <span className="text-xs font-bold text-white">
+                          {tempCardActive ? 'Taxa Ativada' : 'Taxa Desativada'}
+                        </span>
+                      </label>
+                    </div>
+
+                    {/* Passo 1: Tipo de Cobrança */}
+                    <div className="space-y-3">
+                      <label className="block text-xs font-bold text-slate-300">
+                        1. Como você deseja cobrar a taxa da maquininha?
+                      </label>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        {[
+                          { id: 'percentage', label: 'Porcentagem Geral (%)', desc: 'Aplica um % fixo no valor dos itens (ex: 3.5%)' },
+                          { id: 'split', label: 'Débito e Crédito Separados', desc: 'Taxas diferentes para Débito e Crédito' },
+                          { id: 'fixed', label: 'Valor Fixo em R$', desc: 'Adiciona um valor fixo (ex: R$ 2,00 por pedido)' }
+                        ].map(opt => (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            onClick={() => setTempCardType(opt.id)}
+                            className={`p-3.5 rounded-xl text-left border transition-all cursor-pointer ${
+                              tempCardType === opt.id
+                                ? 'bg-brand-gold/15 border-brand-gold text-white shadow-sm ring-1 ring-brand-gold/30'
+                                : 'bg-dark-950/80 border-dark-800 text-slate-400 hover:text-white hover:border-dark-700'
+                            }`}
+                          >
+                            <div className="font-bold text-xs text-brand-gold mb-1">{opt.label}</div>
+                            <div className="text-[11px] text-slate-400 leading-tight">{opt.desc}</div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Passo 2: Valores da Taxa */}
+                    <div className="p-4 rounded-xl bg-dark-950 border border-dark-800 space-y-4">
+                      <label className="block text-xs font-bold text-slate-200">
+                        2. Digite os Valores da sua Taxa:
+                      </label>
+
+                      {tempCardType === 'percentage' && (
+                        <div className="max-w-xs">
+                          <label className="block text-xs text-slate-400 mb-1">
+                            Porcentagem da Taxa (%):
+                          </label>
+                          <div className="relative">
+                            <input
+                              type="text"
+                              value={tempCardPercentage}
+                              onChange={(e) => setTempCardPercentage(e.target.value)}
+                              placeholder="Ex: 3.5"
+                              className="w-full pl-3 pr-8 py-2.5 rounded-xl bg-dark-900 border border-dark-700 text-white font-mono text-base font-bold focus:outline-none focus:border-brand-gold"
+                            />
+                            <span className="absolute right-3 top-1/2 -translate-y-1/2 font-bold text-slate-400">%</span>
+                          </div>
+                          <span className="text-[10px] text-slate-500 mt-1 block">Exemplos: 3.0 ou 3.5 ou 4.99</span>
+                        </div>
+                      )}
+
+                      {tempCardType === 'split' && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-md">
+                          <div>
+                            <label className="block text-xs text-slate-400 mb-1">
+                              Taxa do Cartão de Débito (%):
+                            </label>
+                            <div className="relative">
+                              <input
+                                type="text"
+                                value={tempCardDebit}
+                                onChange={(e) => setTempCardDebit(e.target.value)}
+                                placeholder="Ex: 2.0"
+                                className="w-full pl-3 pr-8 py-2.5 rounded-xl bg-dark-900 border border-dark-700 text-white font-mono text-base font-bold focus:outline-none focus:border-brand-gold"
+                              />
+                              <span className="absolute right-3 top-1/2 -translate-y-1/2 font-bold text-slate-400">%</span>
+                            </div>
+                            <span className="text-[10px] text-slate-500 mt-1 block">Exemplo: 2.0%</span>
+                          </div>
+
+                          <div>
+                            <label className="block text-xs text-slate-400 mb-1">
+                              Taxa do Cartão de Crédito (%):
+                            </label>
+                            <div className="relative">
+                              <input
+                                type="text"
+                                value={tempCardCredit}
+                                onChange={(e) => setTempCardCredit(e.target.value)}
+                                placeholder="Ex: 4.5"
+                                className="w-full pl-3 pr-8 py-2.5 rounded-xl bg-dark-900 border border-dark-700 text-white font-mono text-base font-bold focus:outline-none focus:border-brand-gold"
+                              />
+                              <span className="absolute right-3 top-1/2 -translate-y-1/2 font-bold text-slate-400">%</span>
+                            </div>
+                            <span className="text-[10px] text-slate-500 mt-1 block">Exemplo: 4.5%</span>
+                          </div>
+                        </div>
+                      )}
+
+                      {tempCardType === 'fixed' && (
+                        <div className="max-w-xs">
+                          <label className="block text-xs text-slate-400 mb-1">
+                            Valor Fixo por Pedido (R$):
+                          </label>
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-slate-400">R$</span>
+                            <input
+                              type="text"
+                              value={tempCardFixed}
+                              onChange={(e) => setTempCardFixed(e.target.value)}
+                              placeholder="Ex: 2.00"
+                              className="w-full pl-10 pr-3 py-2.5 rounded-xl bg-dark-900 border border-dark-700 text-white font-mono text-base font-bold focus:outline-none focus:border-brand-gold"
+                            />
+                          </div>
+                          <span className="text-[10px] text-slate-500 mt-1 block">Exemplo: 2.00 ou 3.00 fixos por pedido</span>
+                        </div>
+                      )}
+
+                      {/* Somar automaticamente ao total */}
+                      <div className="pt-3 border-t border-dark-800">
+                        <label className="flex items-start gap-3 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={tempCardAutoAdd}
+                            onChange={(e) => setTempCardAutoAdd(e.target.checked)}
+                            className="w-4 h-4 mt-0.5 rounded text-brand-gold accent-brand-gold cursor-pointer"
+                          />
+                          <div>
+                            <span className="text-xs font-bold text-white block">
+                              Somar o valor da taxa automaticamente no total a pagar
+                            </span>
+                            <span className="text-[11px] text-slate-400 block mt-0.5">
+                              Quando ativado, a taxa da maquininha é somada no total da sacola e no resumo do WhatsApp.
+                            </span>
+                          </div>
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* Passo 3: Mensagem Explicativa */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="block text-xs font-bold text-slate-300">
+                          3. Mensagem explicativa exibida ao cliente na sacola:
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setTempCardCustomNotice('')}
+                          className="text-[11px] text-brand-gold hover:underline cursor-pointer"
+                        >
+                          Usar texto automático padrão
+                        </button>
+                      </div>
+                      <textarea
+                        rows={2}
+                        value={tempCardCustomNotice}
+                        onChange={(e) => setTempCardCustomNotice(e.target.value)}
+                        placeholder={`Automático: ${getCardMachineNoticeText({
+                          active: tempCardActive,
+                          type: tempCardType,
+                          percentageRate: parseFloat(tempCardPercentage) || 3.5,
+                          fixedRate: parseFloat(tempCardFixed) || 2.0,
+                          debitRate: parseFloat(tempCardDebit) || 2.0,
+                          creditRate: parseFloat(tempCardCredit) || 4.5
+                        })}`}
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-dark-950 border border-dark-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand-gold leading-relaxed"
+                      />
+                      <span className="text-[11px] text-slate-500 block">
+                        Deixe em branco para usar o texto automático gerado a partir do valor que você configurou.
+                      </span>
+                    </div>
+
+                    {/* Simulador em Tempo Real */}
+                    <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/25 space-y-3">
+                      <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                        <Sparkles className="w-4 h-4 text-amber-400" />
+                        Simulação em Tempo Real (Exemplo com Pedido de R$ 50,00 no Cartão):
+                      </span>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                        <div className="bg-dark-950/70 p-2.5 rounded-lg border border-dark-800">
+                          <span className="text-slate-400 block text-[10px]">Subtotal do Pedido:</span>
+                          <span className="font-bold text-white">R$ 50,00</span>
+                        </div>
+                        <div className="bg-dark-950/70 p-2.5 rounded-lg border border-dark-800">
+                          <span className="text-slate-400 block text-[10px]">Taxa Calculada:</span>
+                          <span className="font-bold text-brand-gold">
+                            + R$ {calculateCardMachineFee(50, {
+                              active: tempCardActive,
+                              type: tempCardType,
+                              percentageRate: parseFloat(tempCardPercentage) || 0,
+                              fixedRate: parseFloat(tempCardFixed) || 0,
+                              debitRate: parseFloat(tempCardDebit) || 0,
+                              creditRate: parseFloat(tempCardCredit) || 0
+                            }, 'credito').toFixed(2).replace('.', ',')}
+                          </span>
+                        </div>
+                        <div className="bg-dark-950/70 p-2.5 rounded-lg border border-dark-800 sm:col-span-2">
+                          <span className="text-slate-400 block text-[10px]">Total a Pagar ({tempCardAutoAdd ? 'Com Taxa Somada' : 'Sem Taxa Somada'}):</span>
+                          <span className="font-extrabold text-emerald-400 text-sm">
+                            R$ {(50 + (tempCardAutoAdd ? calculateCardMachineFee(50, {
+                              active: tempCardActive,
+                              type: tempCardType,
+                              percentageRate: parseFloat(tempCardPercentage) || 0,
+                              fixedRate: parseFloat(tempCardFixed) || 0,
+                              debitRate: parseFloat(tempCardDebit) || 0,
+                              creditRate: parseFloat(tempCardCredit) || 0
+                            }, 'credito') : 0)).toFixed(2).replace('.', ',')}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="pt-1 text-[11px] text-amber-200/90 leading-relaxed border-t border-amber-500/20">
+                        <strong>Como o cliente verá na sacola:</strong> {getCardMachineNoticeText({
+                          active: tempCardActive,
+                          type: tempCardType,
+                          percentageRate: parseFloat(tempCardPercentage) || 3.5,
+                          fixedRate: parseFloat(tempCardFixed) || 2.0,
+                          debitRate: parseFloat(tempCardDebit) || 2.0,
+                          creditRate: parseFloat(tempCardCredit) || 4.5,
+                          customNotice: tempCardCustomNotice
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Salvar */}
+                    <div className="flex justify-end pt-2">
+                      <button
+                        type="button"
+                        onClick={handleSaveCardMachineSettings}
+                        className="px-6 py-3 rounded-xl bg-gradient-to-r from-brand-gold to-amber-400 text-dark-950 font-black text-xs hover:brightness-110 shadow-glow-gold cursor-pointer flex items-center gap-2 transition-transform active:scale-95"
+                      >
+                        <Save className="w-4 h-4 stroke-[3]" />
+                        <span>Salvar Taxa da Maquininha</span>
+                      </button>
+                    </div>
+
+                  </div>
+                </div>
+              )}
+
               {/* SUBTAB 2: PROMOÇÕES, BANNERS & CUPONS */}
               {menuSubTab === 'promos' && (
                 <div className="mt-5 space-y-6">
@@ -2671,6 +3525,114 @@ export function AdminDashboard({
                         placeholder="Ex: Terça a Domingo: 09:00 às 23:00 (Segunda fechado)"
                         className="w-full px-3.5 py-2 rounded-xl bg-dark-900 border border-dark-700 text-xs text-white"
                       />
+                    </div>
+                  </div>
+
+                  {/* Card Machine Fee Notice Section */}
+                  <div className="pt-4 border-t border-dark-800">
+                    <div className="p-4 sm:p-5 rounded-2xl bg-dark-950/80 border border-amber-500/25 space-y-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                            <CreditCard className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <h4 className="font-bold text-sm text-white flex items-center gap-2">
+                              Aviso de Taxa da Maquininha (Cartão)
+                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${
+                                tempStoreCardMachineNoticeActive 
+                                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
+                                  : 'bg-slate-800 text-slate-400 border border-slate-700'
+                              }`}>
+                                {tempStoreCardMachineNoticeActive ? 'Ativo no Cardápio' : 'Desativado'}
+                              </span>
+                            </h4>
+                            <p className="text-[11px] text-slate-400">
+                              Mensagem exibida ao cliente na sacola ao selecionar Cartão e no resumo do WhatsApp.
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Switch Toggle */}
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setMenuSubTab('card-fee')}
+                            className="px-3 py-1.5 rounded-xl bg-brand-gold/15 hover:bg-brand-gold/25 border border-brand-gold/40 text-brand-gold font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer"
+                          >
+                            <span>⚙️ Definir Valores (% ou R$)</span>
+                          </button>
+
+                          <label className="flex items-center gap-2 cursor-pointer select-none bg-dark-900 px-3 py-1.5 rounded-xl border border-dark-750">
+                            <input
+                              type="checkbox"
+                              checked={tempStoreCardMachineNoticeActive}
+                              onChange={(e) => setTempStoreCardMachineNoticeActive(e.target.checked)}
+                              className="w-4 h-4 rounded text-brand-gold accent-brand-gold cursor-pointer"
+                            />
+                            <span className="text-xs font-semibold text-slate-200">
+                              Exibir aviso ao cliente
+                            </span>
+                          </label>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                          Texto do Aviso sobre a Taxa da Maquininha:
+                        </label>
+                        <textarea
+                          rows={3}
+                          value={tempStoreCardMachineNotice}
+                          onChange={(e) => setTempStoreCardMachineNotice(e.target.value)}
+                          placeholder="Ex: ⚠️ Pagamentos no cartão (débito ou crédito) possuem taxa da maquininha cobrada pela operadora. Consulte as condições na entrega."
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-dark-900 border border-dark-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand-gold leading-relaxed"
+                        />
+                      </div>
+
+                      {/* Live Preview Box */}
+                      {tempStoreCardMachineNoticeActive && tempStoreCardMachineNotice && (
+                        <div className="pt-1">
+                          <span className="block text-[10px] uppercase font-bold tracking-wider text-slate-400 mb-1.5">
+                            Pré-visualização de como o cliente vê na sacola:
+                          </span>
+                          <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs flex items-start gap-2.5">
+                            <AlertCircle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+                            <div className="space-y-0.5">
+                              <span className="font-bold text-amber-300 text-xs block">Aviso sobre Taxa da Maquininha:</span>
+                              <p className="text-[11px] leading-relaxed text-amber-200/90 whitespace-pre-line">
+                                {tempStoreCardMachineNotice}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Preset Quick Buttons */}
+                      <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px]">
+                        <span className="text-slate-400 text-xs">Sugestões rápidas:</span>
+                        <button
+                          type="button"
+                          onClick={() => setTempStoreCardMachineNotice("⚠️ Pagamentos no cartão (débito ou crédito) possuem taxa da maquininha cobrada pela operadora. Consulte as condições na entrega.")}
+                          className="px-2.5 py-1 rounded-lg bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-700 transition-colors cursor-pointer"
+                        >
+                          Padrão da Loja
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setTempStoreCardMachineNotice("⚠️ Pagamentos no cartão possuem acréscimo de taxa da operadora de cartão. Para economizar e pagar sem taxa, utilize PIX ou Dinheiro!")}
+                          className="px-2.5 py-1 rounded-lg bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-700 transition-colors cursor-pointer"
+                        >
+                          Incentivo ao PIX
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setTempStoreCardMachineNotice("💳 Pagamentos com cartão de débito ou crédito possuem acréscimo referente à taxa da maquininha.")}
+                          className="px-2.5 py-1 rounded-lg bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-700 transition-colors cursor-pointer"
+                        >
+                          Aviso Simples
+                        </button>
+                      </div>
                     </div>
                   </div>
 
@@ -3369,6 +4331,46 @@ export function AdminDashboard({
                   />
                 </div>
 
+                {/* Configurações Especiais de Pizza */}
+                {prodFormCategory === 'pizzas' && (
+                  <div className="sm:col-span-2 p-3.5 rounded-2xl bg-brand-gold/10 border border-brand-gold/30 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-white mb-1">
+                        Tamanho da Pizza *
+                      </label>
+                      <input
+                        type="text"
+                        value={prodFormTamanho}
+                        onChange={(e) => setProdFormTamanho(e.target.value)}
+                        placeholder="Ex: Família (8 fatias), Gigante (12 fatias), Pequena (4 fatias)..."
+                        className="w-full px-3 py-2 rounded-xl bg-dark-800 border border-dark-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand-gold"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-white mb-1">
+                        Quantidade Máxima de Sabores *
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="6"
+                        value={prodFormMaxSabores}
+                        onChange={(e) => setProdFormMaxSabores(e.target.value)}
+                        placeholder="Ex: 2 ou 3"
+                        className="w-full px-3 py-2 rounded-xl bg-dark-800 border border-dark-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand-gold font-mono"
+                      />
+                    </div>
+
+                    <div className="sm:col-span-2 text-[11px] text-brand-goldLight flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-brand-gold flex-shrink-0" />
+                      <span>
+                        Pizzas cadastradas aqui abrem automaticamente o montador de sabores com cálculo pelo <strong>maior valor</strong> selecionado.
+                      </span>
+                    </div>
+                  </div>
+                )}
+
                 {/* Descrição */}
                 <div className="sm:col-span-2">
                   <label className="block text-xs font-bold text-slate-200 mb-1">
@@ -3489,6 +4491,168 @@ export function AdminDashboard({
 
           </div>
         </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* MODAL: CRIAR OU EDITAR SABOR DE PIZZA                          */}
+      {/* ============================================================== */}
+      {isFlavorModalOpen && (
+        <div className="fixed inset-0 z-50 bg-dark-950/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 animate-fadeIn overflow-y-auto">
+          <div className="bg-dark-900 border border-brand-gold/40 w-full max-w-lg rounded-3xl p-5 sm:p-7 shadow-2xl my-8 max-h-[90vh] overflow-y-auto">
+            
+            <div className="flex items-center justify-between pb-4 border-b border-dark-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-brand-gold/15 text-brand-gold flex items-center justify-center border border-brand-gold/30">
+                  <Pizza className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-display font-extrabold text-base sm:text-lg text-white">
+                    {editingFlavor ? `Editar: ${editingFlavor.name}` : 'Cadastrar Novo Sabor de Pizza'}
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    {editingFlavor ? 'Atualize o nome, valor ou ingredientes deste sabor' : 'Adicione um novo sabor de pizza com seu respectivo valor'}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsFlavorModalOpen(false)}
+                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-dark-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveFlavor} className="space-y-4 mt-4">
+              
+              {/* Nome do Sabor */}
+              <div>
+                <label className="block text-xs font-bold text-slate-200 mb-1">
+                  Nome do Sabor *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={flavorFormName}
+                  onChange={(e) => setFlavorFormName(e.target.value)}
+                  placeholder="Ex: Camarão Especial com Catupiry, Quatro Queijos..."
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-dark-800 border border-dark-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand-gold"
+                />
+              </div>
+
+              {/* Preço do Sabor */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-bold text-slate-200">
+                    Preço deste Sabor (R$) *
+                  </label>
+                  <span className="text-[10px] text-brand-gold font-medium">Puxa o valor da pizza se for o maior</span>
+                </div>
+                <input
+                  type="text"
+                  required
+                  value={flavorFormPrice}
+                  onChange={(e) => setFlavorFormPrice(e.target.value)}
+                  placeholder="Ex: 40,00 ou 55,00 ou 120,00"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-dark-800 border border-dark-700 text-xs text-white font-mono font-bold focus:outline-none focus:border-brand-gold"
+                />
+                <p className="text-[11px] text-slate-400 mt-1">
+                  💡 <strong>Regra:</strong> Se o cliente montar uma pizza com este sabor e ele for o mais caro entre os escolhidos, a pizza inteira será cobrada por este valor.
+                </p>
+              </div>
+
+              {/* Categoria do Sabor */}
+              <div>
+                <label className="block text-xs font-bold text-slate-200 mb-1">
+                  Categoria do Sabor
+                </label>
+                <select
+                  value={flavorFormCategory}
+                  onChange={(e) => setFlavorFormCategory(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-dark-800 border border-dark-700 text-xs text-white focus:outline-none focus:border-brand-gold cursor-pointer"
+                >
+                  <option value="salgadas">Salgada Tradicional</option>
+                  <option value="especiais">Especial / Nobre / Gourmet ⭐</option>
+                  <option value="doces">Doce 🍫</option>
+                </select>
+              </div>
+
+              {/* Ingredientes / Descrição */}
+              <div>
+                <label className="block text-xs font-bold text-slate-200 mb-1">
+                  Ingredientes / Descrição do Sabor <span className="text-[10px] text-slate-400 font-normal">(Opcional)</span>
+                </label>
+                <textarea
+                  rows="2"
+                  value={flavorFormDescription}
+                  onChange={(e) => setFlavorFormDescription(e.target.value)}
+                  placeholder="Ex: Molho de tomate artesanal, camarões salteados ao alho, catupiry cremoso e orégano..."
+                  className="w-full px-3.5 py-2 rounded-xl bg-dark-800 border border-dark-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand-gold"
+                />
+              </div>
+
+              {/* Disponibilidade */}
+              <div className="pt-2 border-t border-dark-800">
+                <label className="flex items-center gap-2.5 p-3 rounded-xl bg-dark-800/60 border border-dark-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={flavorFormIsAvailable}
+                    onChange={(e) => setFlavorFormIsAvailable(e.target.checked)}
+                    className="w-4 h-4 accent-emerald-400 cursor-pointer"
+                  />
+                  <div>
+                    <div className="text-xs font-bold text-white">Disponível para Pedidos</div>
+                    <div className="text-[10px] text-slate-400">Desmarque se faltar ingrediente para pausar este sabor</div>
+                  </div>
+                </label>
+              </div>
+
+              {/* Footer */}
+              <div className="pt-4 border-t border-dark-800 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setIsFlavorModalOpen(false)}
+                  className="px-4 py-2.5 rounded-xl bg-dark-800 hover:bg-dark-750 text-slate-300 text-xs font-semibold cursor-pointer"
+                >
+                  Cancelar
+                </button>
+
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-brand-gold to-amber-400 text-dark-950 font-black text-xs hover:brightness-110 shadow-glow-gold cursor-pointer flex items-center gap-1.5"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>{editingFlavor ? 'Salvar Sabor' : 'Cadastrar Sabor'}</span>
+                </button>
+              </div>
+
+            </form>
+
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: PERSONALIZAR PIZZA NO PDV */}
+      {pdvPizzaToCustomize && (
+        <PizzaCustomizerModal
+          isOpen={!!pdvPizzaToCustomize}
+          onClose={() => setPdvPizzaToCustomize(null)}
+          pizzaProduct={pdvPizzaToCustomize}
+          onAddPizzaToCart={(customPizza) => {
+            setPdvCart(prev => [...prev, {
+              id: customPizza.id,
+              name: customPizza.name,
+              price: customPizza.price,
+              quantity: 1,
+              notes: customPizza.notes || '',
+              flavors: customPizza.flavors,
+              isCustomPizza: true,
+              description: customPizza.description
+            }]);
+            setPdvPizzaToCustomize(null);
+          }}
+        />
       )}
 
     </div>

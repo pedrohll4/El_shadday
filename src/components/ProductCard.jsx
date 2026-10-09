@@ -96,6 +96,7 @@ export function ProductCard({
         {/* Pricing Row */}
         <div className="mt-2.5 pt-2 border-t border-dark-800/60 flex items-baseline gap-2">
           <div className="flex items-baseline gap-1">
+            {isPizza && <span className="text-[10px] text-slate-400 font-semibold mr-0.5">A partir de</span>}
             <span className="text-xs text-brand-gold font-bold">R$</span>
             <span className="text-base sm:text-lg font-black text-white tracking-tight">
               {product.price.toFixed(2).replace('.', ',')}

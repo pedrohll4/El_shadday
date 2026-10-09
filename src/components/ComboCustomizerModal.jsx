@@ -3,7 +3,7 @@ import {
   X, Flame, Check, Sparkles, AlertCircle, Copy, 
   ChevronRight, ArrowRight, Pizza as PizzaIcon, CheckCircle2, Package 
 } from 'lucide-react';
-import { PIZZA_FLAVORS } from '../data/menuData';
+import { getStoredPizzaFlavors } from '../data/menuData';
 
 // Helper to determine the pizza configuration for any combo
 export function getComboPizzasConfig(product) {
@@ -99,9 +99,33 @@ export function ComboCustomizerModal({
     return getComboPizzasConfig(comboProduct);
   }, [comboProduct]);
 
+  const [flavorsList, setFlavorsList] = useState(() => getStoredPizzaFlavors());
+
+  // Listen to pizza_flavors_updated
+  useEffect(() => {
+    const handleFlavorsUpdated = (e) => {
+      if (e?.detail && Array.isArray(e.detail)) {
+        setFlavorsList(e.detail);
+      } else {
+        setFlavorsList(getStoredPizzaFlavors());
+      }
+    };
+    window.addEventListener('pizza_flavors_updated', handleFlavorsUpdated);
+    window.addEventListener('storage', handleFlavorsUpdated);
+    return () => {
+      window.removeEventListener('pizza_flavors_updated', handleFlavorsUpdated);
+      window.removeEventListener('storage', handleFlavorsUpdated);
+    };
+  }, []);
+
+  const availableFlavors = useMemo(() => {
+    return flavorsList.filter(f => f.isAvailable !== false);
+  }, [flavorsList]);
+
   // Reset state on open
   useEffect(() => {
     if (isOpen && comboProduct) {
+      setFlavorsList(getStoredPizzaFlavors());
       setActivePizzaIndex(0);
       setNotes('');
       setValidationError('');
@@ -332,20 +356,21 @@ export function ComboCustomizerModal({
 
           {/* Flavors Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {PIZZA_FLAVORS.map((flavor) => {
-              const isSelected = currentFlavors.includes(flavor);
+            {availableFlavors.map((flavor) => {
+              const flavorName = typeof flavor === 'object' ? flavor.name : flavor;
+              const isSelected = currentFlavors.includes(flavorName);
               return (
                 <button
-                  key={flavor}
+                  key={flavor.id || flavorName}
                   type="button"
-                  onClick={() => toggleFlavor(flavor)}
+                  onClick={() => toggleFlavor(flavorName)}
                   className={`p-3 rounded-xl border text-left text-xs font-semibold flex items-center justify-between gap-2 transition-all cursor-pointer ${
                     isSelected
                       ? 'bg-brand-gold/20 border-brand-gold text-brand-goldLight shadow-sm'
                       : 'bg-dark-950 border-dark-800 text-slate-300 hover:border-dark-700'
                   }`}
                 >
-                  <span className="truncate">{flavor}</span>
+                  <span className="truncate">{flavorName}</span>
                   <div className={`w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 border ${
                     isSelected
                       ? 'bg-brand-gold border-brand-gold text-dark-950'

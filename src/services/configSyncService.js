@@ -7,7 +7,7 @@
  */
 
 import { supabase, isSupabaseConfigured } from './supabaseClient';
-import { saveStoredProducts, saveStoredPromoSettings, saveStoredRestaurantInfo } from '../data/menuData';
+import { saveStoredProducts, saveStoredPromoSettings, saveStoredRestaurantInfo, saveStoredPizzaFlavors } from '../data/menuData';
 import { saveStoredBuffetGallery } from '../buffet/buffetData';
 
 const CONFIG_TOPIC = 'el-shadday-config-sync-ariquemes-v2';
@@ -20,7 +20,7 @@ const configChannel = typeof window !== 'undefined' && window.BroadcastChannel
 
 /**
  * Dispatch an update to the cloud so all other devices receive it immediately
- * @param {'PRODUCTS_UPDATE' | 'GALLERY_UPDATE' | 'PROMOS_UPDATE' | 'STORE_UPDATE'} type 
+ * @param {'PRODUCTS_UPDATE' | 'GALLERY_UPDATE' | 'PROMOS_UPDATE' | 'STORE_UPDATE' | 'PIZZA_FLAVORS_UPDATE'} type 
  * @param {any} data 
  */
 export async function dispatchConfigSync(type, data) {
@@ -61,6 +61,15 @@ export async function dispatchConfigSync(type, data) {
           address: data.address,
           pix_key: data.pixKey,
           pix_name: data.pixName,
+          card_machine_notice: data.cardMachineNotice,
+          card_machine_notice_active: data.cardMachineNoticeActive,
+          card_machine_settings: data.cardMachineSettings,
+          updated_at: new Date().toISOString()
+        });
+      } else if (type === 'PIZZA_FLAVORS_UPDATE') {
+        await supabase.from('company_settings').upsert({
+          id: 'el_shadday_config',
+          pizza_flavors: data,
           updated_at: new Date().toISOString()
         });
       }
@@ -102,6 +111,7 @@ export async function fetchCloudConfigHistory() {
     let latestGallery = null;
     let latestPromos = null;
     let latestStore = null;
+    let latestFlavors = null;
 
     for (const line of lines) {
       try {
@@ -117,6 +127,8 @@ export async function fetchCloudConfigHistory() {
               latestPromos = parsed.data;
             } else if (parsed.type === 'STORE_UPDATE' && parsed.data) {
               latestStore = parsed.data;
+            } else if (parsed.type === 'PIZZA_FLAVORS_UPDATE' && Array.isArray(parsed.data)) {
+              latestFlavors = parsed.data;
             }
           }
         }
@@ -136,12 +148,16 @@ export async function fetchCloudConfigHistory() {
     if (latestStore) {
       saveStoredRestaurantInfo(latestStore);
     }
+    if (latestFlavors && latestFlavors.length > 0) {
+      saveStoredPizzaFlavors(latestFlavors);
+    }
 
     return {
       products: latestProducts,
       gallery: latestGallery,
       promos: latestPromos,
-      store: latestStore
+      store: latestStore,
+      flavors: latestFlavors
     };
   } catch (err) {
     console.warn('⚠️ [Cloud Sync] Erro ao buscar histórico de configurações:', err);
@@ -152,7 +168,7 @@ export async function fetchCloudConfigHistory() {
 /**
  * Subscribe to real-time configuration events (changes made on PC push to phone live)
  */
-export function subscribeToConfigEvents({ onProductsUpdate, onGalleryUpdate, onPromosUpdate, onStoreUpdate } = {}) {
+export function subscribeToConfigEvents({ onProductsUpdate, onGalleryUpdate, onPromosUpdate, onStoreUpdate, onPizzaFlavorsUpdate } = {}) {
   let eventSource = null;
   let isCleanedUp = false;
 
@@ -180,6 +196,9 @@ export function subscribeToConfigEvents({ onProductsUpdate, onGalleryUpdate, onP
             } else if (data.type === 'STORE_UPDATE' && data.data) {
               saveStoredRestaurantInfo(data.data);
               if (onStoreUpdate) onStoreUpdate(data.data);
+            } else if (data.type === 'PIZZA_FLAVORS_UPDATE' && Array.isArray(data.data)) {
+              saveStoredPizzaFlavors(data.data);
+              if (onPizzaFlavorsUpdate) onPizzaFlavorsUpdate(data.data);
             }
           }
         } catch (e) {}
@@ -211,6 +230,8 @@ export function subscribeToConfigEvents({ onProductsUpdate, onGalleryUpdate, onP
       if (onPromosUpdate) onPromosUpdate(data.data);
     } else if (data.type === 'STORE_UPDATE' && data.data) {
       if (onStoreUpdate) onStoreUpdate(data.data);
+    } else if (data.type === 'PIZZA_FLAVORS_UPDATE' && Array.isArray(data.data)) {
+      if (onPizzaFlavorsUpdate) onPizzaFlavorsUpdate(data.data);
     }
   };
 

@@ -8,7 +8,9 @@ import {
   saveStoredProducts,
   getStoredPromoSettings,
   saveStoredPromoSettings,
-  getStoredRestaurantInfo
+  getStoredRestaurantInfo,
+  saveStoredRestaurantInfo,
+  saveStoredPizzaFlavors
 } from './data/menuData';
 import { supabase, isSupabaseConfigured } from './services/supabaseClient';
 import { Header } from './components/Header';
@@ -156,9 +158,30 @@ export default function App() {
               setProducts(data.menu_products);
               saveStoredProducts(data.menu_products);
             }
+            if (Array.isArray(data.pizza_flavors) && data.pizza_flavors.length > 0) {
+              saveStoredPizzaFlavors(data.pizza_flavors);
+              window.dispatchEvent(new CustomEvent("pizza_flavors_updated", { detail: data.pizza_flavors }));
+            }
             if (data.promo_settings && typeof data.promo_settings === 'object' && Object.keys(data.promo_settings).length > 0) {
               setPromoSettings(data.promo_settings);
               saveStoredPromoSettings(data.promo_settings);
+            }
+            if (data.card_machine_notice !== undefined || data.name) {
+              const currentStore = getStoredRestaurantInfo();
+              const updatedStore = {
+                ...currentStore,
+                ...(data.name ? { name: data.name } : {}),
+                ...(data.phone ? { phone: data.phone } : {}),
+                ...(data.phone_display ? { phoneFormatted: data.phone_display } : {}),
+                ...(data.address ? { address: data.address } : {}),
+                ...(data.pix_key ? { pixKey: data.pix_key } : {}),
+                ...(data.pix_name ? { pixName: data.pix_name } : {}),
+                ...(data.card_machine_notice !== undefined ? { cardMachineNotice: data.card_machine_notice } : {}),
+                ...(data.card_machine_notice_active !== undefined ? { cardMachineNoticeActive: data.card_machine_notice_active } : {}),
+                ...(data.card_machine_settings ? { cardMachineSettings: data.card_machine_settings } : {})
+              };
+              setRestaurantInfo(updatedStore);
+              saveStoredRestaurantInfo(updatedStore);
             }
           }
         });
@@ -170,6 +193,10 @@ export default function App() {
         if (cloudCfg.products && cloudCfg.products.length > 0) setProducts(cloudCfg.products);
         if (cloudCfg.promos) setPromoSettings(cloudCfg.promos);
         if (cloudCfg.store) setRestaurantInfo(cloudCfg.store);
+        if (cloudCfg.flavors && cloudCfg.flavors.length > 0) {
+          saveStoredPizzaFlavors(cloudCfg.flavors);
+          window.dispatchEvent(new CustomEvent("pizza_flavors_updated", { detail: cloudCfg.flavors }));
+        }
       }
     });
 
@@ -177,7 +204,10 @@ export default function App() {
     const unsubscribeConfig = subscribeToConfigEvents({
       onProductsUpdate: (prods) => setProducts(prods),
       onPromosUpdate: (promos) => setPromoSettings(promos),
-      onStoreUpdate: (store) => setRestaurantInfo(store)
+      onStoreUpdate: (store) => setRestaurantInfo(store),
+      onPizzaFlavorsUpdate: (flavors) => {
+        window.dispatchEvent(new CustomEvent("pizza_flavors_updated", { detail: flavors }));
+      }
     });
 
     return () => {
