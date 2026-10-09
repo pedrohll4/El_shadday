@@ -536,6 +536,7 @@ export default function App() {
         onCreateKitchenOrder={handleCreateKitchenOrder}
         onLogout={handleAdminLogout}
         onBackToSite={handleBackToSiteFromAdmin}
+        onSwitchToBuffet={() => setAppView('full-buffet')}
       />
     );
   }

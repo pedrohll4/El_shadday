@@ -5,9 +5,17 @@ import {
   Printer, ArrowLeft, LogOut, RefreshCw, Send, Check,
   Bike, ChefHat, BellRing, Plus, Minus, Trash2, XCircle,
   MessageSquare, Phone, ShoppingBag, Store, Copy, ChevronRight,
-  AlertCircle, X, ShieldAlert, Sparkles, CheckCheck
+  AlertCircle, X, ShieldAlert, Sparkles, CheckCheck,
+  Camera, RotateCcw
 } from 'lucide-react';
 import { RESTAURANT_INFO, ARIQUEMES_DISTRICTS, CATEGORIES, PRODUCTS } from '../data/menuData';
+import { 
+  GALLERY_CATEGORIES, 
+  INITIAL_BUFFET_GALLERY, 
+  getStoredBuffetGallery, 
+  saveStoredBuffetGallery 
+} from '../buffet/buffetData';
+import { supabase, isSupabaseConfigured } from '../services/supabaseClient';
 
 export function AdminDashboard({ 
   orders, 
@@ -17,9 +25,10 @@ export function AdminDashboard({
   onDeleteOrder,
   onCreateKitchenOrder,
   onLogout, 
-  onBackToSite 
+  onBackToSite,
+  onSwitchToBuffet
 }) {
-  // Navigation: 'kds' (Kitchen Display) | 'pdv' (Point of Sale / Criar Pedidos)
+  // Navigation: 'kds' (Kitchen Display) | 'pdv' (Point of Sale / Criar Pedidos) | 'gallery' (Fotos do Buffet)
   const [activeAdminTab, setActiveAdminTab] = useState('kds');
 
   // KDS Filters
@@ -57,6 +66,94 @@ export function AdminDashboard({
   const [pdvOrderNotes, setPdvOrderNotes] = useState('');
   const [pdvSuccessOrder, setPdvSuccessOrder] = useState(null);
   const [pdvValidationError, setPdvValidationError] = useState('');
+
+  // Buffet Gallery Management States
+  const [galleryList, setGalleryList] = useState(() => getStoredBuffetGallery());
+  const [newPhotoUrl, setNewPhotoUrl] = useState('');
+  const [newPhotoTitle, setNewPhotoTitle] = useState('');
+  const [newPhotoSubtitle, setNewPhotoSubtitle] = useState('');
+  const [newPhotoCategory, setNewPhotoCategory] = useState('churrasco');
+  const [newPhotoTag, setNewPhotoTag] = useState('');
+  const [galleryFeedback, setGalleryFeedback] = useState('');
+
+  // Sincronizar galeria com Supabase se configurado
+  useEffect(() => {
+    if (isSupabaseConfigured && supabase) {
+      supabase
+        .from('buffet_gallery')
+        .select('*')
+        .order('position', { ascending: true })
+        .then(({ data, error }) => {
+          if (!error && Array.isArray(data) && data.length > 0) {
+            setGalleryList(data);
+            saveStoredBuffetGallery(data);
+          }
+        });
+    }
+  }, []);
+
+  const handleAddPhoto = async (e) => {
+    e.preventDefault();
+    if (!newPhotoUrl.trim() || !newPhotoTitle.trim()) {
+      alert('Por favor, informe a URL da foto e o título.');
+      return;
+    }
+    const newPhoto = {
+      id: 'gal_' + Date.now(),
+      url: newPhotoUrl.trim(),
+      title: newPhotoTitle.trim(),
+      subtitle: newPhotoSubtitle.trim() || 'Foto oficial do Buffet El Shadday',
+      category: newPhotoCategory,
+      tag: newPhotoTag.trim() || 'Buffet El Shadday'
+    };
+    const updated = [newPhoto, ...galleryList];
+    setGalleryList(updated);
+    saveStoredBuffetGallery(updated);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('buffet_gallery').insert({
+          id: newPhoto.id,
+          url: newPhoto.url,
+          title: newPhoto.title,
+          subtitle: newPhoto.subtitle,
+          category: newPhoto.category,
+          tag: newPhoto.tag,
+          position: 0
+        });
+      } catch (err) {}
+    }
+
+    setNewPhotoUrl('');
+    setNewPhotoTitle('');
+    setNewPhotoSubtitle('');
+    setNewPhotoTag('');
+    setGalleryFeedback('Foto adicionada à galeria com sucesso!');
+    setTimeout(() => setGalleryFeedback(''), 3500);
+  };
+
+  const handleDeletePhoto = async (photoId) => {
+    if (!window.confirm('Tem certeza que deseja remover esta foto?')) return;
+    const updated = galleryList.filter(p => p.id !== photoId);
+    setGalleryList(updated);
+    saveStoredBuffetGallery(updated);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('buffet_gallery').delete().eq('id', photoId);
+      } catch (err) {}
+    }
+    setGalleryFeedback('Foto removida!');
+    setTimeout(() => setGalleryFeedback(''), 3500);
+  };
+
+  const handleResetGallery = async () => {
+    if (!window.confirm('Deseja restaurar as fotos padrão do Buffet?')) return;
+    setGalleryList(INITIAL_BUFFET_GALLERY);
+    saveStoredBuffetGallery(INITIAL_BUFFET_GALLERY);
+    setGalleryFeedback('Galeria restaurada para o padrão!');
+    setTimeout(() => setGalleryFeedback(''), 3500);
+  };
 
   // Sound chime helper using Web Audio API + Speech Synthesis
   const playChime = (isTest = false) => {
@@ -612,6 +709,36 @@ export function AdminDashboard({
               </span>
             )}
           </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveAdminTab('gallery')}
+            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all cursor-pointer ${
+              activeAdminTab === 'gallery'
+                ? 'bg-brand-gold text-dark-950 shadow-glow-gold font-black'
+                : 'bg-dark-800 text-slate-300 hover:bg-dark-750 hover:text-white border border-dark-750'
+            }`}
+          >
+            <Camera className="w-4 h-4 text-brand-gold" />
+            <span>Galeria de Fotos (Buffet)</span>
+            <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+              activeAdminTab === 'gallery' ? 'bg-dark-950 text-brand-gold' : 'bg-dark-900 text-slate-400'
+            }`}>
+              {galleryList.length}
+            </span>
+          </button>
+
+          {onSwitchToBuffet && (
+            <button
+              type="button"
+              onClick={onSwitchToBuffet}
+              className="ml-auto px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-1.5 bg-gradient-to-r from-amber-500/20 to-brand-gold/20 text-brand-gold hover:text-white hover:bg-brand-gold/30 border border-brand-gold/40 transition-all cursor-pointer"
+              title="Acessar o site do Buffet"
+            >
+              <Sparkles className="w-4 h-4" />
+              <span>Ver Site do Buffet 👑</span>
+            </button>
+          )}
         </div>
       </header>
 
@@ -1567,6 +1694,195 @@ export function AdminDashboard({
 
             </div>
 
+          </div>
+        )}
+
+        {/* ============================================================== */}
+        {/* VIEW 3: BUFFET PHOTO GALLERY MANAGEMENT                        */}
+        {/* ============================================================== */}
+        {activeAdminTab === 'gallery' && (
+          <div className="space-y-6 animate-fade-in">
+            <div className="bg-dark-900 border border-dark-800 rounded-3xl p-5 sm:p-7 shadow-xl">
+              
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-5 border-b border-dark-800">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-2xl bg-brand-gold/20 flex items-center justify-center text-brand-gold border border-brand-gold/30">
+                    <Camera className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h2 className="font-display font-extrabold text-base sm:text-lg text-white">
+                      Galeria de Fotos do Buffet ({galleryList.length} fotos)
+                    </h2>
+                    <p className="text-xs text-slate-400">
+                      Adicione e remova as fotos oficiais que passam no carrossel do Buffet El Shadday.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleResetGallery}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-dark-800 hover:bg-dark-750 text-xs font-semibold text-slate-300 hover:text-white border border-dark-700 transition-all cursor-pointer"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5 text-brand-gold" />
+                    <span>Restaurar Fotos Padrão</span>
+                  </button>
+                </div>
+              </div>
+
+              {galleryFeedback && (
+                <div className="mb-4 p-3 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-bold animate-fadeIn">
+                  {galleryFeedback}
+                </div>
+              )}
+
+              {/* Form to add new photo */}
+              <form onSubmit={handleAddPhoto} className="p-5 rounded-2xl bg-dark-950 border border-brand-gold/30 mb-8 space-y-4">
+                <h3 className="text-xs uppercase font-extrabold tracking-wider text-brand-gold flex items-center gap-2">
+                  <Plus className="w-4 h-4 stroke-[3]" />
+                  <span>Cadastrar Nova Foto na Galeria</span>
+                </h3>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                  <div className="sm:col-span-2 lg:col-span-1">
+                    <label className="block text-[11px] uppercase font-bold text-slate-300 mb-1">
+                      URL da Imagem *
+                    </label>
+                    <input
+                      type="url"
+                      placeholder="https://exemplo.com/foto.jpg"
+                      value={newPhotoUrl}
+                      onChange={(e) => setNewPhotoUrl(e.target.value)}
+                      required
+                      className="w-full px-3 py-2 rounded-xl bg-dark-900 border border-dark-750 text-white text-xs focus:outline-none focus:border-brand-gold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] uppercase font-bold text-slate-300 mb-1">
+                      Título do Prato / Evento *
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Ex: Picanha Angus na Brasa"
+                      value={newPhotoTitle}
+                      onChange={(e) => setNewPhotoTitle(e.target.value)}
+                      required
+                      className="w-full px-3 py-2 rounded-xl bg-dark-900 border border-dark-750 text-white text-xs focus:outline-none focus:border-brand-gold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] uppercase font-bold text-slate-300 mb-1">
+                      Categoria
+                    </label>
+                    <select
+                      value={newPhotoCategory}
+                      onChange={(e) => setNewPhotoCategory(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl bg-dark-900 border border-dark-750 text-white text-xs focus:outline-none focus:border-brand-gold"
+                    >
+                      {GALLERY_CATEGORIES.filter(c => c.id !== 'all').map(cat => (
+                        <option key={cat.id} value={cat.id}>{cat.label}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] uppercase font-bold text-slate-300 mb-1">
+                      Subtítulo / Descrição Rápida
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Ex: Cortes nobres assados lentamente"
+                      value={newPhotoSubtitle}
+                      onChange={(e) => setNewPhotoSubtitle(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl bg-dark-900 border border-dark-750 text-white text-xs focus:outline-none focus:border-brand-gold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] uppercase font-bold text-slate-300 mb-1">
+                      Etiqueta / Tag (opcional)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Ex: Churrasco Premium"
+                      value={newPhotoTag}
+                      onChange={(e) => setNewPhotoTag(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl bg-dark-900 border border-dark-750 text-white text-xs focus:outline-none focus:border-brand-gold"
+                    />
+                  </div>
+
+                  <div className="flex items-end">
+                    <button
+                      type="submit"
+                      className="w-full py-2 px-4 rounded-xl bg-gradient-to-r from-brand-gold to-amber-400 text-dark-950 font-black text-xs hover:brightness-110 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md"
+                    >
+                      <Plus className="w-4 h-4 stroke-[3]" />
+                      <span>Salvar Foto</span>
+                    </button>
+                  </div>
+                </div>
+
+                {newPhotoUrl.trim() && (
+                  <div className="pt-2 flex items-center gap-3">
+                    <span className="text-[11px] text-slate-400">Prévia da imagem:</span>
+                    <img 
+                      src={newPhotoUrl} 
+                      alt="Prévia" 
+                      className="w-12 h-12 object-cover rounded-lg border border-brand-gold/40"
+                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                    />
+                  </div>
+                )}
+              </form>
+
+              {/* Photos List Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {galleryList.map((photo, idx) => {
+                  const catObj = GALLERY_CATEGORIES.find(c => c.id === photo.category);
+                  return (
+                    <div 
+                      key={photo.id || idx}
+                      className="group relative rounded-2xl overflow-hidden bg-dark-950 border border-dark-800 hover:border-brand-gold/50 transition-all flex flex-col shadow-sm"
+                    >
+                      <div className="relative aspect-video w-full bg-black/40 overflow-hidden">
+                        <img
+                          src={photo.url}
+                          alt={photo.title}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          loading="lazy"
+                        />
+                        <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-black/70 backdrop-blur-sm text-brand-gold border border-brand-gold/30">
+                          {catObj ? catObj.label : photo.category}
+                        </span>
+                      </div>
+
+                      <div className="p-3.5 flex-1 flex flex-col justify-between">
+                        <div>
+                          <h4 className="text-xs font-bold text-white line-clamp-1">{photo.title}</h4>
+                          <p className="text-[11px] text-slate-400 line-clamp-1 mt-0.5">{photo.subtitle}</p>
+                        </div>
+
+                        <div className="mt-3 pt-2 border-t border-dark-800 flex items-center justify-between">
+                          <span className="text-[10px] text-slate-500 font-mono">#{idx + 1}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleDeletePhoto(photo.id)}
+                            className="p-1.5 rounded-lg text-rose-400 hover:text-white hover:bg-rose-950/60 transition-colors cursor-pointer"
+                            title="Remover foto da galeria"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+            </div>
           </div>
         )}
 
