@@ -73,9 +73,9 @@ export function ImageUploader({
       } else if (file.type.startsWith('image/')) {
         setProcessingStatus('Otimizando imagem para WebP ultra-leve...');
         const result = await compressImageFile(file, {
-          maxWidth: 900,
-          maxHeight: 900,
-          quality: 0.75,
+          maxWidth: 800,
+          maxHeight: 800,
+          quality: 0.70,
           mimeType: 'image/webp'
         });
 

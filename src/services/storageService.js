@@ -16,15 +16,27 @@ export async function uploadMediaToSupabaseStorage(file, folder = 'gallery') {
     const ext = rawExt ? rawExt.toLowerCase() : (file.type.startsWith('video/') ? 'mp4' : 'webp');
     const safeName = `${folder}/${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${ext}`;
 
-    const { data, error } = await supabase.storage
+    let uploadRes = await supabase.storage
       .from('gallery')
       .upload(safeName, file, {
         cacheControl: '3600',
         upsert: true
       });
 
-    if (error) {
-      console.warn('⚠️ Supabase Storage upload avisou:', error.message);
+    if (uploadRes.error && (uploadRes.error.message?.includes('not found') || uploadRes.error.message?.includes('Bucket') || uploadRes.error.message?.includes('bucket'))) {
+      try {
+        await supabase.storage.createBucket('gallery', { public: true });
+        uploadRes = await supabase.storage
+          .from('gallery')
+          .upload(safeName, file, {
+            cacheControl: '3600',
+            upsert: true
+          });
+      } catch (bErr) {}
+    }
+
+    if (uploadRes.error) {
+      console.warn('⚠️ Supabase Storage upload avisou:', uploadRes.error.message);
       return null;
     }
 

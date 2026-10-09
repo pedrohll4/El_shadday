@@ -33,7 +33,8 @@ import {
   GALLERY_CATEGORIES, 
   INITIAL_BUFFET_GALLERY, 
   getStoredBuffetGallery, 
-  saveStoredBuffetGallery 
+  saveStoredBuffetGallery,
+  isFakeGalleryItem
 } from '../buffet/buffetData';
 import { 
   supabase, 
@@ -119,8 +120,9 @@ export function AdminDashboard({
     window.addEventListener('buffet_gallery_updated', handleGallerySync);
 
     if (isSupabaseConfigured && supabase) {
-      // Limpa automaticamente fotos padrão/fake do banco se existirem
-      supabase.from('buffet_gallery').delete().or('id.like.gal_%,url.like.%unsplash.com%').then(() => {});
+      // Limpa automaticamente apenas as fotos padrão do Unsplash antigas
+      supabase.from('buffet_gallery').delete().in('id', ['gal_1', 'gal_2', 'gal_3', 'gal_4', 'gal_5', 'gal_6', 'gal_7', 'gal_8', 'gal_9', 'gal_10', 'gal_11', 'gal_12']).then(() => {});
+      supabase.from('buffet_gallery').delete().like('url', '%unsplash.com%').then(() => {});
 
       supabase
         .from('buffet_gallery')
@@ -128,7 +130,7 @@ export function AdminDashboard({
         .order('position', { ascending: true })
         .then(({ data, error }) => {
           if (!error && Array.isArray(data)) {
-            const clean = data.filter(p => p && !p.id?.startsWith('gal_') && !p.url?.includes('images.unsplash.com'));
+            const clean = data.filter(p => !isFakeGalleryItem(p));
             setGalleryList(clean);
             saveStoredBuffetGallery(clean);
           } else {
@@ -139,7 +141,7 @@ export function AdminDashboard({
               .single()
               .then(({ data: csData }) => {
                 if (Array.isArray(csData?.buffet_gallery)) {
-                  const cleanCs = csData.buffet_gallery.filter(p => p && !p.id?.startsWith('gal_') && !p.url?.includes('images.unsplash.com'));
+                  const cleanCs = csData.buffet_gallery.filter(p => !isFakeGalleryItem(p));
                   setGalleryList(cleanCs);
                   saveStoredBuffetGallery(cleanCs);
                 }
@@ -156,7 +158,7 @@ export function AdminDashboard({
             .order('position', { ascending: true })
             .then(({ data }) => {
               if (Array.isArray(data)) {
-                const clean = data.filter(p => p && !p.id?.startsWith('gal_') && !p.url?.includes('images.unsplash.com'));
+                const clean = data.filter(p => !isFakeGalleryItem(p));
                 setGalleryList(clean);
                 saveStoredBuffetGallery(clean);
               }
@@ -173,19 +175,19 @@ export function AdminDashboard({
 
   const handleAddPhoto = async (e) => {
     e.preventDefault();
-    if (!newPhotoUrl.trim() || !newPhotoTitle.trim()) {
-      alert('Por favor, envie uma foto ou vídeo e informe o título.');
+    if (!newPhotoUrl.trim()) {
+      alert('Por favor, envie uma foto/vídeo ou informe um link antes de salvar.');
       return;
     }
     const isVid = Boolean(newPhotoMeta?.isVideo || isVideoUrl(newPhotoUrl.trim()));
     const poster = newPhotoMeta?.thumbnail || (isVid ? getVideoPosterUrl(newPhotoUrl.trim()) : null);
 
     const newPhoto = {
-      id: 'gal_' + Date.now(),
+      id: 'media_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
       url: newPhotoUrl.trim(),
-      title: newPhotoTitle.trim(),
+      title: newPhotoTitle.trim() || (isVid ? 'Vídeo Buffet El Shadday' : 'Buffet El Shadday'),
       subtitle: newPhotoSubtitle.trim() || (isVid ? 'Vídeo oficial do Buffet El Shadday' : 'Foto oficial do Buffet El Shadday'),
-      category: newPhotoCategory,
+      category: newPhotoCategory || 'churrasco',
       tag: newPhotoTag.trim() || 'Buffet El Shadday',
       type: isVid ? 'video' : 'image',
       thumbnail: poster || (isVid ? '' : newPhotoUrl.trim())

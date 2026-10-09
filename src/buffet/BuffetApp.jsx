@@ -7,7 +7,8 @@ import {
   getStoredEventTypes, 
   saveStoredEventTypes,
   getStoredBuffetGallery,
-  saveStoredBuffetGallery
+  saveStoredBuffetGallery,
+  isFakeGalleryItem
 } from './buffetData';
 import { BuffetHeader } from './components/BuffetHeader';
 import { BuffetHero } from './components/BuffetHero';
@@ -146,7 +147,7 @@ export function BuffetApp({ currentAppMode, onToggleAppMode }) {
         .order('position', { ascending: true })
         .then(({ data, error }) => {
           if (!error && Array.isArray(data)) {
-            const clean = data.filter(p => p && !p.id?.startsWith('gal_') && !p.url?.includes('images.unsplash.com'));
+            const clean = data.filter(p => !isFakeGalleryItem(p));
             setGalleryPhotos(clean);
             saveStoredBuffetGallery(clean);
           } else {
@@ -158,7 +159,7 @@ export function BuffetApp({ currentAppMode, onToggleAppMode }) {
               .single()
               .then(({ data: csData }) => {
                 if (Array.isArray(csData?.buffet_gallery)) {
-                  const cleanCs = csData.buffet_gallery.filter(p => p && !p.id?.startsWith('gal_') && !p.url?.includes('images.unsplash.com'));
+                  const cleanCs = csData.buffet_gallery.filter(p => !isFakeGalleryItem(p));
                   setGalleryPhotos(cleanCs);
                   saveStoredBuffetGallery(cleanCs);
                 }
@@ -176,7 +177,7 @@ export function BuffetApp({ currentAppMode, onToggleAppMode }) {
             .order('position', { ascending: true })
             .then(({ data }) => {
               if (Array.isArray(data)) {
-                const clean = data.filter(p => p && !p.id?.startsWith('gal_') && !p.url?.includes('images.unsplash.com'));
+                const clean = data.filter(p => !isFakeGalleryItem(p));
                 setGalleryPhotos(clean);
                 saveStoredBuffetGallery(clean);
               }
@@ -188,7 +189,7 @@ export function BuffetApp({ currentAppMode, onToggleAppMode }) {
     // Carrega fotos mais recentes da nuvem pública (cross-device)
     fetchCloudConfigHistory().then(cfg => {
       if (cfg?.gallery && Array.isArray(cfg.gallery)) {
-        const clean = cfg.gallery.filter(p => p && !p.id?.startsWith('gal_') && !p.url?.includes('images.unsplash.com'));
+        const clean = cfg.gallery.filter(p => !isFakeGalleryItem(p));
         setGalleryPhotos(clean);
       }
     });
@@ -196,7 +197,7 @@ export function BuffetApp({ currentAppMode, onToggleAppMode }) {
     const unsubscribeGallery = subscribeToConfigEvents({
       onGalleryUpdate: (gal) => {
         if (Array.isArray(gal)) {
-          const clean = gal.filter(p => p && !p.id?.startsWith('gal_') && !p.url?.includes('images.unsplash.com'));
+          const clean = gal.filter(p => !isFakeGalleryItem(p));
           setGalleryPhotos(clean);
         }
       }

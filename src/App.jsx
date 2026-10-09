@@ -12,7 +12,7 @@ import {
   saveStoredRestaurantInfo,
   saveStoredPizzaFlavors
 } from './data/menuData';
-import { saveStoredBuffetGallery } from './buffet/buffetData';
+import { saveStoredBuffetGallery, isFakeGalleryItem } from './buffet/buffetData';
 import { supabase, isSupabaseConfigured } from './services/supabaseClient';
 import { Header } from './components/Header';
 import { RestaurantStoreHeader } from './components/RestaurantStoreHeader';
@@ -156,7 +156,7 @@ export default function App() {
         .then(({ data, error }) => {
           if (!error && data) {
             if (Array.isArray(data.buffet_gallery)) {
-              const cleanGal = data.buffet_gallery.filter(p => p && !p.id?.startsWith('gal_') && !p.url?.includes('images.unsplash.com'));
+              const cleanGal = data.buffet_gallery.filter(p => !isFakeGalleryItem(p));
               saveStoredBuffetGallery(cleanGal);
               window.dispatchEvent(new CustomEvent("buffet_gallery_updated", { detail: cleanGal }));
             }
@@ -199,7 +199,7 @@ export default function App() {
           const freshData = payload.new;
           if (freshData) {
             if (Array.isArray(freshData.buffet_gallery)) {
-              const cleanGal = freshData.buffet_gallery.filter(p => p && !p.id?.startsWith('gal_') && !p.url?.includes('images.unsplash.com'));
+              const cleanGal = freshData.buffet_gallery.filter(p => !isFakeGalleryItem(p));
               saveStoredBuffetGallery(cleanGal);
               window.dispatchEvent(new CustomEvent("buffet_gallery_updated", { detail: cleanGal }));
             }

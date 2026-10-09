@@ -284,6 +284,18 @@ export function saveQuoteToHistory(quote) {
   }
 }
 
+export const FAKE_GALLERY_IDS = new Set([
+  'gal_1', 'gal_2', 'gal_3', 'gal_4', 'gal_5', 'gal_6',
+  'gal_7', 'gal_8', 'gal_9', 'gal_10', 'gal_11', 'gal_12'
+]);
+
+export function isFakeGalleryItem(item) {
+  if (!item) return false;
+  if (FAKE_GALLERY_IDS.has(item.id)) return true;
+  if (typeof item.url === 'string' && item.url.includes('images.unsplash.com')) return true;
+  return false;
+}
+
 // Helper to get buffet gallery photos with persistence (apenas fotos reais do usuário)
 export function getStoredBuffetGallery() {
   try {
@@ -291,7 +303,7 @@ export function getStoredBuffetGallery() {
     if (saved !== null) {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed)) {
-        return parsed.filter(item => item && !item.id?.startsWith('gal_') && !item.url?.includes('images.unsplash.com'));
+        return parsed.filter(item => item && !isFakeGalleryItem(item));
       }
     }
   } catch (e) {
