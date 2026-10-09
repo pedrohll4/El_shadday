@@ -128,7 +128,7 @@ export function BuffetApp({ currentAppMode, onToggleAppMode }) {
   // Fetch initial gallery from Supabase if configured & listen to real-time events
   useEffect(() => {
     const handleGallerySync = (e) => {
-      if (e?.detail && Array.isArray(e.detail) && e.detail.length > 0) {
+      if (e?.detail && Array.isArray(e.detail)) {
         setGalleryPhotos(e.detail);
       } else {
         setGalleryPhotos(getStoredBuffetGallery());
@@ -139,12 +139,13 @@ export function BuffetApp({ currentAppMode, onToggleAppMode }) {
     window.addEventListener('buffet_gallery_updated', handleGallerySync);
 
     if (isSupabaseConfigured && supabase) {
+      const localSaved = localStorage.getItem("el_shadday_buffet_gallery_v2");
       supabase
         .from('buffet_gallery')
         .select('*')
         .order('position', { ascending: true })
         .then(({ data, error }) => {
-          if (!error && Array.isArray(data) && data.length > 0) {
+          if (!error && Array.isArray(data) && localSaved === null) {
             setGalleryPhotos(data);
             saveStoredBuffetGallery(data);
           }

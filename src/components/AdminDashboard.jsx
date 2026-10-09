@@ -106,7 +106,7 @@ export function AdminDashboard({
   // Sincronizar galeria com Supabase se configurado & escutar atualizações
   useEffect(() => {
     const handleGallerySync = (e) => {
-      if (e?.detail && Array.isArray(e.detail) && e.detail.length > 0) {
+      if (e?.detail && Array.isArray(e.detail)) {
         setGalleryList(e.detail);
       } else {
         setGalleryList(getStoredBuffetGallery());
@@ -117,12 +117,13 @@ export function AdminDashboard({
     window.addEventListener('buffet_gallery_updated', handleGallerySync);
 
     if (isSupabaseConfigured && supabase) {
+      const localSaved = localStorage.getItem("el_shadday_buffet_gallery_v2");
       supabase
         .from('buffet_gallery')
         .select('*')
         .order('position', { ascending: true })
         .then(({ data, error }) => {
-          if (!error && Array.isArray(data) && data.length > 0) {
+          if (!error && Array.isArray(data) && localSaved === null) {
             setGalleryList(data);
             saveStoredBuffetGallery(data);
           }
@@ -138,7 +139,7 @@ export function AdminDashboard({
   const handleAddPhoto = async (e) => {
     e.preventDefault();
     if (!newPhotoUrl.trim() || !newPhotoTitle.trim()) {
-      alert('Por favor, informe a URL da foto e o título.');
+      alert('Por favor, envie a foto e informe o título do prato.');
       return;
     }
     const newPhoto = {
@@ -189,6 +190,21 @@ export function AdminDashboard({
       } catch (err) {}
     }
     setGalleryFeedback('Foto removida!');
+    setTimeout(() => setGalleryFeedback(''), 3500);
+  };
+
+  const handleClearAllPhotos = async () => {
+    if (!window.confirm('Tem certeza que deseja apagar TODAS as fotos da galeria? O carrossel ficará livre para você colocar apenas as suas fotos reais do Buffet.')) return;
+    setGalleryList([]);
+    saveStoredBuffetGallery([]);
+    dispatchConfigSync('GALLERY_UPDATE', []);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('buffet_gallery').delete().neq('id', '___none___');
+      } catch (err) {}
+    }
+    setGalleryFeedback('Todas as fotos foram removidas com sucesso!');
     setTimeout(() => setGalleryFeedback(''), 3500);
   };
 
@@ -606,6 +622,15 @@ export function AdminDashboard({
     triggerMenuToast('Cardápio restaurado para o padrão original!');
   };
 
+  const handleClearAllProducts = () => {
+    if (!window.confirm('Tem certeza que deseja apagar TODOS os produtos do cardápio? Você poderá cadastrar somente os seus produtos e preços exclusivos.')) return;
+    setProductsList([]);
+    saveStoredProducts([]);
+    syncProductsToCloud([]);
+    dispatchConfigSync('PRODUCTS_UPDATE', []);
+    triggerMenuToast('Todos os produtos foram removidos!');
+  };
+
   const handleSavePromoSettings = (e) => {
     e.preventDefault();
     const newSettings = {
@@ -766,6 +791,14 @@ export function AdminDashboard({
     saveStoredPizzaFlavors(INITIAL_PIZZA_FLAVORS);
     dispatchConfigSync('PIZZA_FLAVORS_UPDATE', INITIAL_PIZZA_FLAVORS);
     triggerMenuToast('Sabores de pizza restaurados para o padrão com sucesso!');
+  };
+
+  const handleClearAllFlavors = () => {
+    if (!window.confirm('Tem certeza que deseja apagar TODOS os sabores de pizza? Você poderá cadastrar somente os seus sabores e valores exclusivos.')) return;
+    setPizzaFlavors([]);
+    saveStoredPizzaFlavors([]);
+    dispatchConfigSync('PIZZA_FLAVORS_UPDATE', []);
+    triggerMenuToast('Todos os sabores de pizza foram removidos!');
   };
 
   // Filtered Pizza Flavors in Admin
@@ -2468,6 +2501,18 @@ export function AdminDashboard({
                         <span>+ Novo Sabor de Pizza</span>
                       </button>
 
+                      {pizzaFlavors.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={handleClearAllFlavors}
+                          className="px-3 py-2 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 hover:text-white text-xs font-semibold border border-rose-500/40 flex items-center gap-1.5 transition-colors cursor-pointer"
+                          title="Apagar todos os sabores de pizza para cadastrar os seus"
+                        >
+                          <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                          <span>Apagar Todos os Sabores</span>
+                        </button>
+                      )}
+
                       <button
                         type="button"
                         onClick={handleResetFlavorsToDefault}
@@ -2488,6 +2533,18 @@ export function AdminDashboard({
                         <Plus className="w-4 h-4 stroke-[3]" />
                         <span>+ Criar Novo Produto</span>
                       </button>
+
+                      {productsList.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={handleClearAllProducts}
+                          className="px-3 py-2 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 hover:text-white text-xs font-semibold border border-rose-500/40 flex items-center gap-1.5 transition-colors cursor-pointer"
+                          title="Apagar todos os produtos para cadastrar os seus"
+                        >
+                          <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                          <span>Apagar Todos os Produtos</span>
+                        </button>
+                      )}
 
                       <button
                         type="button"
@@ -3762,6 +3819,18 @@ export function AdminDashboard({
                 </div>
 
                 <div className="flex items-center gap-2">
+                  {galleryList.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleClearAllPhotos}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-xs font-semibold text-rose-300 hover:text-white border border-rose-500/40 transition-all cursor-pointer"
+                      title="Apagar todas as fotos padrão para cadastrar apenas as suas"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                      <span>Apagar Todas as Fotos</span>
+                    </button>
+                  )}
+
                   <button
                     type="button"
                     onClick={handleResetGallery}
@@ -3865,48 +3934,60 @@ export function AdminDashboard({
               </form>
 
               {/* Photos List Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {galleryList.map((photo, idx) => {
-                  const catObj = GALLERY_CATEGORIES.find(c => c.id === photo.category);
-                  return (
-                    <div 
-                      key={photo.id || idx}
-                      className="group relative rounded-2xl overflow-hidden bg-dark-950 border border-dark-800 hover:border-brand-gold/50 transition-all flex flex-col shadow-sm"
-                    >
-                      <div className="relative aspect-video w-full bg-black/40 overflow-hidden">
-                        <img
-                          src={photo.url}
-                          alt={photo.title}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                          loading="lazy"
-                        />
-                        <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-black/70 backdrop-blur-sm text-brand-gold border border-brand-gold/30">
-                          {catObj ? catObj.label : photo.category}
-                        </span>
-                      </div>
-
-                      <div className="p-3.5 flex-1 flex flex-col justify-between">
-                        <div>
-                          <h4 className="text-xs font-bold text-white line-clamp-1">{photo.title}</h4>
-                          <p className="text-[11px] text-slate-400 line-clamp-1 mt-0.5">{photo.subtitle}</p>
+              {galleryList.length === 0 ? (
+                <div className="p-8 sm:p-12 text-center rounded-2xl bg-dark-950 border border-dark-800 space-y-3">
+                  <div className="w-14 h-14 rounded-2xl bg-brand-gold/10 text-brand-gold flex items-center justify-center mx-auto border border-brand-gold/20">
+                    <Camera className="w-7 h-7" />
+                  </div>
+                  <h4 className="text-base font-bold text-white">Nenhuma foto cadastrada na galeria</h4>
+                  <p className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed">
+                    Todas as fotos padrão foram removidas. Adicione as suas fotos reais do Buffet El Shadday no formulário acima usando a opção <strong>"Do Dispositivo"</strong> ou <strong>"Link / URL"</strong>!
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {galleryList.map((photo, idx) => {
+                    const catObj = GALLERY_CATEGORIES.find(c => c.id === photo.category);
+                    return (
+                      <div 
+                        key={photo.id || idx}
+                        className="group relative rounded-2xl overflow-hidden bg-dark-950 border border-dark-800 hover:border-brand-gold/50 transition-all flex flex-col shadow-sm"
+                      >
+                        <div className="relative aspect-video w-full bg-black/40 overflow-hidden">
+                          <img
+                            src={photo.url}
+                            alt={photo.title}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            loading="lazy"
+                          />
+                          <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-black/70 backdrop-blur-sm text-brand-gold border border-brand-gold/30">
+                            {catObj ? catObj.label : photo.category}
+                          </span>
                         </div>
 
-                        <div className="mt-3 pt-2 border-t border-dark-800 flex items-center justify-between">
-                          <span className="text-[10px] text-slate-500 font-mono">#{idx + 1}</span>
-                          <button
-                            type="button"
-                            onClick={() => handleDeletePhoto(photo.id)}
-                            className="p-1.5 rounded-lg text-rose-400 hover:text-white hover:bg-rose-950/60 transition-colors cursor-pointer"
-                            title="Remover foto da galeria"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                        <div className="p-3.5 flex-1 flex flex-col justify-between">
+                          <div>
+                            <h4 className="text-xs font-bold text-white line-clamp-1">{photo.title}</h4>
+                            <p className="text-[11px] text-slate-400 line-clamp-1 mt-0.5">{photo.subtitle}</p>
+                          </div>
+
+                          <div className="mt-3 pt-2 border-t border-dark-800 flex items-center justify-between">
+                            <span className="text-[10px] text-slate-500 font-mono">#{idx + 1}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleDeletePhoto(photo.id)}
+                              className="p-1.5 rounded-lg text-rose-400 hover:text-white hover:bg-rose-950/60 transition-colors cursor-pointer"
+                              title="Remover foto da galeria"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
 
             </div>
           </div>

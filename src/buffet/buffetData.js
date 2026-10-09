@@ -385,9 +385,9 @@ export function saveQuoteToHistory(quote) {
 export function getStoredBuffetGallery() {
   try {
     const saved = localStorage.getItem("el_shadday_buffet_gallery_v2");
-    if (saved) {
+    if (saved !== null) {
       const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed) && parsed.length > 0) {
+      if (Array.isArray(parsed)) {
         return parsed;
       }
     }

@@ -72,7 +72,7 @@ export function BuffetSection({ onExploreFullBuffet }) {
 
   useEffect(() => {
     const handleGallerySync = (e) => {
-      if (e?.detail && Array.isArray(e.detail) && e.detail.length > 0) {
+      if (e?.detail && Array.isArray(e.detail)) {
         setGalleryPhotos(e.detail);
       } else {
         setGalleryPhotos(getStoredBuffetGallery());
@@ -82,14 +82,15 @@ export function BuffetSection({ onExploreFullBuffet }) {
     window.addEventListener('storage', handleGallerySync);
     window.addEventListener('buffet_gallery_updated', handleGallerySync);
 
-    // Carrega fotos atualizadas do Supabase
+    // Carrega fotos atualizadas do Supabase apenas se o usuário ainda não tiver alterado localmente
     if (isSupabaseConfigured && supabase) {
+      const localSaved = localStorage.getItem("el_shadday_buffet_gallery_v2");
       supabase
         .from('buffet_gallery')
         .select('*')
         .order('position', { ascending: true })
         .then(({ data, error }) => {
-          if (!error && Array.isArray(data) && data.length > 0) {
+          if (!error && Array.isArray(data) && localSaved === null) {
             setGalleryPhotos(data);
             saveStoredBuffetGallery(data);
           }
@@ -521,42 +522,47 @@ export function BuffetSection({ onExploreFullBuffet }) {
           </p>
 
           {/* Mini Carrossel de 3 Fotos Rotativas */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
-            {[0, 1, 2].map(offset => {
-              const activeList = galleryPhotos && galleryPhotos.length > 0 ? galleryPhotos : INITIAL_BUFFET_GALLERY;
-              const photoIdx = (galleryIndex + offset) % activeList.length;
-              const photo = activeList[photoIdx];
-              if (!photo) return null;
-              return (
-                <div 
-                  key={photo.id || offset}
-                  onClick={onExploreFullBuffet}
-                  className="group relative h-40 sm:h-44 rounded-xl overflow-hidden bg-[#0E1218] border border-[#2E3744] hover:border-[#D8B85A] transition-all cursor-pointer shadow-md"
-                >
-                  <img 
-                    src={photo.url} 
-                    alt={photo.title}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-                    loading="lazy"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-[#0E1218] via-transparent to-transparent" />
-                  
-                  <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-[#0E1218]/85 text-[#E8D58A] border border-[#D8B85A]/30 text-[9px] font-bold uppercase">
-                    {photo.tag || 'Buffet'}
-                  </span>
+          {galleryPhotos && galleryPhotos.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
+              {[0, 1, 2].slice(0, Math.min(3, galleryPhotos.length)).map(offset => {
+                const photoIdx = (galleryIndex + offset) % galleryPhotos.length;
+                const photo = galleryPhotos[photoIdx];
+                if (!photo) return null;
+                return (
+                  <div 
+                    key={photo.id || offset}
+                    onClick={onExploreFullBuffet}
+                    className="group relative h-40 sm:h-44 rounded-xl overflow-hidden bg-[#0E1218] border border-[#2E3744] hover:border-[#D8B85A] transition-all cursor-pointer shadow-md"
+                  >
+                    <img 
+                      src={photo.url} 
+                      alt={photo.title}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                      loading="lazy"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#0E1218] via-transparent to-transparent" />
+                    
+                    <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-[#0E1218]/85 text-[#E8D58A] border border-[#D8B85A]/30 text-[9px] font-bold uppercase">
+                      {photo.tag || 'Buffet'}
+                    </span>
 
-                  <div className="absolute bottom-2 left-2 right-2 text-left">
-                    <h5 className="font-serif text-xs font-bold text-white truncate group-hover:text-[#E8D58A]">
-                      {photo.title}
-                    </h5>
-                    <p className="text-[10px] text-slate-400 truncate">
-                      {photo.subtitle}
-                    </p>
+                    <div className="absolute bottom-2 left-2 right-2 text-left">
+                      <h5 className="font-serif text-xs font-bold text-white truncate group-hover:text-[#E8D58A]">
+                        {photo.title}
+                      </h5>
+                      <p className="text-[10px] text-slate-400 truncate">
+                        {photo.subtitle}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="mt-4 p-6 rounded-2xl bg-[#0E1218] border border-[#2E3744] text-center text-xs text-slate-400">
+              Galeria em atualização • Fotos reais dos nossos eventos disponíveis no WhatsApp!
+            </div>
+          )}
 
           <div className="mt-3.5 flex items-center justify-between text-[11px] text-slate-400">
             <span className="flex items-center gap-1.5 text-slate-300">

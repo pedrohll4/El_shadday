@@ -37,7 +37,7 @@ const CATEGORY_ICONS = {
 export function BuffetGallery({ galleryItems }) {
   // Use passed gallery items or read from localStorage
   const photos = useMemo(() => {
-    if (galleryItems && galleryItems.length > 0) return galleryItems;
+    if (galleryItems !== undefined && Array.isArray(galleryItems)) return galleryItems;
     return getStoredBuffetGallery();
   }, [galleryItems]);
 
@@ -258,6 +258,21 @@ export function BuffetGallery({ galleryItems }) {
             </button>
           </div>
         </div>
+
+        {/* ========================================================
+            ESTADO VAZIO: QUANDO TODAS AS FOTOS FORAM REMOVIDAS
+        ======================================================== */}
+        {filteredPhotos.length === 0 && (
+          <div className="py-16 text-center bg-[#181E27]/50 rounded-3xl border border-[#2A3442] p-8 max-w-lg mx-auto my-6 animate-fadeIn">
+            <div className="w-16 h-16 rounded-2xl bg-[#D8B85A]/15 text-[#D8B85A] flex items-center justify-center mx-auto mb-4 border border-[#D8B85A]/30">
+              <Camera className="w-8 h-8" />
+            </div>
+            <h3 className="font-serif text-xl font-normal text-white">Galeria em Atualização</h3>
+            <p className="text-sm text-slate-400 mt-2 leading-relaxed">
+              Novas fotos dos nossos eventos estão sendo preparadas. Solicite fotos e vídeos recentes diretamente pelo nosso WhatsApp!
+            </p>
+          </div>
+        )}
 
         {/* ========================================================
             MODO 1: CARROSSEL ROTATIVO COM AUTOPLAY (PADRÃO)

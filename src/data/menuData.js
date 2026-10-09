@@ -709,9 +709,9 @@ export const DEFAULT_PROMO_SETTINGS = {
 export function getStoredProducts() {
   try {
     const saved = localStorage.getItem("el_shadday_delivery_products_v2");
-    if (saved) {
+    if (saved !== null) {
       const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed) && parsed.length > 0) {
+      if (Array.isArray(parsed)) {
         return parsed;
       }
     }
@@ -797,9 +797,9 @@ export function saveStoredRestaurantInfo(info) {
 export function getStoredPizzaFlavors() {
   try {
     const saved = localStorage.getItem("el_shadday_pizza_flavors_v2");
-    if (saved) {
+    if (saved !== null) {
       const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed) && parsed.length > 0) {
+      if (Array.isArray(parsed)) {
         // Normaliza para garantir formato uniforme
         return parsed.map((item, idx) => {
           if (typeof item === 'string') {
