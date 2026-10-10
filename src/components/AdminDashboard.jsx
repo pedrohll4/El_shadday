@@ -4050,14 +4050,13 @@ export function AdminDashboard({
 
                   <div>
                     <label className="block text-[11px] uppercase font-bold text-slate-300 mb-1">
-                      Título do Prato / Evento *
+                      Título do Prato / Evento (Opcional)
                     </label>
                     <input
                       type="text"
-                      placeholder="Ex: Picanha Angus na Brasa"
+                      placeholder="Ex: Buffet El Shadday ou Picanha"
                       value={newPhotoTitle}
                       onChange={(e) => setNewPhotoTitle(e.target.value)}
-                      required
                       className="w-full px-3 py-2 rounded-xl bg-dark-900 border border-dark-750 text-white text-xs focus:outline-none focus:border-brand-gold"
                     />
                   </div>

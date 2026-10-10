@@ -241,10 +241,16 @@ export function BuffetApp({ currentAppMode, onToggleAppMode }) {
 
     if (isSupabaseConfigured && supabase) {
       try {
+        await supabase.from('company_settings').upsert({
+          id: 'el_shadday_config',
+          buffet_gallery: newGallery,
+          updated_at: new Date().toISOString()
+        });
+
         await supabase.from('buffet_gallery').delete().neq('id', 'placeholder_none');
         if (newGallery.length > 0) {
           const rows = newGallery.map((g, idx) => ({
-            id: g.id || `gal_${Date.now()}_${idx}`,
+            id: g.id || `media_${Date.now()}_${idx}`,
             url: g.url,
             title: g.title,
             subtitle: g.subtitle || '',

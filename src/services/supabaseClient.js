@@ -22,9 +22,10 @@ const checkUrlParams = () => {
 // Check if credentials came via URL query params (e.g. from 1-click sync link)
 checkUrlParams();
 
-const getEnvOrStored = (envKey, storageKey) => {
-  const envVal = import.meta.env[envKey];
-  if (envVal && !envVal.includes('placeholder')) return envVal;
+const getEnvOrStored = (staticEnvVal, storageKey) => {
+  if (staticEnvVal && typeof staticEnvVal === 'string' && !staticEnvVal.includes('placeholder')) {
+    return staticEnvVal.trim();
+  }
   if (typeof window !== 'undefined') {
     try {
       const stored = localStorage.getItem(storageKey);
@@ -34,8 +35,9 @@ const getEnvOrStored = (envKey, storageKey) => {
   return '';
 };
 
-const supabaseUrl = getEnvOrStored('VITE_SUPABASE_URL', 'el_shadday_supabase_url');
-const supabaseAnonKey = getEnvOrStored('VITE_SUPABASE_ANON_KEY', 'el_shadday_supabase_anon_key');
+// STATIC access required by Vite compiler for production builds:
+const supabaseUrl = getEnvOrStored(import.meta.env.VITE_SUPABASE_URL, 'el_shadday_supabase_url');
+const supabaseAnonKey = getEnvOrStored(import.meta.env.VITE_SUPABASE_ANON_KEY, 'el_shadday_supabase_anon_key');
 
 export const isSupabaseConfigured = Boolean(
   supabaseUrl && 

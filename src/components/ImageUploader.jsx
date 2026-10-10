@@ -145,7 +145,12 @@ export function ImageUploader({
   const handleUrlChange = (url) => {
     setLoadError(false);
     setMediaInfo(null);
-    const trimmed = url.trim();
+    let trimmed = url.trim();
+    if (trimmed && !trimmed.startsWith('http://') && !trimmed.startsWith('https://') && !trimmed.startsWith('data:') && !trimmed.startsWith('/')) {
+      if (trimmed.includes('.') && !trimmed.includes(' ')) {
+        trimmed = 'https://' + trimmed;
+      }
+    }
     const isVid = isVideoUrl(trimmed);
     const ytThumb = getVideoPosterUrl(trimmed);
 
@@ -283,7 +288,11 @@ export function ImageUploader({
           <div className="relative">
             <LinkIcon className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
-              type="url"
+              type="text"
+              inputMode="url"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck="false"
               value={value.startsWith('data:') ? '' : value}
               onChange={(e) => handleUrlChange(e.target.value)}
               placeholder={placeholder || (acceptVideo ? "https://... (Foto, MP4 ou YouTube)" : "https://...")}

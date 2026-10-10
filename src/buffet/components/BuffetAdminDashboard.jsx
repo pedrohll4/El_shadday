@@ -259,17 +259,24 @@ export function BuffetAdminDashboard({
   // --- GALLERY HANDLERS ---
   const handleAddPhoto = (e) => {
     e.preventDefault();
-    if (!newPhotoUrl.trim() || !newPhotoTitle.trim()) {
-      alert('Por favor, informe a URL da imagem e o título.');
+    if (!newPhotoUrl.trim()) {
+      alert('Por favor, informe a URL da imagem.');
       return;
     }
 
+    let cleanUrl = newPhotoUrl.trim();
+    if (cleanUrl && !cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://') && !cleanUrl.startsWith('data:') && !cleanUrl.startsWith('/')) {
+      if (cleanUrl.includes('.') && !cleanUrl.includes(' ')) {
+        cleanUrl = 'https://' + cleanUrl;
+      }
+    }
+
     const newPhoto = {
-      id: 'gal_' + Date.now(),
-      url: newPhotoUrl.trim(),
-      title: newPhotoTitle.trim(),
+      id: 'media_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+      url: cleanUrl,
+      title: newPhotoTitle.trim() || 'Buffet El Shadday',
       subtitle: newPhotoSubtitle.trim() || 'Foto oficial do Buffet El Shadday',
-      category: newPhotoCategory,
+      category: newPhotoCategory || 'churrasco',
       tag: newPhotoTag.trim() || 'Buffet El Shadday'
     };
 
