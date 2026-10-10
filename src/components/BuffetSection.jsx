@@ -24,7 +24,6 @@ import {
   isFakeGalleryItem
 } from '../buffet/buffetData';
 import { supabase, isSupabaseConfigured } from '../services/supabaseClient';
-import { fetchCloudConfigHistory, subscribeToConfigEvents } from '../services/configSyncService';
 import { isVideoUrl, getVideoPosterUrl } from '../utils/imageCompressor';
 
 export function BuffetSection({ onExploreFullBuffet }) {
@@ -75,6 +74,7 @@ export function BuffetSection({ onExploreFullBuffet }) {
   const [galleryPhotos, setGalleryPhotos] = useState(() => getStoredBuffetGallery());
 
   useEffect(() => {
+    // Escuta atualizações locais (cross-tab e evento custom)
     const handleGallerySync = (e) => {
       if (e?.detail && Array.isArray(e.detail) && e.detail.length > 0) {
         setGalleryPhotos(e.detail);
@@ -85,55 +85,70 @@ export function BuffetSection({ onExploreFullBuffet }) {
         }
       }
     };
-
     window.addEventListener('storage', handleGallerySync);
     window.addEventListener('buffet_gallery_updated', handleGallerySync);
 
-    // Carrega fotos atualizadas do Supabase (tenta buffet_gallery + company_settings)
+    // ========== CARREGA GALERIA DO SUPABASE ==========
+    // Estratégia: company_settings.buffet_gallery PRIMEIRO (tabela garantida),
+    // depois tenta buffet_gallery (tabela dedicada) se existir.
     if (isSupabaseConfigured && supabase) {
-      const loadFromCompanySettings = () => {
-        return supabase
-          .from('company_settings')
-          .select('buffet_gallery')
-          .eq('id', 'el_shadday_config')
-          .single()
-          .then(({ data: csData }) => {
-            if (Array.isArray(csData?.buffet_gallery)) {
-              const cleanCs = csData.buffet_gallery.filter(p => !isFakeGalleryItem(p));
-              if (cleanCs.length > 0) {
-                console.log('[BuffetSection] Galeria carregada de company_settings:', cleanCs.length, 'itens');
-                setGalleryPhotos(cleanCs);
-                saveStoredBuffetGallery(cleanCs);
-              }
-            }
-          });
-      };
-
+      // 1) Busca de company_settings (SEMPRE existe)
       supabase
-        .from('buffet_gallery')
-        .select('*')
-        .order('position', { ascending: true })
-        .then(({ data, error }) => {
-          if (!error && Array.isArray(data)) {
-            const clean = data.filter(p => !isFakeGalleryItem(p));
-            if (clean.length > 0) {
-              console.log('[BuffetSection] Galeria carregada de buffet_gallery:', clean.length, 'itens');
-              setGalleryPhotos(clean);
-              saveStoredBuffetGallery(clean);
-            } else {
-              // Tabela existe mas está vazia — tenta company_settings como fallback
-              console.log('[BuffetSection] buffet_gallery vazia, tentando company_settings...');
-              loadFromCompanySettings();
+        .from('company_settings')
+        .select('buffet_gallery')
+        .eq('id', 'el_shadday_config')
+        .single()
+        .then(({ data: csData, error: csError }) => {
+          if (!csError && Array.isArray(csData?.buffet_gallery)) {
+            const cleanCs = csData.buffet_gallery.filter(p => !isFakeGalleryItem(p));
+            if (cleanCs.length > 0) {
+              console.log('[BuffetSection] ✅ Galeria carregada de company_settings:', cleanCs.length, 'itens');
+              setGalleryPhotos(cleanCs);
+              saveStoredBuffetGallery(cleanCs);
+              return; // Já carregou — não precisa tentar buffet_gallery
             }
-          } else {
-            // Tabela não existe ou erro — tenta company_settings
-            console.warn('[BuffetSection] Erro ao buscar buffet_gallery:', error?.message);
-            loadFromCompanySettings();
           }
+          // 2) Fallback: tenta tabela buffet_gallery (pode não existir)
+          supabase
+            .from('buffet_gallery')
+            .select('*')
+            .order('position', { ascending: true })
+            .then(({ data, error }) => {
+              if (!error && Array.isArray(data)) {
+                const clean = data.filter(p => !isFakeGalleryItem(p));
+                if (clean.length > 0) {
+                  console.log('[BuffetSection] ✅ Galeria carregada de buffet_gallery:', clean.length, 'itens');
+                  setGalleryPhotos(clean);
+                  saveStoredBuffetGallery(clean);
+                }
+              }
+            });
         });
 
+      // Realtime: escuta mudanças em company_settings
       supabase
-        .channel('realtime_buffet_gallery_section')
+        .channel('realtime_gallery_section_cs')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'company_settings' }, () => {
+          supabase
+            .from('company_settings')
+            .select('buffet_gallery')
+            .eq('id', 'el_shadday_config')
+            .single()
+            .then(({ data: csData }) => {
+              if (Array.isArray(csData?.buffet_gallery)) {
+                const clean = csData.buffet_gallery.filter(p => !isFakeGalleryItem(p));
+                if (clean.length > 0) {
+                  setGalleryPhotos(clean);
+                  saveStoredBuffetGallery(clean);
+                }
+              }
+            });
+        })
+        .subscribe();
+
+      // Realtime: escuta mudanças em buffet_gallery (se existir)
+      supabase
+        .channel('realtime_gallery_section_bg')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'buffet_gallery' }, () => {
           supabase
             .from('buffet_gallery')
@@ -152,33 +167,9 @@ export function BuffetSection({ onExploreFullBuffet }) {
         .subscribe();
     }
 
-    // Carrega fotos mais recentes da nuvem pública (cross-device)
-    fetchCloudConfigHistory().then(cfg => {
-      if (cfg?.gallery && Array.isArray(cfg.gallery)) {
-        const clean = cfg.gallery.filter(p => !isFakeGalleryItem(p));
-        if (clean.length > 0) {
-          setGalleryPhotos(clean);
-          saveStoredBuffetGallery(clean);
-        }
-      }
-    });
-
-    const unsubscribeGallery = subscribeToConfigEvents({
-      onGalleryUpdate: (gal) => {
-        if (Array.isArray(gal)) {
-          const clean = gal.filter(p => !isFakeGalleryItem(p));
-          if (clean.length > 0) {
-            setGalleryPhotos(clean);
-            saveStoredBuffetGallery(clean);
-          }
-        }
-      }
-    });
-
     return () => {
       window.removeEventListener('storage', handleGallerySync);
       window.removeEventListener('buffet_gallery_updated', handleGallerySync);
-      if (unsubscribeGallery) unsubscribeGallery();
     };
   }, []);
 

@@ -249,19 +249,29 @@ export function AdminDashboard({
 
     if (isSupabaseConfigured && supabase) {
       try {
-        const { error } = await supabase.from('buffet_gallery').upsert({
-          id: newPhoto.id,
-          url: newPhoto.url,
-          title: newPhoto.title,
-          subtitle: newPhoto.subtitle,
-          category: newPhoto.category,
-          tag: newPhoto.tag,
-          type: newPhoto.type || 'image',
-          thumbnail: newPhoto.thumbnail || newPhoto.url,
-          position: 0
+        // PRIMÁRIO: salva TODA a galeria em company_settings.buffet_gallery (tabela garantida)
+        await supabase.from('company_settings').upsert({
+          id: 'el_shadday_config',
+          buffet_gallery: updated,
+          updated_at: new Date().toISOString()
         });
-        if (error) {
-          console.warn('Aviso Supabase buffet_gallery:', error.message);
+        console.log('[AdminDashboard] ✅ Galeria salva em company_settings');
+
+        // SECUNDÁRIO: tenta salvar também na tabela buffet_gallery (pode não existir)
+        try {
+          await supabase.from('buffet_gallery').upsert({
+            id: newPhoto.id,
+            url: newPhoto.url,
+            title: newPhoto.title,
+            subtitle: newPhoto.subtitle,
+            category: newPhoto.category,
+            tag: newPhoto.tag,
+            type: newPhoto.type || 'image',
+            thumbnail: newPhoto.thumbnail || newPhoto.url,
+            position: 0
+          });
+        } catch (bgErr) {
+          console.warn('[AdminDashboard] buffet_gallery table não disponível (OK):', bgErr.message);
         }
       } catch (err) {
         console.warn('Erro na inserção do Supabase:', err);
@@ -286,7 +296,13 @@ export function AdminDashboard({
 
     if (isSupabaseConfigured && supabase) {
       try {
-        await supabase.from('buffet_gallery').delete().eq('id', photoId);
+        // Atualiza company_settings com galeria sem o item deletado
+        await supabase.from('company_settings').upsert({
+          id: 'el_shadday_config',
+          buffet_gallery: updated,
+          updated_at: new Date().toISOString()
+        });
+        try { await supabase.from('buffet_gallery').delete().eq('id', photoId); } catch (e) {}
       } catch (err) {}
     }
     setGalleryFeedback('Item removido com sucesso!');
@@ -301,10 +317,14 @@ export function AdminDashboard({
 
     if (isSupabaseConfigured && supabase) {
       try {
-        await supabase.from('buffet_gallery').delete().neq('id', '___none___');
+        await supabase.from('company_settings').upsert({
+          id: 'el_shadday_config',
+          buffet_gallery: [],
+          updated_at: new Date().toISOString()
+        });
+        try { await supabase.from('buffet_gallery').delete().neq('id', '___none___'); } catch (e) {}
       } catch (err) {}
     }
-    setGalleryFeedback('Todas as fotos foram removidas com sucesso!');
     setTimeout(() => setGalleryFeedback(''), 3500);
   };
 
@@ -315,7 +335,12 @@ export function AdminDashboard({
     dispatchConfigSync('GALLERY_UPDATE', []);
     if (isSupabaseConfigured && supabase) {
       try {
-        await supabase.from('buffet_gallery').delete().neq('id', '___none___');
+        await supabase.from('company_settings').upsert({
+          id: 'el_shadday_config',
+          buffet_gallery: [],
+          updated_at: new Date().toISOString()
+        });
+        try { await supabase.from('buffet_gallery').delete().neq('id', '___none___'); } catch (e) {}
       } catch (err) {}
     }
     setGalleryFeedback('Galeria limpa com sucesso!');
