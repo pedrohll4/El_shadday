@@ -109,10 +109,13 @@ export function AdminDashboard({
   // Sincronizar galeria com Supabase se configurado & escutar atualizações
   useEffect(() => {
     const handleGallerySync = (e) => {
-      if (e?.detail && Array.isArray(e.detail)) {
+      if (e?.detail && Array.isArray(e.detail) && e.detail.length > 0) {
         setGalleryList(e.detail);
       } else {
-        setGalleryList(getStoredBuffetGallery());
+        const stored = getStoredBuffetGallery();
+        if (stored && stored.length > 0) {
+          setGalleryList(stored);
+        }
       }
     };
 
@@ -120,40 +123,6 @@ export function AdminDashboard({
     window.addEventListener('buffet_gallery_updated', handleGallerySync);
 
     if (isSupabaseConfigured && supabase) {
-      // Limpa automaticamente apenas as fotos padrão do Unsplash antigas
-      supabase.from('buffet_gallery').delete().in('id', ['gal_1', 'gal_2', 'gal_3', 'gal_4', 'gal_5', 'gal_6', 'gal_7', 'gal_8', 'gal_9', 'gal_10', 'gal_11', 'gal_12']).then(() => {});
-      supabase.from('buffet_gallery').delete().like('url', '%unsplash.com%').then(() => {});
-
-      const pushLocalToSupabase = (items) => {
-        if (!Array.isArray(items) || items.length === 0) return;
-        const clean = items.filter(p => !isFakeGalleryItem(p));
-        if (clean.length === 0) return;
-        console.log('[AdminDashboard] Sincronizando fotos locais com o banco Supabase...', clean.length);
-        
-        supabase.from('company_settings').upsert({
-          id: 'el_shadday_config',
-          buffet_gallery: clean,
-          updated_at: new Date().toISOString()
-        }).then(() => {});
-
-        for (let i = 0; i < clean.length; i++) {
-          const item = clean[i];
-          supabase.from('buffet_gallery').upsert({
-            id: item.id || `media_${Date.now()}_${i}`,
-            url: item.url,
-            title: item.title || 'Buffet El Shadday',
-            subtitle: item.subtitle || '',
-            category: item.category || 'churrasco',
-            tag: item.tag || 'Buffet',
-            type: item.type || 'image',
-            thumbnail: item.thumbnail || item.url,
-            position: i
-          }).then(() => {});
-        }
-
-        dispatchConfigSync('GALLERY_UPDATE', clean);
-      };
-
       const loadFromCompanySettings = () => {
         return supabase
           .from('company_settings')
@@ -167,17 +136,12 @@ export function AdminDashboard({
                 console.log('[AdminDashboard] Galeria carregada de company_settings:', cleanCs.length, 'itens');
                 setGalleryList(cleanCs);
                 saveStoredBuffetGallery(cleanCs);
-                return;
               }
-            }
-            // Se Supabase estiver vazio, sincroniza as fotos locais do Admin para a nuvem
-            const stored = getStoredBuffetGallery();
-            if (stored.length > 0) {
-              pushLocalToSupabase(stored);
             }
           });
       };
 
+      // Carrega inicial: tenta primeiro buffet_gallery, depois company_settings
       supabase
         .from('buffet_gallery')
         .select('*')
@@ -190,15 +154,14 @@ export function AdminDashboard({
               setGalleryList(clean);
               saveStoredBuffetGallery(clean);
             } else {
-              console.log('[AdminDashboard] buffet_gallery vazia, tentando company_settings...');
               loadFromCompanySettings();
             }
           } else {
-            console.warn('[AdminDashboard] Erro ao buscar buffet_gallery:', error?.message);
             loadFromCompanySettings();
           }
         });
 
+      // Realtime seguro: NUNCA sobrescreve a lista local com array vazio
       supabase
         .channel('realtime_buffet_gallery_admin')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'buffet_gallery' }, () => {
@@ -207,12 +170,22 @@ export function AdminDashboard({
             .select('*')
             .order('position', { ascending: true })
             .then(({ data }) => {
-              if (Array.isArray(data)) {
+              if (Array.isArray(data) && data.length > 0) {
                 const clean = data.filter(p => !isFakeGalleryItem(p));
-                setGalleryList(clean);
-                saveStoredBuffetGallery(clean);
+                if (clean.length > 0) {
+                  setGalleryList(clean);
+                  saveStoredBuffetGallery(clean);
+                }
               }
             });
+        })
+        .subscribe();
+
+      // Realtime company_settings: sincroniza novas fotos enviadas
+      supabase
+        .channel('realtime_cs_gallery_admin')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'company_settings' }, () => {
+          loadFromCompanySettings();
         })
         .subscribe();
     }

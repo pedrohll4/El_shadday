@@ -292,7 +292,6 @@ export const FAKE_GALLERY_IDS = new Set([
 export function isFakeGalleryItem(item) {
   if (!item) return false;
   if (FAKE_GALLERY_IDS.has(item.id)) return true;
-  if (typeof item.url === 'string' && item.url.includes('images.unsplash.com')) return true;
   return false;
 }
 

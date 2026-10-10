@@ -251,7 +251,7 @@ export function subscribeToConfigEvents({ onProductsUpdate, onGalleryUpdate, onP
                     if (onGalleryUpdate) onGalleryUpdate(galData);
                   } else {
                     supabase.from('company_settings').select('buffet_gallery').eq('id', 'el_shadday_config').single().then(({ data: cs }) => {
-                      if (Array.isArray(cs?.buffet_gallery)) {
+                      if (Array.isArray(cs?.buffet_gallery) && cs.buffet_gallery.length > 0) {
                         saveStoredBuffetGallery(cs.buffet_gallery);
                         if (onGalleryUpdate) onGalleryUpdate(cs.buffet_gallery);
                       }
