@@ -124,6 +124,36 @@ export function AdminDashboard({
       supabase.from('buffet_gallery').delete().in('id', ['gal_1', 'gal_2', 'gal_3', 'gal_4', 'gal_5', 'gal_6', 'gal_7', 'gal_8', 'gal_9', 'gal_10', 'gal_11', 'gal_12']).then(() => {});
       supabase.from('buffet_gallery').delete().like('url', '%unsplash.com%').then(() => {});
 
+      const pushLocalToSupabase = (items) => {
+        if (!Array.isArray(items) || items.length === 0) return;
+        const clean = items.filter(p => !isFakeGalleryItem(p));
+        if (clean.length === 0) return;
+        console.log('[AdminDashboard] Sincronizando fotos locais com o banco Supabase...', clean.length);
+        
+        supabase.from('company_settings').upsert({
+          id: 'el_shadday_config',
+          buffet_gallery: clean,
+          updated_at: new Date().toISOString()
+        }).then(() => {});
+
+        for (let i = 0; i < clean.length; i++) {
+          const item = clean[i];
+          supabase.from('buffet_gallery').upsert({
+            id: item.id || `media_${Date.now()}_${i}`,
+            url: item.url,
+            title: item.title || 'Buffet El Shadday',
+            subtitle: item.subtitle || '',
+            category: item.category || 'churrasco',
+            tag: item.tag || 'Buffet',
+            type: item.type || 'image',
+            thumbnail: item.thumbnail || item.url,
+            position: i
+          }).then(() => {});
+        }
+
+        dispatchConfigSync('GALLERY_UPDATE', clean);
+      };
+
       const loadFromCompanySettings = () => {
         return supabase
           .from('company_settings')
@@ -137,7 +167,13 @@ export function AdminDashboard({
                 console.log('[AdminDashboard] Galeria carregada de company_settings:', cleanCs.length, 'itens');
                 setGalleryList(cleanCs);
                 saveStoredBuffetGallery(cleanCs);
+                return;
               }
+            }
+            // Se Supabase estiver vazio, sincroniza as fotos locais do Admin para a nuvem
+            const stored = getStoredBuffetGallery();
+            if (stored.length > 0) {
+              pushLocalToSupabase(stored);
             }
           });
       };
@@ -284,6 +320,55 @@ export function AdminDashboard({
     }
     setGalleryFeedback('Galeria limpa com sucesso!');
     setTimeout(() => setGalleryFeedback(''), 3500);
+  };
+
+  const handleForceSyncGalleryToDatabase = async () => {
+    const current = galleryList.length > 0 ? galleryList : getStoredBuffetGallery();
+    const clean = current.filter(p => !isFakeGalleryItem(p));
+    if (clean.length === 0) {
+      alert('Não há fotos ou vídeos na galeria para sincronizar.');
+      return;
+    }
+
+    setGalleryFeedback(`Enviando ${clean.length} item(ns) para o banco de dados Supabase e nuvem...`);
+    
+    // 1. Salva localmente
+    saveStoredBuffetGallery(clean);
+    setGalleryList(clean);
+
+    // 2. Salva em Supabase se configurado
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('company_settings').upsert({
+          id: 'el_shadday_config',
+          buffet_gallery: clean,
+          updated_at: new Date().toISOString()
+        });
+
+        for (let i = 0; i < clean.length; i++) {
+          const item = clean[i];
+          await supabase.from('buffet_gallery').upsert({
+            id: item.id || `media_${Date.now()}_${i}`,
+            url: item.url,
+            title: item.title || 'Buffet El Shadday',
+            subtitle: item.subtitle || '',
+            category: item.category || 'churrasco',
+            tag: item.tag || 'Buffet',
+            type: item.type || 'image',
+            thumbnail: item.thumbnail || item.url,
+            position: i
+          });
+        }
+      } catch (err) {
+        console.warn('Erro ao salvar no Supabase:', err);
+      }
+    }
+
+    // 3. Notifica nuvem global e outros dispositivos
+    dispatchConfigSync('GALLERY_UPDATE', clean);
+
+    setGalleryFeedback(`✅ ${clean.length} foto(s)/vídeo(s) sincronizados com sucesso no banco de dados e nuvem!`);
+    setTimeout(() => setGalleryFeedback(''), 4500);
   };
 
   // ==============================================================
@@ -3908,27 +3993,30 @@ export function AdminDashboard({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  {galleryList.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleForceSyncGalleryToDatabase}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-brand-gold to-amber-400 hover:brightness-110 text-xs font-black text-dark-950 transition-all cursor-pointer shadow-md active:scale-95"
+                      title="Forçar envio de todas as fotos para o banco de dados Supabase e nuvem agora"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 fill-current" />
+                      <span>Sincronizar no Banco ({galleryList.length})</span>
+                    </button>
+                  )}
+
                   {galleryList.length > 0 && (
                     <button
                       type="button"
                       onClick={handleClearAllPhotos}
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-xs font-semibold text-rose-300 hover:text-white border border-rose-500/40 transition-all cursor-pointer"
-                      title="Apagar todas as fotos padrão para cadastrar apenas as suas"
+                      title="Apagar todas as fotos da galeria para recomeçar do zero"
                     >
                       <Trash2 className="w-3.5 h-3.5 text-rose-400" />
-                      <span>Apagar Todas as Fotos</span>
+                      <span>Apagar Todas</span>
                     </button>
                   )}
-
-                  <button
-                    type="button"
-                    onClick={handleResetGallery}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-dark-800 hover:bg-dark-750 text-xs font-semibold text-slate-300 hover:text-white border border-dark-700 transition-all cursor-pointer"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5 text-brand-gold" />
-                    <span>Restaurar Fotos Padrão</span>
-                  </button>
                 </div>
               </div>
 

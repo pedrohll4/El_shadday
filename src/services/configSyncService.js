@@ -78,6 +78,25 @@ export async function dispatchConfigSync(type, data) {
           buffet_gallery: data,
           updated_at: new Date().toISOString()
         });
+
+        if (Array.isArray(data) && data.length > 0) {
+          for (let i = 0; i < data.length; i++) {
+            const item = data[i];
+            if (item && item.url) {
+              await supabase.from('buffet_gallery').upsert({
+                id: item.id || `media_${Date.now()}_${i}`,
+                url: item.url,
+                title: item.title || 'Buffet El Shadday',
+                subtitle: item.subtitle || '',
+                category: item.category || 'churrasco',
+                tag: item.tag || 'Buffet',
+                type: item.type || 'image',
+                thumbnail: item.thumbnail || item.url,
+                position: i
+              });
+            }
+          }
+        }
       }
     } catch (err) {
       console.warn('⚠️ Supabase config sync error:', err);
@@ -142,7 +161,18 @@ export async function fetchCloudConfigHistory() {
             } else if (parsed.type === 'PRODUCTS_UPDATE' && Array.isArray(parsed.data)) {
               latestProducts = parsed.data;
             } else if (parsed.type === 'GALLERY_UPDATE' && Array.isArray(parsed.data)) {
-              latestGallery = parsed.data;
+              if (parsed.data.length > 0) {
+                latestGallery = parsed.data;
+              }
+            } else if (parsed.type === 'GALLERY_UPDATE_PING' || parsed.type === 'GALLERY_PING') {
+              if (isSupabaseConfigured && supabase) {
+                try {
+                  const { data: bgData } = await supabase.from('buffet_gallery').select('*').order('position', { ascending: true });
+                  if (Array.isArray(bgData) && bgData.length > 0) {
+                    latestGallery = bgData;
+                  }
+                } catch (e) {}
+              }
             } else if (parsed.type === 'PROMOS_UPDATE' && parsed.data) {
               latestPromos = parsed.data;
             } else if (parsed.type === 'STORE_UPDATE' && parsed.data) {
@@ -174,7 +204,7 @@ export async function fetchCloudConfigHistory() {
 
     return {
       products: latestProducts,
-      gallery: latestGallery,
+      gallery: (latestGallery && latestGallery.length > 0) ? latestGallery : null,
       promos: latestPromos,
       store: latestStore,
       flavors: latestFlavors
@@ -233,8 +263,10 @@ export function subscribeToConfigEvents({ onProductsUpdate, onGalleryUpdate, onP
               saveStoredProducts(data.data);
               if (onProductsUpdate) onProductsUpdate(data.data);
             } else if (data.type === 'GALLERY_UPDATE' && Array.isArray(data.data)) {
-              saveStoredBuffetGallery(data.data);
-              if (onGalleryUpdate) onGalleryUpdate(data.data);
+              if (data.data.length > 0) {
+                saveStoredBuffetGallery(data.data);
+                if (onGalleryUpdate) onGalleryUpdate(data.data);
+              }
             } else if (data.type === 'PROMOS_UPDATE' && data.data) {
               saveStoredPromoSettings(data.data);
               if (onPromosUpdate) onPromosUpdate(data.data);

@@ -76,10 +76,13 @@ export function BuffetSection({ onExploreFullBuffet }) {
 
   useEffect(() => {
     const handleGallerySync = (e) => {
-      if (e?.detail && Array.isArray(e.detail)) {
+      if (e?.detail && Array.isArray(e.detail) && e.detail.length > 0) {
         setGalleryPhotos(e.detail);
       } else {
-        setGalleryPhotos(getStoredBuffetGallery());
+        const stored = getStoredBuffetGallery();
+        if (stored && stored.length > 0) {
+          setGalleryPhotos(stored);
+        }
       }
     };
 
@@ -139,8 +142,10 @@ export function BuffetSection({ onExploreFullBuffet }) {
             .then(({ data }) => {
               if (Array.isArray(data)) {
                 const clean = data.filter(p => !isFakeGalleryItem(p));
-                setGalleryPhotos(clean);
-                saveStoredBuffetGallery(clean);
+                if (clean.length > 0) {
+                  setGalleryPhotos(clean);
+                  saveStoredBuffetGallery(clean);
+                }
               }
             });
         })
@@ -151,7 +156,10 @@ export function BuffetSection({ onExploreFullBuffet }) {
     fetchCloudConfigHistory().then(cfg => {
       if (cfg?.gallery && Array.isArray(cfg.gallery)) {
         const clean = cfg.gallery.filter(p => !isFakeGalleryItem(p));
-        setGalleryPhotos(clean);
+        if (clean.length > 0) {
+          setGalleryPhotos(clean);
+          saveStoredBuffetGallery(clean);
+        }
       }
     });
 
@@ -159,7 +167,10 @@ export function BuffetSection({ onExploreFullBuffet }) {
       onGalleryUpdate: (gal) => {
         if (Array.isArray(gal)) {
           const clean = gal.filter(p => !isFakeGalleryItem(p));
-          setGalleryPhotos(clean);
+          if (clean.length > 0) {
+            setGalleryPhotos(clean);
+            saveStoredBuffetGallery(clean);
+          }
         }
       }
     });

@@ -146,8 +146,24 @@ export default function App() {
     window.addEventListener('delivery_restaurant_info_updated', handleInfoSync);
     window.addEventListener('storage', handleProductsSync);
 
-    // Hydrate products & promo settings from Supabase if configured
+    // Hydrate products, gallery & promo settings from Supabase if configured
     if (isSupabaseConfigured && supabase) {
+      const syncGalleryFromSupabase = () => {
+        supabase
+          .from('buffet_gallery')
+          .select('*')
+          .order('position', { ascending: true })
+          .then(({ data: bgData, error: bgErr }) => {
+            if (!bgErr && Array.isArray(bgData) && bgData.length > 0) {
+              const clean = bgData.filter(p => !isFakeGalleryItem(p));
+              if (clean.length > 0) {
+                saveStoredBuffetGallery(clean);
+                window.dispatchEvent(new CustomEvent("buffet_gallery_updated", { detail: clean }));
+              }
+            }
+          });
+      };
+
       supabase
         .from('company_settings')
         .select('*')
@@ -155,10 +171,17 @@ export default function App() {
         .single()
         .then(({ data, error }) => {
           if (!error && data) {
-            if (Array.isArray(data.buffet_gallery)) {
+            if (Array.isArray(data.buffet_gallery) && data.buffet_gallery.length > 0) {
               const cleanGal = data.buffet_gallery.filter(p => !isFakeGalleryItem(p));
-              saveStoredBuffetGallery(cleanGal);
-              window.dispatchEvent(new CustomEvent("buffet_gallery_updated", { detail: cleanGal }));
+              if (cleanGal.length > 0) {
+                saveStoredBuffetGallery(cleanGal);
+                window.dispatchEvent(new CustomEvent("buffet_gallery_updated", { detail: cleanGal }));
+              } else {
+                syncGalleryFromSupabase();
+              }
+            } else {
+              // company_settings vazio para galeria — busca na tabela buffet_gallery
+              syncGalleryFromSupabase();
             }
             if (Array.isArray(data.menu_products) && data.menu_products.length > 0) {
               setProducts(data.menu_products);
@@ -189,6 +212,8 @@ export default function App() {
               setRestaurantInfo(updatedStore);
               saveStoredRestaurantInfo(updatedStore);
             }
+          } else {
+            syncGalleryFromSupabase();
           }
         });
 
@@ -198,10 +223,12 @@ export default function App() {
         .on('postgres_changes', { event: '*', schema: 'public', table: 'company_settings' }, (payload) => {
           const freshData = payload.new;
           if (freshData) {
-            if (Array.isArray(freshData.buffet_gallery)) {
+            if (Array.isArray(freshData.buffet_gallery) && freshData.buffet_gallery.length > 0) {
               const cleanGal = freshData.buffet_gallery.filter(p => !isFakeGalleryItem(p));
-              saveStoredBuffetGallery(cleanGal);
-              window.dispatchEvent(new CustomEvent("buffet_gallery_updated", { detail: cleanGal }));
+              if (cleanGal.length > 0) {
+                saveStoredBuffetGallery(cleanGal);
+                window.dispatchEvent(new CustomEvent("buffet_gallery_updated", { detail: cleanGal }));
+              }
             }
             if (Array.isArray(freshData.menu_products)) {
               setProducts(freshData.menu_products);
