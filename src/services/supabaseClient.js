@@ -22,7 +22,10 @@ const checkUrlParams = () => {
 // Check if credentials came via URL query params (e.g. from 1-click sync link)
 checkUrlParams();
 
-const getEnvOrStored = (staticEnvVal, storageKey) => {
+const DEFAULT_SUPABASE_URL = 'https://yzeemqzxlgudynydvpof.supabase.co';
+const DEFAULT_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl6ZWVtcXp4bGd1ZHlueWR2cG9mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE1MjAwOTgsImV4cCI6MjEwNzA5NjA5OH0.aahKZCTuVyJ9lNS09EZPVhaucSRhTL6pDGwKITSUnwg';
+
+const getEnvOrStored = (staticEnvVal, storageKey, fallbackVal = '') => {
   if (staticEnvVal && typeof staticEnvVal === 'string' && !staticEnvVal.includes('placeholder')) {
     return staticEnvVal.trim();
   }
@@ -32,12 +35,12 @@ const getEnvOrStored = (staticEnvVal, storageKey) => {
       if (stored && stored.trim()) return stored.trim();
     } catch (e) {}
   }
-  return '';
+  return fallbackVal;
 };
 
 // STATIC access required by Vite compiler for production builds:
-const supabaseUrl = getEnvOrStored(import.meta.env.VITE_SUPABASE_URL, 'el_shadday_supabase_url');
-const supabaseAnonKey = getEnvOrStored(import.meta.env.VITE_SUPABASE_ANON_KEY, 'el_shadday_supabase_anon_key');
+const supabaseUrl = getEnvOrStored(import.meta.env.VITE_SUPABASE_URL, 'el_shadday_supabase_url', DEFAULT_SUPABASE_URL);
+const supabaseAnonKey = getEnvOrStored(import.meta.env.VITE_SUPABASE_ANON_KEY, 'el_shadday_supabase_anon_key', DEFAULT_SUPABASE_ANON_KEY);
 
 export const isSupabaseConfigured = Boolean(
   supabaseUrl && 

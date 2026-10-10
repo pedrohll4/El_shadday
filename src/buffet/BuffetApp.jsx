@@ -22,7 +22,7 @@ import { BuffetFloatingWhatsApp } from './components/BuffetFloatingWhatsApp';
 import { BuffetAdminLoginModal } from './components/BuffetAdminLoginModal';
 import { BuffetAdminDashboard } from './components/BuffetAdminDashboard';
 import { supabase, isSupabaseConfigured } from '../services/supabaseClient';
-import { fetchCloudConfigHistory, subscribeToConfigEvents, dispatchConfigSync } from '../services/configSyncService';
+import { dispatchConfigSync } from '../services/configSyncService';
 
 export function BuffetApp({ currentAppMode, onToggleAppMode }) {
   // App Dynamic State (Editable & Persisted)
@@ -202,35 +202,19 @@ export function BuffetApp({ currentAppMode, onToggleAppMode }) {
             });
         })
         .subscribe();
+
+      // 3. Escuta alterações em tempo real na tabela company_settings
+      supabase
+        .channel('realtime_cs_gallery_buffetapp')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'company_settings' }, () => {
+          loadFromCompanySettings();
+        })
+        .subscribe();
     }
-
-    // Carrega fotos mais recentes da nuvem pública (cross-device)
-    fetchCloudConfigHistory().then(cfg => {
-      if (cfg?.gallery && Array.isArray(cfg.gallery)) {
-        const clean = cfg.gallery.filter(p => !isFakeGalleryItem(p));
-        if (clean.length > 0) {
-          setGalleryPhotos(clean);
-          saveStoredBuffetGallery(clean);
-        }
-      }
-    });
-
-    const unsubscribeGallery = subscribeToConfigEvents({
-      onGalleryUpdate: (gal) => {
-        if (Array.isArray(gal)) {
-          const clean = gal.filter(p => !isFakeGalleryItem(p));
-          if (clean.length > 0) {
-            setGalleryPhotos(clean);
-            saveStoredBuffetGallery(clean);
-          }
-        }
-      }
-    });
 
     return () => {
       window.removeEventListener('storage', handleGallerySync);
       window.removeEventListener('buffet_gallery_updated', handleGallerySync);
-      if (unsubscribeGallery) unsubscribeGallery();
     };
   }, []);
 
