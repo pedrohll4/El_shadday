@@ -1,4 +1,5 @@
 import { getStoredBranches } from '../data/branchesData';
+import { getBranchWhatsApp } from './whatsappBranchService';
 
 const STORAGE_SETTINGS_KEY = 'el_shadday_whatsapp_settings_v1';
 
@@ -62,9 +63,17 @@ export function cleanPhoneNumber(rawPhone) {
 export function getBranchForOrder(order, branches = null) {
   const list = branches || getStoredBranches();
   const targetId = order?.branchId || 'ariquemes';
-  const found = list.find(b => b.id === targetId);
-  if (found) return found;
-  return list.find(b => b.id === 'ariquemes') || list[0] || {};
+  const found = list.find(b => b.id === targetId) || list.find(b => b.id === 'ariquemes') || list[0] || {};
+  const session = getBranchWhatsApp(targetId);
+  return {
+    ...found,
+    phone: session?.phone || found.phone,
+    phoneFormatted: session?.phoneFormatted || found.phoneFormatted,
+    whatsapp: session?.phone || found.whatsapp,
+    whatsappFormatted: session?.phoneFormatted || found.whatsappFormatted,
+    whatsappApiUrl: session?.apiUrl || found.whatsappApiUrl,
+    whatsappApiToken: session?.apiToken || found.whatsappApiToken
+  };
 }
 
 /**

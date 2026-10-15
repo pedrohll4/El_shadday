@@ -9,7 +9,8 @@ import {
   Camera, RotateCcw, Edit, Edit2, Eye, EyeOff, Tag, Percent,
   Utensils, ToggleLeft, ToggleRight, Save, Layers, CheckSquare,
   Pizza, ArrowUpRight, Info, CreditCard, Play, Film,
-  Building2, Users, Crown, Sliders, BarChart3, Star, QrCode
+  Building2, Users, Crown, Sliders, BarChart3, Star, QrCode,
+  Settings2, Smartphone
 } from 'lucide-react';
 import { 
   RESTAURANT_INFO, 
@@ -51,6 +52,7 @@ import { getStoredBranches } from '../data/branchesData';
 import { MasterFinancialView } from './admin/MasterFinancialView';
 import { BranchManagementView } from './admin/BranchManagementView';
 import { UserManagementView } from './admin/UserManagementView';
+import WhatsAppManagerView from './admin/WhatsAppManagerView';
 import { 
   sendCustomerWhatsAppNotification, 
   buildStatusMessage, 
@@ -479,8 +481,10 @@ export function AdminDashboard({
   const [promoSettings, setPromoSettings] = useState(() => getStoredPromoSettings());
   const [restaurantSettings, setRestaurantSettings] = useState(() => getStoredRestaurantInfo());
 
-  // Sub-navigation in Menu Tab: 'products' | 'promos' | 'store'
+  // Sub-navigation in Menu Tab: 'products' | 'flavors'
   const [menuSubTab, setMenuSubTab] = useState('products');
+  // Sub-navigation in Settings Tab: 'card-fee' | 'store' | 'promos'
+  const [settingsSubTab, setSettingsSubTab] = useState('card-fee');
 
   // Search & Filter in Products list
   const [menuSearch, setMenuSearch] = useState('');
@@ -1721,35 +1725,140 @@ export function AdminDashboard({
 
         {/* Navigation Tabs */}
         {currentUser?.role !== ROLES.KITCHEN && (
-          <div className="max-w-7xl mx-auto mt-3 flex items-center gap-2 border-t border-dark-800 pt-2.5 overflow-x-auto scrollbar-none pb-1">
+          <div className="max-w-7xl mx-auto mt-3 flex items-center gap-1.5 border-t border-dark-800 pt-2.5 overflow-x-auto scrollbar-none pb-1 text-xs">
             
-            {/* SUPER ADMIN TABS */}
+            {/* 1. COZINHA (KDS) */}
+            <button
+              type="button"
+              onClick={() => setActiveAdminTab('kds')}
+              className={`px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+                activeAdminTab === 'kds'
+                  ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
+                  : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
+              }`}
+            >
+              <ChefHat className="w-4 h-4" />
+              <span>Cozinha</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                activeAdminTab === 'kds' ? 'bg-dark-950 text-brand-gold' : 'bg-dark-900 text-slate-400'
+              }`}>
+                {activeOrdersList.length}
+              </span>
+            </button>
+
+            {/* 2. NOVO PEDIDO (PDV) */}
+            <button
+              type="button"
+              onClick={() => setActiveAdminTab('pdv')}
+              className={`px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+                activeAdminTab === 'pdv'
+                  ? 'bg-emerald-500 text-dark-950 font-black shadow-sm'
+                  : 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/30'
+              }`}
+            >
+              <Plus className="w-4 h-4 stroke-[3]" />
+              <span>Novo Pedido</span>
+              {pdvCart.length > 0 && (
+                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-500 text-dark-950 font-black">
+                  {pdvCart.length}
+                </span>
+              )}
+            </button>
+
+            {/* 3. CARDÁPIO */}
+            <button
+              type="button"
+              onClick={() => {
+                setActiveAdminTab('menu');
+                setMenuSubTab('products');
+              }}
+              className={`px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+                activeAdminTab === 'menu'
+                  ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
+                  : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
+              }`}
+            >
+              <Utensils className="w-4 h-4" />
+              <span>Cardápio</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                activeAdminTab === 'menu' ? 'bg-dark-950 text-brand-gold' : 'bg-dark-900 text-slate-400'
+              }`}>
+                {productsList.length}
+              </span>
+            </button>
+
+            {/* 4. WHATSAPP MULTI-FILIAL */}
+            <button
+              type="button"
+              onClick={() => setActiveAdminTab('whatsapp')}
+              className={`px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+                activeAdminTab === 'whatsapp'
+                  ? 'bg-emerald-500 text-dark-950 font-black shadow-sm'
+                  : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
+              }`}
+              title="Gerenciador de Conexões WhatsApp das Filiais"
+            >
+              <MessageSquare className="w-4 h-4 text-emerald-400" />
+              <span>WhatsApp</span>
+            </button>
+
+            {/* 5. QR CODE MESA / BALCÃO */}
+            <button
+              type="button"
+              onClick={() => setActiveAdminTab('qrcode')}
+              className={`px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+                activeAdminTab === 'qrcode'
+                  ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
+                  : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
+              }`}
+              title="QR Code e Link Oficial da Filial"
+            >
+              <QrCode className="w-4 h-4" />
+              <span>QR Code Mesa</span>
+            </button>
+
+            {/* 6. CONFIGURAÇÕES (TAXA, LOJA, CUPONS) */}
+            <button
+              type="button"
+              onClick={() => setActiveAdminTab('settings')}
+              className={`px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+                activeAdminTab === 'settings'
+                  ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
+                  : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
+              }`}
+              title="Taxa da maquininha, dados da filial e cupons"
+            >
+              <Settings2 className="w-4 h-4" />
+              <span>Configurações</span>
+            </button>
+
+            {/* ABAS DO MASTER (SUPER_ADMIN) */}
             {currentUser?.role === ROLES.SUPER_ADMIN && (
               <>
                 <button
                   type="button"
                   onClick={() => setActiveAdminTab('master-overview')}
-                  className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
+                  className={`px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
                     activeAdminTab === 'master-overview'
-                      ? 'bg-brand-gold text-dark-950 shadow-glow-gold font-black'
-                      : 'bg-dark-800 text-slate-300 hover:bg-dark-750 hover:text-white border border-dark-750'
+                      ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
+                      : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
                   }`}
                 >
                   <BarChart3 className="w-4 h-4" />
-                  <span>Faturamento & Lucro Master</span>
+                  <span>Faturamento</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setActiveAdminTab('branches')}
-                  className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
+                  className={`px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
                     activeAdminTab === 'branches'
-                      ? 'bg-brand-gold text-dark-950 shadow-glow-gold font-black'
-                      : 'bg-dark-800 text-slate-300 hover:bg-dark-750 hover:text-white border border-dark-750'
+                      ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
+                      : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
                   }`}
                 >
                   <Building2 className="w-4 h-4" />
-                  <span>Gestão de Filiais</span>
+                  <span>Filiais</span>
                   <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
                     activeAdminTab === 'branches' ? 'bg-dark-950 text-brand-gold' : 'bg-dark-900 text-slate-400'
                   }`}>
@@ -1760,155 +1869,63 @@ export function AdminDashboard({
                 <button
                   type="button"
                   onClick={() => setActiveAdminTab('users')}
-                  className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
+                  className={`px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
                     activeAdminTab === 'users'
-                      ? 'bg-brand-gold text-dark-950 shadow-glow-gold font-black'
-                      : 'bg-dark-800 text-slate-300 hover:bg-dark-750 hover:text-white border border-dark-750'
+                      ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
+                      : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
                   }`}
                 >
                   <Users className="w-4 h-4" />
-                  <span>Contas & Usuários</span>
+                  <span>Usuários</span>
                 </button>
               </>
             )}
 
-            {/* BRANCH ADMIN TAB: LOCAL METRICS */}
+            {/* DESEMPENHO DA FILIAL (BRANCH_ADMIN) */}
             {currentUser?.role === ROLES.BRANCH_ADMIN && (
               <button
                 type="button"
                 onClick={() => setActiveAdminTab('branch-overview')}
-                className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
+                className={`px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
                   activeAdminTab === 'branch-overview'
-                    ? 'bg-brand-gold text-dark-950 shadow-glow-gold font-black'
-                    : 'bg-dark-800 text-slate-300 hover:bg-dark-750 hover:text-white border border-dark-750'
+                    ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
+                    : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
                 }`}
               >
                 <BarChart3 className="w-4 h-4" />
-                <span>Desempenho da Filial</span>
+                <span>Desempenho</span>
               </button>
             )}
 
-            {/* COMMON TABS (SUPER ADMIN & BRANCH ADMIN) */}
-            <button
-              type="button"
-              onClick={() => {
-                setActiveAdminTab('menu');
-                if (menuSubTab === 'card-fee') {
-                  setMenuSubTab('products');
-                }
-              }}
-              className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
-                activeAdminTab === 'menu' && menuSubTab !== 'card-fee'
-                  ? 'bg-brand-gold text-dark-950 shadow-glow-gold font-black'
-                  : 'bg-dark-800 text-slate-300 hover:bg-dark-750 hover:text-white border border-dark-750'
-              }`}
-            >
-              <Utensils className="w-4 h-4" />
-              <span>{currentUser?.role === ROLES.SUPER_ADMIN ? 'Cardápio & Preços' : 'Cardápio da Filial'}</span>
-              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
-                activeAdminTab === 'menu' && menuSubTab !== 'card-fee' ? 'bg-dark-950 text-brand-gold' : 'bg-dark-900 text-slate-400'
-              }`}>
-                {productsList.length}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveAdminTab('pdv')}
-              className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
-                activeAdminTab === 'pdv'
-                  ? 'bg-brand-gold text-dark-950 shadow-glow-gold font-black'
-                  : 'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 border border-emerald-500/40'
-              }`}
-            >
-              <Plus className="w-4 h-4 stroke-[3]" />
-              <span>Novo Pedido (PDV)</span>
-              {pdvCart.length > 0 && (
-                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-500 text-dark-950 font-black">
-                  {pdvCart.length} itens
-                </span>
-              )}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveAdminTab('kds')}
-              className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
-                activeAdminTab === 'kds'
-                  ? 'bg-brand-gold text-dark-950 shadow-glow-gold font-black'
-                  : 'bg-dark-800 text-slate-300 hover:bg-dark-750 hover:text-white border border-dark-750'
-              }`}
-            >
-              <ChefHat className="w-4 h-4" />
-              <span>{currentUser?.role === ROLES.SUPER_ADMIN ? 'Cozinha KDS' : 'Cozinha da Filial'}</span>
-              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
-                activeAdminTab === 'kds' ? 'bg-dark-950 text-brand-gold' : 'bg-dark-900 text-slate-400'
-              }`}>
-                {activeOrdersList.length}
-              </span>
-            </button>
-
-            {/* Botão de Acesso Direto: Taxa da Maquininha */}
-            <button
-              type="button"
-              onClick={() => {
-                setActiveAdminTab('menu');
-                setMenuSubTab('card-fee');
-              }}
-              className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
-                activeAdminTab === 'menu' && menuSubTab === 'card-fee'
-                  ? 'bg-gradient-to-r from-amber-400 to-brand-gold text-dark-950 shadow-glow-gold font-black ring-2 ring-amber-300'
-                  : 'bg-amber-500/15 text-amber-300 hover:bg-amber-500/25 border border-amber-500/40'
-              }`}
-              title="Clique aqui para configurar a taxa da maquininha de cartão"
-            >
-              <CreditCard className="w-4 h-4 text-amber-400" />
-              <span>💳 Taxa Maquininha</span>
-            </button>
-
-            {/* QR Code Tab for this Branch */}
-            <button
-              type="button"
-              onClick={() => setActiveAdminTab('qrcode')}
-              className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
-                activeAdminTab === 'qrcode'
-                  ? 'bg-brand-gold text-dark-950 shadow-glow-gold font-black'
-                  : 'bg-dark-800 text-slate-300 hover:bg-dark-750 hover:text-white border border-dark-750'
-              }`}
-              title="Ver e imprimir QR Code exclusivo desta filial"
-            >
-              <QrCode className="w-4 h-4 text-brand-gold" />
-              <span>QR Code da Filial</span>
-            </button>
-
-            {/* Buffet Gallery (Only Ariquemes has Buffet) */}
+            {/* GALERIA BUFFET (APENAS ARIQUEMES) */}
             {currentBranch?.id === 'ariquemes' && (currentUser?.role === ROLES.SUPER_ADMIN || currentUser?.branchId === 'ariquemes') && (
               <button
                 type="button"
                 onClick={() => setActiveAdminTab('gallery')}
-                className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
+                className={`px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
                   activeAdminTab === 'gallery'
-                    ? 'bg-brand-gold text-dark-950 shadow-glow-gold font-black'
-                    : 'bg-dark-800 text-slate-300 hover:bg-dark-750 hover:text-white border border-dark-750'
+                    ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
+                    : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
                 }`}
               >
-                <Camera className="w-4 h-4 text-brand-gold" />
-                <span>Galeria (Buffet Ariquemes)</span>
+                <Camera className="w-4 h-4" />
+                <span>Galeria Buffet</span>
               </button>
             )}
 
-            {/* Buffet Shortcut (Only Ariquemes has Buffet) */}
+            {/* ATALHO BUFFET (APENAS ARIQUEMES) */}
             {onSwitchToBuffet && currentBranch?.id === 'ariquemes' && (
               <button
                 type="button"
                 onClick={onSwitchToBuffet}
-                className="ml-auto px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-1.5 bg-gradient-to-r from-amber-500/20 to-brand-gold/20 text-brand-gold hover:text-white hover:bg-brand-gold/30 border border-brand-gold/40 transition-all cursor-pointer whitespace-nowrap"
-                title="Acessar apresentação do Buffet El Shadday Ariquemes"
+                className="ml-auto px-3 py-1.5 rounded-xl font-bold flex items-center gap-1 bg-amber-500/10 text-brand-gold hover:bg-amber-500/20 border border-brand-gold/30 transition-all cursor-pointer whitespace-nowrap text-xs"
+                title="Acessar vitrine do Buffet El Shadday Ariquemes"
               >
-                <Sparkles className="w-4 h-4" />
+                <Sparkles className="w-3.5 h-3.5" />
                 <span>Buffet 👑</span>
               </button>
             )}
+
           </div>
         )}
       </header>
@@ -1973,80 +1990,68 @@ export function AdminDashboard({
         {activeAdminTab === 'kds' && (
           <div className="space-y-5 animate-fade-in">
 
-            {/* KPI Summary Cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 sm:gap-4">
+            {/* Operational Status Strip (Compact, Clean & Fast) */}
+            <div className="flex flex-wrap items-center justify-between gap-3 p-3 sm:p-4 rounded-2xl bg-dark-900 border border-dark-800 shadow-md">
               
-              {/* Card 1: Faturamento */}
-              <div className="p-3.5 sm:p-4 rounded-2xl bg-dark-900 border border-dark-800 shadow-md flex items-center gap-3">
-                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center flex-shrink-0">
-                  <DollarSign className="w-5 h-5" />
+              {/* Order Flow Counts */}
+              <div className="flex items-center gap-2 flex-wrap text-xs">
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-dark-950 border border-dark-800">
+                  <span className="text-slate-400">Total na Fila:</span>
+                  <span className="font-black text-white">{activeOrdersList.length}</span>
                 </div>
-                <div>
-                  <div className="text-[10px] sm:text-[11px] text-slate-400 font-medium">Faturamento Total</div>
-                  <div className="text-base sm:text-xl font-black text-white">
-                    R$ {totalRevenue.toFixed(2).replace('.', ',')}
+                
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400">
+                  <span>Pendentes:</span>
+                  <span className="font-bold">{pendingCount}</span>
+                </div>
+                
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-gold/10 border border-brand-gold/30 text-brand-gold">
+                  <span>No Forno:</span>
+                  <span className="font-bold">{inPrepCount}</span>
+                </div>
+                
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-400">
+                  <span>Em Entrega:</span>
+                  <span className="font-bold">{inDeliveryCount}</span>
+                </div>
+
+                {delayedCount > 0 && (
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-500/15 border border-red-500/40 text-red-400 font-bold animate-pulse">
+                    <AlertTriangle className="w-3.5 h-3.5" />
+                    <span>Atrasados (+35m): {delayedCount}</span>
                   </div>
-                </div>
+                )}
               </div>
 
-              {/* Card 2: Pedidos Pendentes */}
-              <div className="p-3.5 sm:p-4 rounded-2xl bg-dark-900 border border-dark-800 shadow-md flex items-center gap-3">
-                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-500/15 text-amber-400 flex items-center justify-center flex-shrink-0">
-                  <Clock className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="text-[10px] sm:text-[11px] text-slate-400 font-medium">Novos / Pendentes</div>
-                  <div className="text-base sm:text-xl font-black text-amber-400">
-                    {pendingCount}
-                  </div>
-                </div>
-              </div>
+              {/* WhatsApp Quick Status & Auto-Notify */}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveAdminTab('whatsapp')}
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-400 text-xs font-semibold transition-colors cursor-pointer"
+                  title="Clique para gerenciar a conexão do WhatsApp desta filial"
+                >
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span>WhatsApp: <strong>{currentBranch?.phoneFormatted || '(69) 99222-8682'}</strong></span>
+                </button>
 
-              {/* Card 3: Na Cozinha */}
-              <div className="p-3.5 sm:p-4 rounded-2xl bg-dark-900 border border-dark-800 shadow-md flex items-center gap-3">
-                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-brand-gold/15 text-brand-gold flex items-center justify-center flex-shrink-0">
-                  <Flame className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="text-[10px] sm:text-[11px] text-slate-400 font-medium">No Forno / Preparo</div>
-                  <div className="text-base sm:text-xl font-black text-brand-gold">
-                    {inPrepCount}
-                  </div>
-                </div>
-              </div>
-
-              {/* Card 4: EM ATRASO (ALERT!) */}
-              <div className={`p-3.5 sm:p-4 rounded-2xl border shadow-md flex items-center gap-3 ${
-                delayedCount > 0 
-                  ? 'bg-red-500/15 border-red-500/50 text-red-400 animate-pulse' 
-                  : 'bg-dark-900 border-dark-800 text-slate-400'
-              }`}>
-                <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                  delayedCount > 0 ? 'bg-red-500 text-dark-950 font-bold' : 'bg-dark-800 text-slate-500'
-                }`}>
-                  <AlertTriangle className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider">
-                    {delayedCount > 0 ? '🚨 Atraso (+35 min)' : 'Em Atraso'}
-                  </div>
-                  <div className="text-base sm:text-xl font-black text-white">
-                    {delayedCount}
-                  </div>
-                </div>
-              </div>
-
-              {/* Card 5: Concluídos */}
-              <div className="p-3.5 sm:p-4 rounded-2xl bg-dark-900 border border-dark-800 shadow-md flex items-center gap-3 col-span-2 sm:col-span-1">
-                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center flex-shrink-0">
-                  <CheckCircle2 className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="text-[10px] sm:text-[11px] text-slate-400 font-medium">Entregues / Prontos</div>
-                  <div className="text-base sm:text-xl font-black text-white">
-                    {completedCount}
-                  </div>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nextState = !whatsAppSettings.autoNotify;
+                    const updated = { ...whatsAppSettings, autoNotify: nextState };
+                    setWhatsAppSettings(updated);
+                    saveWhatsAppSettings(updated);
+                  }}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    whatsAppSettings.autoNotify
+                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                      : 'bg-dark-800 text-slate-400 border border-dark-750'
+                  }`}
+                  title="Ativar ou pausar envio automático de mensagens no WhatsApp do cliente"
+                >
+                  {whatsAppSettings.autoNotify ? '🔔 Avisos: ON' : '🔕 Avisos: OFF'}
+                </button>
               </div>
 
             </div>
@@ -2149,59 +2154,6 @@ export function AdminDashboard({
                   />
                 </div>
 
-              </div>
-            </div>
-
-            {/* WhatsApp Branch Status & Auto-Notify Switch Bar */}
-            <div className="p-3 sm:p-3.5 rounded-2xl bg-gradient-to-r from-emerald-950/30 via-dark-900 to-dark-900 border border-emerald-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-md">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center border border-emerald-500/30 flex-shrink-0">
-                  <MessageSquare className="w-4 h-4" />
-                </div>
-                <div>
-                  <div className="text-xs font-extrabold text-white flex items-center gap-2 flex-wrap">
-                    <span>WhatsApp da Cozinha:</span>
-                    <span className="font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-lg border border-emerald-500/20">
-                      {currentBranch?.whatsappFormatted || currentBranch?.phoneFormatted || '(69) 99222-8682'}
-                    </span>
-                    <span className="text-[11px] text-slate-400 font-normal">
-                      ({currentBranch?.displayName || currentBranch?.name || 'Ariquemes'})
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-slate-400 mt-0.5">
-                    Notificações automáticas no WhatsApp do cliente ao mudar status no KDS (No Forno, Saiu Entrega, Pronto, Concluído, Cancelado).
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 self-end sm:self-center flex-shrink-0">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const nextState = !whatsAppSettings.autoNotify;
-                    const updated = { ...whatsAppSettings, autoNotify: nextState };
-                    setWhatsAppSettings(updated);
-                    saveWhatsAppSettings(updated);
-                  }}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
-                    whatsAppSettings.autoNotify
-                      ? 'bg-emerald-500/20 border border-emerald-500/50 text-emerald-300 shadow-sm'
-                      : 'bg-dark-800 border border-dark-700 text-slate-400 hover:text-white'
-                  }`}
-                  title="Ativar ou pausar disparo automático de mensagens no WhatsApp"
-                >
-                  {whatsAppSettings.autoNotify ? (
-                    <>
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>Avisos Automáticos: ATIVADO</span>
-                    </>
-                  ) : (
-                    <>
-                      <XCircle className="w-3.5 h-3.5 text-slate-400" />
-                      <span>Avisos Automáticos: PAUSADO</span>
-                    </>
-                  )}
-                </button>
               </div>
             </div>
 
@@ -3001,101 +2953,129 @@ export function AdminDashboard({
         )}
 
         {/* ============================================================== */}
-        {/* VIEW 3: CARDÁPIO, PRODUTOS & PROMOÇÕES MANAGEMENT             */}
+        {/* VIEW 3: CARDÁPIO (PRODUTOS & SABORES) / CONFIGURAÇÕES DA FILIAL */}
         {/* ============================================================== */}
-        {activeAdminTab === 'menu' && (
+        {(activeAdminTab === 'menu' || activeAdminTab === 'settings') && (
           <div className="space-y-6 animate-fade-in">
             
             {/* Header Box */}
             <div className="bg-dark-900 border border-dark-800 rounded-3xl p-5 sm:p-7 shadow-xl">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-dark-800">
-                <div className="flex items-center gap-3">
-                  <div className="w-11 h-11 rounded-2xl bg-brand-gold/15 text-brand-gold flex items-center justify-center border border-brand-gold/30">
-                    <Utensils className="w-6 h-6" />
+              
+              {activeAdminTab === 'settings' ? (
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-dark-800">
+                  <div className="flex items-center gap-3">
+                    <div className="w-11 h-11 rounded-2xl bg-brand-gold/15 text-brand-gold flex items-center justify-center border border-brand-gold/30">
+                      <Settings2 className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h2 className="font-display font-extrabold text-base sm:text-lg text-white">
+                        Configurações da {currentBranch?.name || 'Filial'}
+                      </h2>
+                      <p className="text-xs text-slate-400">
+                        Ajuste taxas de cartão da maquininha, dados de contato e endereço da unidade, e promoções.
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h2 className="font-display font-extrabold text-base sm:text-lg text-white flex items-center gap-2">
-                      <span>Gestão Completa de Cardápio & Sabores</span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-brand-gold/20 text-brand-gold border border-brand-gold/30 font-bold">
-                        {menuSubTab === 'flavors' ? `${pizzaFlavors.length} sabores` : `${productsList.length} itens`}
-                      </span>
-                    </h2>
-                    <p className="text-xs text-slate-400">
-                      Crie novos itens, edite preços de pizzas e sabores individuais, pause produtos esgotados e configure promoções.
-                    </p>
-                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveAdminTab('menu')}
+                    className="px-3.5 py-2 rounded-xl bg-dark-800 hover:bg-dark-750 text-slate-300 hover:text-white border border-dark-700 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer self-start sm:self-auto"
+                  >
+                    <Utensils className="w-3.5 h-3.5 text-brand-gold" />
+                    <span>Voltar ao Cardápio &rarr;</span>
+                  </button>
                 </div>
+              ) : (
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-dark-800">
+                  <div className="flex items-center gap-3">
+                    <div className="w-11 h-11 rounded-2xl bg-brand-gold/15 text-brand-gold flex items-center justify-center border border-brand-gold/30">
+                      <Utensils className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h2 className="font-display font-extrabold text-base sm:text-lg text-white flex items-center gap-2">
+                        <span>Cardápio & Preços da {currentBranch?.name || 'Filial'}</span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-brand-gold/20 text-brand-gold border border-brand-gold/30 font-bold">
+                          {menuSubTab === 'flavors' ? `${pizzaFlavors.length} sabores` : `${productsList.length} itens`}
+                        </span>
+                      </h2>
+                      <p className="text-xs text-slate-400">
+                        Crie novos itens, edite preços de pizzas e sabores individuais, pause produtos esgotados.
+                      </p>
+                    </div>
+                  </div>
 
-                <div className="flex flex-wrap items-center gap-2">
-                  {menuSubTab === 'flavors' ? (
-                    <>
-                      <button
-                        type="button"
-                        onClick={handleOpenCreateFlavor}
-                        className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-brand-gold to-amber-400 text-dark-950 font-black text-xs hover:brightness-110 shadow-glow-gold flex items-center gap-2 transition-transform active:scale-95 cursor-pointer"
-                      >
-                        <Plus className="w-4 h-4 stroke-[3]" />
-                        <span>+ Novo Sabor de Pizza</span>
-                      </button>
-
-                      {pizzaFlavors.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    {menuSubTab === 'flavors' ? (
+                      <>
                         <button
                           type="button"
-                          onClick={handleClearAllFlavors}
-                          className="px-3 py-2 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 hover:text-white text-xs font-semibold border border-rose-500/40 flex items-center gap-1.5 transition-colors cursor-pointer"
-                          title="Apagar todos os sabores de pizza para cadastrar os seus"
+                          onClick={handleOpenCreateFlavor}
+                          className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-brand-gold to-amber-400 text-dark-950 font-black text-xs hover:brightness-110 shadow-glow-gold flex items-center gap-2 transition-transform active:scale-95 cursor-pointer"
                         >
-                          <Trash2 className="w-3.5 h-3.5 text-rose-400" />
-                          <span>Apagar Todos os Sabores</span>
+                          <Plus className="w-4 h-4 stroke-[3]" />
+                          <span>+ Novo Sabor de Pizza</span>
                         </button>
-                      )}
 
-                      <button
-                        type="button"
-                        onClick={handleResetFlavorsToDefault}
-                        className="px-3 py-2 rounded-xl bg-dark-800 hover:bg-dark-750 text-slate-300 hover:text-white text-xs font-semibold border border-dark-700 flex items-center gap-1.5 transition-colors cursor-pointer"
-                        title="Restaurar os sabores padrão de pizza"
-                      >
-                        <RotateCcw className="w-3.5 h-3.5 text-brand-gold" />
-                        <span>Restaurar Sabores Padrão</span>
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <button
-                        type="button"
-                        onClick={handleOpenCreateProduct}
-                        className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-brand-gold to-amber-400 text-dark-950 font-black text-xs hover:brightness-110 shadow-glow-gold flex items-center gap-2 transition-transform active:scale-95 cursor-pointer"
-                      >
-                        <Plus className="w-4 h-4 stroke-[3]" />
-                        <span>+ Criar Novo Produto</span>
-                      </button>
+                        {pizzaFlavors.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={handleClearAllFlavors}
+                            className="px-3 py-2 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 hover:text-white text-xs font-semibold border border-rose-500/40 flex items-center gap-1.5 transition-colors cursor-pointer"
+                            title="Apagar todos os sabores de pizza para cadastrar os seus"
+                          >
+                            <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                            <span>Apagar Todos os Sabores</span>
+                          </button>
+                        )}
 
-                      {productsList.length > 0 && (
                         <button
                           type="button"
-                          onClick={handleClearAllProducts}
-                          className="px-3 py-2 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 hover:text-white text-xs font-semibold border border-rose-500/40 flex items-center gap-1.5 transition-colors cursor-pointer"
-                          title="Apagar todos os produtos para cadastrar os seus"
+                          onClick={handleResetFlavorsToDefault}
+                          className="px-3 py-2 rounded-xl bg-dark-800 hover:bg-dark-750 text-slate-300 hover:text-white text-xs font-semibold border border-dark-700 flex items-center gap-1.5 transition-colors cursor-pointer"
+                          title="Restaurar os sabores padrão de pizza"
                         >
-                          <Trash2 className="w-3.5 h-3.5 text-rose-400" />
-                          <span>Apagar Todos os Produtos</span>
+                          <RotateCcw className="w-3.5 h-3.5 text-brand-gold" />
+                          <span>Restaurar Sabores Padrão</span>
                         </button>
-                      )}
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          onClick={handleOpenCreateProduct}
+                          className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-brand-gold to-amber-400 text-dark-950 font-black text-xs hover:brightness-110 shadow-glow-gold flex items-center gap-2 transition-transform active:scale-95 cursor-pointer"
+                        >
+                          <Plus className="w-4 h-4 stroke-[3]" />
+                          <span>+ Criar Novo Produto</span>
+                        </button>
 
-                      <button
-                        type="button"
-                        onClick={handleResetMenuToDefault}
-                        className="px-3 py-2 rounded-xl bg-dark-800 hover:bg-dark-750 text-slate-300 hover:text-white text-xs font-semibold border border-dark-700 flex items-center gap-1.5 transition-colors cursor-pointer"
-                        title="Restaurar o cardápio original"
-                      >
-                        <RotateCcw className="w-3.5 h-3.5 text-brand-gold" />
-                        <span>Restaurar Padrão</span>
-                      </button>
-                    </>
-                  )}
+                        {productsList.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={handleClearAllProducts}
+                            className="px-3 py-2 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 hover:text-white text-xs font-semibold border border-rose-500/40 flex items-center gap-1.5 transition-colors cursor-pointer"
+                            title="Apagar todos os produtos para cadastrar os seus"
+                          >
+                            <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                            <span>Apagar Todos os Produtos</span>
+                          </button>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={handleResetMenuToDefault}
+                          className="px-3 py-2 rounded-xl bg-dark-800 hover:bg-dark-750 text-slate-300 hover:text-white text-xs font-semibold border border-dark-700 flex items-center gap-1.5 transition-colors cursor-pointer"
+                          title="Restaurar o cardápio original"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5 text-brand-gold" />
+                          <span>Restaurar Padrão</span>
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Toast Feedback */}
               {menuFeedback && (
@@ -3105,82 +3085,95 @@ export function AdminDashboard({
                 </div>
               )}
 
-              {/* Sub-tabs: Produtos | Sabores de Pizza | Promoções & Cupons | Dados do Restaurante */}
-              <div className="flex items-center gap-2 mt-5 border-b border-dark-800 pb-3 overflow-x-auto scrollbar-none">
-                <button
-                  type="button"
-                  onClick={() => setMenuSubTab('products')}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
-                    menuSubTab === 'products'
-                      ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
-                      : 'bg-dark-800/80 text-slate-400 hover:text-white hover:bg-dark-800'
-                  }`}
-                >
-                  <Package className="w-3.5 h-3.5" />
-                  <span>Produtos & Preços ({productsList.length})</span>
-                </button>
+              {/* Sub-tabs Dinâmicas (Cardápio ou Configurações) */}
+              {activeAdminTab === 'settings' ? (
+                <div className="flex items-center gap-2 mt-5 border-b border-dark-800 pb-3 overflow-x-auto scrollbar-none">
+                  <button
+                    type="button"
+                    onClick={() => setSettingsSubTab('card-fee')}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                      settingsSubTab === 'card-fee'
+                        ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
+                        : 'bg-dark-800/80 text-slate-400 hover:text-white hover:bg-dark-800'
+                    }`}
+                  >
+                    <CreditCard className="w-3.5 h-3.5 text-amber-400" />
+                    <span>💳 Taxa da Maquininha</span>
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={() => setMenuSubTab('flavors')}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
-                    menuSubTab === 'flavors'
-                      ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
-                      : 'bg-dark-800/80 text-slate-400 hover:text-white hover:bg-dark-800'
-                  }`}
-                >
-                  <Pizza className="w-3.5 h-3.5" />
-                  <span>Sabores de Pizza ({pizzaFlavors.length})</span>
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => setSettingsSubTab('store')}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                      settingsSubTab === 'store'
+                        ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
+                        : 'bg-dark-800/80 text-slate-400 hover:text-white hover:bg-dark-800'
+                    }`}
+                  >
+                    <Store className="w-3.5 h-3.5" />
+                    <span>🏪 Dados da Loja</span>
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={() => setMenuSubTab('card-fee')}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
-                    menuSubTab === 'card-fee'
-                      ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
-                      : 'bg-dark-800/80 text-slate-400 hover:text-white hover:bg-dark-800'
-                  }`}
-                >
-                  <CreditCard className="w-3.5 h-3.5 text-amber-400" />
-                  <span>💳 Taxa da Maquininha</span>
-                  {restaurantSettings.cardMachineSettings?.active && (
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                  )}
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => setSettingsSubTab('promos')}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                      settingsSubTab === 'promos'
+                        ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
+                        : 'bg-dark-800/80 text-slate-400 hover:text-white hover:bg-dark-800'
+                    }`}
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>🏷️ Promoções & Cupons</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between gap-2 mt-5 border-b border-dark-800 pb-3 flex-wrap">
+                  <div className="flex items-center gap-2 overflow-x-auto scrollbar-none">
+                    <button
+                      type="button"
+                      onClick={() => setMenuSubTab('products')}
+                      className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                        menuSubTab === 'products'
+                          ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
+                          : 'bg-dark-800/80 text-slate-400 hover:text-white hover:bg-dark-800'
+                      }`}
+                    >
+                      <Package className="w-3.5 h-3.5" />
+                      <span>Produtos & Preços ({productsList.length})</span>
+                    </button>
 
-                <button
-                  type="button"
-                  onClick={() => setMenuSubTab('promos')}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
-                    menuSubTab === 'promos'
-                      ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
-                      : 'bg-dark-800/80 text-slate-400 hover:text-white hover:bg-dark-800'
-                  }`}
-                >
-                  <Sparkles className="w-3.5 h-3.5" />
-                  <span>Promoções, Banners & Cupons</span>
-                  {promoSettings.bannerActive && (
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                  )}
-                </button>
+                    <button
+                      type="button"
+                      onClick={() => setMenuSubTab('flavors')}
+                      className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                        menuSubTab === 'flavors'
+                          ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
+                          : 'bg-dark-800/80 text-slate-400 hover:text-white hover:bg-dark-800'
+                      }`}
+                    >
+                      <Pizza className="w-3.5 h-3.5" />
+                      <span>Sabores de Pizza ({pizzaFlavors.length})</span>
+                    </button>
+                  </div>
 
-                <button
-                  type="button"
-                  onClick={() => setMenuSubTab('store')}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
-                    menuSubTab === 'store'
-                      ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
-                      : 'bg-dark-800/80 text-slate-400 hover:text-white hover:bg-dark-800'
-                  }`}
-                >
-                  <Store className="w-3.5 h-3.5" />
-                  <span>Configurações da Loja</span>
-                </button>
-              </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveAdminTab('settings');
+                      setSettingsSubTab('card-fee');
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-dark-800 hover:bg-dark-750 text-slate-300 hover:text-white border border-dark-700 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                    title="Configurar taxa da maquininha, dados da loja e cupons"
+                  >
+                    <Settings2 className="w-3.5 h-3.5 text-brand-gold" />
+                    <span>Configurações da Filial (Taxas / Loja) &rarr;</span>
+                  </button>
+                </div>
+              )}
 
               {/* SUBTAB 1: PRODUTOS & PREÇOS */}
-              {menuSubTab === 'products' && (
+              {activeAdminTab === 'menu' && menuSubTab === 'products' && (
                 <div className="mt-5 space-y-4">
                   {/* Search and Category Filters */}
                   <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
@@ -3453,7 +3446,7 @@ export function AdminDashboard({
               )}
 
               {/* SUBTAB: SABORES DE PIZZA & PRECIFICAÇÃO */}
-              {menuSubTab === 'flavors' && (
+              {activeAdminTab === 'menu' && menuSubTab === 'flavors' && (
                 <div className="mt-5 space-y-5">
                   {/* Informational Callout Box explaining the rule */}
                   <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-amber-500/10 via-brand-gold/15 to-amber-500/10 border border-brand-gold/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -3657,7 +3650,7 @@ export function AdminDashboard({
               )}
 
               {/* SUBTAB: TAXA DA MAQUININHA */}
-              {menuSubTab === 'card-fee' && (
+              {(activeAdminTab === 'settings' ? settingsSubTab === 'card-fee' : menuSubTab === 'card-fee') && (
                 <div className="mt-5 space-y-6 max-w-4xl">
                   <div className="p-5 sm:p-6 rounded-2xl bg-dark-850 border border-dark-750 space-y-6">
                     
@@ -3931,7 +3924,7 @@ export function AdminDashboard({
               )}
 
               {/* SUBTAB 2: PROMOÇÕES, BANNERS & CUPONS */}
-              {menuSubTab === 'promos' && (
+              {(activeAdminTab === 'settings' ? settingsSubTab === 'promos' : menuSubTab === 'promos') && (
                 <div className="mt-5 space-y-6">
                   {/* Banner de Destaque no Topo do Site */}
                   <form onSubmit={handleSavePromoSettings} className="p-5 rounded-2xl bg-dark-800/60 border border-dark-700 space-y-4">
@@ -4057,7 +4050,7 @@ export function AdminDashboard({
               )}
 
               {/* SUBTAB 3: DADOS DO RESTAURANTE & WHATSAPP */}
-              {menuSubTab === 'store' && (
+              {(activeAdminTab === 'settings' ? settingsSubTab === 'store' : menuSubTab === 'store') && (
                 <>
                   <form onSubmit={handleSaveStoreSettings} className="mt-5 p-5 rounded-2xl bg-dark-800/60 border border-dark-700 space-y-4">
                   <div className="flex items-center gap-2 pb-3 border-b border-dark-700">
@@ -4817,6 +4810,19 @@ export function AdminDashboard({
               </div>
 
             </div>
+          </div>
+        )}
+
+        {/* ============================================================== */}
+        {/* VIEW 6: GERENCIADOR DE CONEXÕES WHATSAPP (MULTI-FILIAL)        */}
+        {/* ============================================================== */}
+        {activeAdminTab === 'whatsapp' && (
+          <div className="space-y-6 animate-fade-in">
+            <WhatsAppManagerView 
+              currentUser={currentUser} 
+              branches={branchesList} 
+              currentBranch={currentBranch} 
+            />
           </div>
         )}
 
