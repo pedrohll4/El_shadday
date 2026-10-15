@@ -51,6 +51,13 @@ import { getStoredBranches } from '../data/branchesData';
 import { MasterFinancialView } from './admin/MasterFinancialView';
 import { BranchManagementView } from './admin/BranchManagementView';
 import { UserManagementView } from './admin/UserManagementView';
+import { 
+  sendCustomerWhatsAppNotification, 
+  buildStatusMessage, 
+  getWhatsAppSettings, 
+  saveWhatsAppSettings,
+  cleanPhoneNumber 
+} from '../services/whatsappNotificationService';
 
 export function AdminDashboard({ 
   orders = [], 
@@ -131,9 +138,24 @@ export function AdminDashboard({
   const [isAudioUnlocked, setIsAudioUnlocked] = useState(false);
   const knownOrderIdsRef = useRef(new Set(orders.map(o => o.orderId)));
 
-  // WhatsApp Modal State
-  const [whatsappModalData, setWhatsappModalData] = useState(null); // { order, phone, message }
-  
+  // WhatsApp Settings & Notification States
+  const [whatsAppSettings, setWhatsAppSettings] = useState(() => getWhatsAppSettings());
+  const [lastSentWhatsAppNotice, setLastSentWhatsAppNotice] = useState(null); // { orderId, customerName, statusType, phone, whatsappUrl }
+  const [whatsappModalData, setWhatsappModalData] = useState(null); // { order, phone, message, activeTemplate }
+
+  // Listen to global WhatsApp sent events for visual toast feedback
+  useEffect(() => {
+    const handleWhatsAppNotification = (e) => {
+      if (e?.detail) {
+        setLastSentWhatsAppNotice(e.detail);
+        const timer = setTimeout(() => setLastSentWhatsAppNotice(null), 8000);
+        return () => clearTimeout(timer);
+      }
+    };
+    window.addEventListener('el_shadday_whatsapp_notification_triggered', handleWhatsAppNotification);
+    return () => window.removeEventListener('el_shadday_whatsapp_notification_triggered', handleWhatsAppNotification);
+  }, []);
+
   // Cancel Order Modal State
   const [cancelModalOrder, setCancelModalOrder] = useState(null);
   const [cancelReason, setCancelReason] = useState('');
@@ -1295,58 +1317,63 @@ export function AdminDashboard({
     printWindow.print();
   };
 
-  // WhatsApp Message Launcher
+  // Disparo automático de WhatsApp para o cliente da filial do pedido
+  const handleTriggerCustomerWhatsApp = async (order, statusType, reason = '') => {
+    if (!order || !order.customerPhone) return;
+    const branch = branchesList.find(b => b.id === (order.branchId || currentBranch?.id)) || currentBranch;
+    try {
+      await sendCustomerWhatsAppNotification({
+        order,
+        statusType,
+        branch,
+        reason,
+        forceOpen: false
+      });
+    } catch (err) {
+      console.warn('[AdminDashboard] Erro ao disparar WhatsApp automático:', err);
+    }
+  };
+
+  // WhatsApp Message Launcher (Modal manual com preview)
   const handleOpenWhatsAppModal = (order, defaultType = 'pronto') => {
     let rawPhone = (order.customerPhone || '').replace(/\D/g, '');
-    let initialMessage = '';
+    const branch = branchesList.find(b => b.id === (order.branchId || currentBranch?.id)) || currentBranch;
 
-    const name = order.customerName || 'Cliente';
-    const id = order.orderId;
-    const isBalcao = order.deliveryType === 'balcao';
+    let normalizedType = defaultType;
+    if (defaultType === 'entrega') normalizedType = 'SAIU_ENTREGA';
+    else if (defaultType === 'pronto') normalizedType = order.deliveryType === 'balcao' ? 'PRONTO_BALCAO' : 'SAIU_ENTREGA';
+    else if (defaultType === 'preparo') normalizedType = 'EM_PREPARO';
+    else if (defaultType === 'cancelado') normalizedType = 'CANCELADO';
+    else if (defaultType === 'recebido') normalizedType = 'RECEBIDO_COZINHA';
+    else if (defaultType === 'concluido') normalizedType = 'CONCLUIDO';
 
-    if (defaultType === 'entrega') {
-      initialMessage = `Olá ${name}! 🛵💨 Seu pedido #${id} da El Shadday acabou de sair para entrega! O nosso motoboy já está a caminho do seu endereço. Bom apetite! 🍕`;
-    } else if (defaultType === 'pronto') {
-      if (isBalcao) {
-        initialMessage = `Olá ${name}! 🍕✨ Seu pedido #${id} da El Shadday já está quentinho e PRONTO no balcão esperando por você! Pode vir retirar na Rua Maceió, 2333 - Setor 03.`;
-      } else {
-        initialMessage = `Olá ${name}! 🍕✨ Seu pedido #${id} da El Shadday já ficou pronto e está sendo preparado para o envio!`;
-      }
-    } else if (defaultType === 'preparo') {
-      initialMessage = `Olá ${name}! 👨‍🍳🔥 Passando para avisar que o seu pedido #${id} já está no forno sendo preparado com muito carinho pela equipe El Shadday!`;
-    } else if (defaultType === 'cancelado') {
-      initialMessage = `Olá ${name}, informamos que o seu pedido #${id} foi cancelado no sistema da El Shadday. Qualquer dúvida, estamos à disposição por aqui!`;
-    }
+    const initialMessage = buildStatusMessage({
+      order,
+      statusType: normalizedType,
+      branch,
+      reason: order.cancelReason || ''
+    });
 
     setWhatsappModalData({
       order,
+      branch,
       phone: rawPhone,
       message: initialMessage,
-      activeTemplate: defaultType
+      activeTemplate: normalizedType
     });
   };
 
   const handleApplyWhatsAppTemplate = (type) => {
     if (!whatsappModalData) return;
-    const { order } = whatsappModalData;
-    const name = order.customerName || 'Cliente';
-    const id = order.orderId;
-    const isBalcao = order.deliveryType === 'balcao';
+    const { order, branch } = whatsappModalData;
+    const targetBranch = branch || branchesList.find(b => b.id === (order.branchId || currentBranch?.id)) || currentBranch;
 
-    let msg = '';
-    if (type === 'entrega') {
-      msg = `Olá ${name}! 🛵💨 Seu pedido #${id} da El Shadday acabou de sair para entrega! O nosso motoboy já está a caminho do seu endereço. Bom apetite! 🍕`;
-    } else if (type === 'pronto') {
-      if (isBalcao) {
-        msg = `Olá ${name}! 🍕✨ Seu pedido #${id} da El Shadday já está quentinho e PRONTO no balcão esperando por você! Pode vir retirar na Rua Maceió, 2333 - Setor 03.`;
-      } else {
-        msg = `Olá ${name}! 🍕✨ Seu pedido #${id} da El Shadday já ficou pronto e quentinho!`;
-      }
-    } else if (type === 'preparo') {
-      msg = `Olá ${name}! 👨‍🍳🔥 Passando para avisar que seu pedido #${id} já está no forno sendo preparado com muito capricho pela equipe El Shadday!`;
-    } else if (type === 'cancelado') {
-      msg = `Olá ${name}, informamos que seu pedido #${id} foi cancelado no sistema da El Shadday. Qualquer dúvida, estamos à disposição por aqui!`;
-    }
+    const msg = buildStatusMessage({
+      order,
+      statusType: type,
+      branch: targetBranch,
+      reason: order.cancelReason || ''
+    });
 
     setWhatsappModalData(prev => ({
       ...prev,
@@ -1357,13 +1384,10 @@ export function AdminDashboard({
 
   const handleSendWhatsAppMessage = () => {
     if (!whatsappModalData) return;
-    let digits = (whatsappModalData.phone || '').replace(/\D/g, '');
+    let digits = cleanPhoneNumber(whatsappModalData.phone);
     if (!digits) {
-      alert('Por favor, informe o número de WhatsApp do cliente!');
+      alert('Por favor, informe o número de WhatsApp válido do cliente!');
       return;
-    }
-    if (digits.length === 10 || digits.length === 11) {
-      digits = '55' + digits;
     }
     const url = `https://wa.me/${digits}?text=${encodeURIComponent(whatsappModalData.message)}`;
     window.open(url, '_blank');
@@ -1373,11 +1397,13 @@ export function AdminDashboard({
   // Cancel / Delete Order Execution
   const handleConfirmCancel = () => {
     if (!cancelModalOrder) return;
+    const orderToCancel = { ...cancelModalOrder, cancelReason };
     if (onCancelOrder) {
       onCancelOrder(cancelModalOrder.orderId, cancelReason);
     } else {
       onUpdateOrderStatus(cancelModalOrder.orderId, 'CANCELADO');
     }
+    handleTriggerCustomerWhatsApp(orderToCancel, 'CANCELADO', cancelReason);
     setCancelModalOrder(null);
     setCancelReason('');
   };
@@ -1504,6 +1530,10 @@ export function AdminDashboard({
 
     if (onCreateKitchenOrder) {
       onCreateKitchenOrder(newOrder);
+    }
+
+    if (newOrder.customerPhone) {
+      handleTriggerCustomerWhatsApp(newOrder, 'RECEBIDO_COZINHA');
     }
 
     playChime(false);
@@ -2071,6 +2101,59 @@ export function AdminDashboard({
               </div>
             </div>
 
+            {/* WhatsApp Branch Status & Auto-Notify Switch Bar */}
+            <div className="p-3 sm:p-3.5 rounded-2xl bg-gradient-to-r from-emerald-950/30 via-dark-900 to-dark-900 border border-emerald-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-md">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center border border-emerald-500/30 flex-shrink-0">
+                  <MessageSquare className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="text-xs font-extrabold text-white flex items-center gap-2 flex-wrap">
+                    <span>WhatsApp da Cozinha:</span>
+                    <span className="font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-lg border border-emerald-500/20">
+                      {currentBranch?.whatsappFormatted || currentBranch?.phoneFormatted || '(69) 99222-8682'}
+                    </span>
+                    <span className="text-[11px] text-slate-400 font-normal">
+                      ({currentBranch?.displayName || currentBranch?.name || 'Ariquemes'})
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    Notificações automáticas no WhatsApp do cliente ao mudar status no KDS (No Forno, Saiu Entrega, Pronto, Concluído, Cancelado).
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 self-end sm:self-center flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nextState = !whatsAppSettings.autoNotify;
+                    const updated = { ...whatsAppSettings, autoNotify: nextState };
+                    setWhatsAppSettings(updated);
+                    saveWhatsAppSettings(updated);
+                  }}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                    whatsAppSettings.autoNotify
+                      ? 'bg-emerald-500/20 border border-emerald-500/50 text-emerald-300 shadow-sm'
+                      : 'bg-dark-800 border border-dark-700 text-slate-400 hover:text-white'
+                  }`}
+                  title="Ativar ou pausar disparo automático de mensagens no WhatsApp"
+                >
+                  {whatsAppSettings.autoNotify ? (
+                    <>
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Avisos Automáticos: ATIVADO</span>
+                    </>
+                  ) : (
+                    <>
+                      <XCircle className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Avisos Automáticos: PAUSADO</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
             {/* Orders Feed */}
             <div className="space-y-4">
               <div className="flex items-center justify-between text-xs text-slate-400 px-1">
@@ -2297,7 +2380,7 @@ export function AdminDashboard({
                               <button
                                 onClick={() => {
                                   onUpdateOrderStatus(order.orderId, 'EM_PREPARO');
-                                  handleOpenWhatsAppModal(order, 'preparo');
+                                  handleTriggerCustomerWhatsApp(order, 'EM_PREPARO');
                                 }}
                                 className="px-3 py-1.5 rounded-xl bg-brand-gold hover:bg-amber-400 text-dark-950 font-bold text-xs flex items-center gap-1 shadow-glow-gold transition-all cursor-pointer"
                               >
@@ -2311,10 +2394,10 @@ export function AdminDashboard({
                                 onClick={() => {
                                   if (order.deliveryType === 'balcao') {
                                     onUpdateOrderStatus(order.orderId, 'CONCLUIDO');
-                                    handleOpenWhatsAppModal(order, 'pronto');
+                                    handleTriggerCustomerWhatsApp(order, 'PRONTO_BALCAO');
                                   } else {
                                     onUpdateOrderStatus(order.orderId, 'SAIU_ENTREGA');
-                                    handleOpenWhatsAppModal(order, 'entrega');
+                                    handleTriggerCustomerWhatsApp(order, 'SAIU_ENTREGA');
                                   }
                                 }}
                                 className="px-3 py-1.5 rounded-xl bg-blue-500 hover:bg-blue-400 text-white font-bold text-xs flex items-center gap-1 shadow-md transition-all cursor-pointer"
@@ -2335,7 +2418,10 @@ export function AdminDashboard({
 
                             {!isCancelled && order.orderStatus === 'SAIU_ENTREGA' && (
                               <button
-                                onClick={() => onUpdateOrderStatus(order.orderId, 'CONCLUIDO')}
+                                onClick={() => {
+                                  onUpdateOrderStatus(order.orderId, 'CONCLUIDO');
+                                  handleTriggerCustomerWhatsApp(order, 'CONCLUIDO');
+                                }}
                                 className="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-dark-950 font-bold text-xs flex items-center gap-1 shadow-md transition-all cursor-pointer"
                               >
                                 <CheckCircle2 className="w-3.5 h-3.5" />
@@ -4539,62 +4625,102 @@ export function AdminDashboard({
               </div>
             </div>
 
+            {/* Branch indicator */}
+            {whatsappModalData.branch && (
+              <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-dark-950 border border-dark-800 text-[11px]">
+                <span className="text-slate-400">Filial de Envio:</span>
+                <span className="font-bold text-brand-gold flex items-center gap-1">
+                  <Store className="w-3.5 h-3.5 text-brand-gold" />
+                  {whatsappModalData.branch.displayName || whatsappModalData.branch.name}
+                  <span className="text-emerald-400 font-mono text-[10px]">
+                    ({whatsappModalData.branch.whatsappFormatted || whatsappModalData.branch.phoneFormatted || '(69) 99222-8682'})
+                  </span>
+                </span>
+              </div>
+            )}
+
             {/* Quick Templates */}
             <div>
               <label className="text-xs font-bold text-slate-300 block mb-1.5">
-                Mensagens Rápidas (1 Clique):
+                Mensagens Rápidas por Status (1 Clique):
               </label>
-              <div className="grid grid-cols-2 gap-2 text-xs font-bold">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs font-bold">
                 <button
                   type="button"
-                  onClick={() => handleApplyWhatsAppTemplate('entrega')}
-                  className={`p-2 rounded-xl border text-left flex items-center gap-2 transition-all cursor-pointer ${
-                    whatsappModalData.activeTemplate === 'entrega'
-                      ? 'bg-blue-500/20 border-blue-500 text-blue-300 font-black'
-                      : 'bg-dark-950 border-dark-800 text-slate-300 hover:border-dark-700'
-                  }`}
-                >
-                  <Bike className="w-4 h-4 text-blue-400 flex-shrink-0" />
-                  <span>🛵 Saiu p/ Entrega</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleApplyWhatsAppTemplate('pronto')}
-                  className={`p-2 rounded-xl border text-left flex items-center gap-2 transition-all cursor-pointer ${
-                    whatsappModalData.activeTemplate === 'pronto'
-                      ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300 font-black'
-                      : 'bg-dark-950 border-dark-800 text-slate-300 hover:border-dark-700'
-                  }`}
-                >
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                  <span>🍕 Pronto p/ Retirada</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleApplyWhatsAppTemplate('preparo')}
-                  className={`p-2 rounded-xl border text-left flex items-center gap-2 transition-all cursor-pointer ${
-                    whatsappModalData.activeTemplate === 'preparo'
+                  onClick={() => handleApplyWhatsAppTemplate('RECEBIDO_COZINHA')}
+                  className={`p-2 rounded-xl border text-left flex items-center gap-1.5 transition-all cursor-pointer ${
+                    whatsappModalData.activeTemplate === 'RECEBIDO_COZINHA' || whatsappModalData.activeTemplate === 'recebido'
                       ? 'bg-amber-500/20 border-amber-500 text-amber-300 font-black'
                       : 'bg-dark-950 border-dark-800 text-slate-300 hover:border-dark-700'
                   }`}
                 >
-                  <Flame className="w-4 h-4 text-amber-400 flex-shrink-0" />
-                  <span>👨‍🍳 No Forno / Preparo</span>
+                  <Pizza className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+                  <span className="truncate">Confirmado</span>
                 </button>
 
                 <button
                   type="button"
-                  onClick={() => handleApplyWhatsAppTemplate('cancelado')}
-                  className={`p-2 rounded-xl border text-left flex items-center gap-2 transition-all cursor-pointer ${
-                    whatsappModalData.activeTemplate === 'cancelado'
+                  onClick={() => handleApplyWhatsAppTemplate('EM_PREPARO')}
+                  className={`p-2 rounded-xl border text-left flex items-center gap-1.5 transition-all cursor-pointer ${
+                    whatsappModalData.activeTemplate === 'EM_PREPARO' || whatsappModalData.activeTemplate === 'preparo'
+                      ? 'bg-amber-500/20 border-amber-500 text-amber-300 font-black'
+                      : 'bg-dark-950 border-dark-800 text-slate-300 hover:border-dark-700'
+                  }`}
+                >
+                  <Flame className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+                  <span className="truncate">No Forno</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleApplyWhatsAppTemplate('SAIU_ENTREGA')}
+                  className={`p-2 rounded-xl border text-left flex items-center gap-1.5 transition-all cursor-pointer ${
+                    whatsappModalData.activeTemplate === 'SAIU_ENTREGA' || whatsappModalData.activeTemplate === 'entrega'
+                      ? 'bg-blue-500/20 border-blue-500 text-blue-300 font-black'
+                      : 'bg-dark-950 border-dark-800 text-slate-300 hover:border-dark-700'
+                  }`}
+                >
+                  <Bike className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
+                  <span className="truncate">Saiu p/ Entrega</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleApplyWhatsAppTemplate('PRONTO_BALCAO')}
+                  className={`p-2 rounded-xl border text-left flex items-center gap-1.5 transition-all cursor-pointer ${
+                    whatsappModalData.activeTemplate === 'PRONTO_BALCAO' || whatsappModalData.activeTemplate === 'pronto'
+                      ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300 font-black'
+                      : 'bg-dark-950 border-dark-800 text-slate-300 hover:border-dark-700'
+                  }`}
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                  <span className="truncate">Pronto Balcão</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleApplyWhatsAppTemplate('CONCLUIDO')}
+                  className={`p-2 rounded-xl border text-left flex items-center gap-1.5 transition-all cursor-pointer ${
+                    whatsappModalData.activeTemplate === 'CONCLUIDO' || whatsappModalData.activeTemplate === 'concluido'
+                      ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300 font-black'
+                      : 'bg-dark-950 border-dark-800 text-slate-300 hover:border-dark-700'
+                  }`}
+                >
+                  <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0 stroke-[3]" />
+                  <span className="truncate">Finalizado</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleApplyWhatsAppTemplate('CANCELADO')}
+                  className={`p-2 rounded-xl border text-left flex items-center gap-1.5 transition-all cursor-pointer ${
+                    whatsappModalData.activeTemplate === 'CANCELADO' || whatsappModalData.activeTemplate === 'cancelado'
                       ? 'bg-red-500/20 border-red-500 text-red-300 font-black'
                       : 'bg-dark-950 border-dark-800 text-slate-300 hover:border-dark-700'
                   }`}
                 >
-                  <XCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
-                  <span>❌ Pedido Cancelado</span>
+                  <XCircle className="w-3.5 h-3.5 text-red-400 flex-shrink-0" />
+                  <span className="truncate">Cancelado</span>
                 </button>
               </div>
             </div>
@@ -5218,6 +5344,49 @@ export function AdminDashboard({
             setPdvPizzaToCustomize(null);
           }}
         />
+      )}
+
+      {/* FLOATING WHATSAPP SENT NOTIFICATION TOAST */}
+      {lastSentWhatsAppNotice && (
+        <div className="fixed bottom-5 right-5 z-50 max-w-sm w-[92vw] sm:w-auto bg-dark-900 border-2 border-emerald-500 rounded-2xl p-4 shadow-2xl flex items-center justify-between gap-3 animate-fade-in backdrop-blur-md">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center flex-shrink-0 border border-emerald-500/40">
+              <MessageSquare className="w-5 h-5" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-xs font-black text-white truncate flex items-center gap-1.5">
+                <span>WhatsApp Enviado!</span>
+                <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded font-mono font-bold">
+                  #{lastSentWhatsAppNotice.orderId}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-300 truncate">
+                {lastSentWhatsAppNotice.customerName} ({lastSentWhatsAppNotice.phone})
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            {lastSentWhatsAppNotice.whatsappUrl && (
+              <a
+                href={lastSentWhatsAppNotice.whatsappUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-2.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-dark-950 font-black text-xs flex items-center gap-1 transition-all cursor-pointer shadow-md"
+                title="Abrir WhatsApp manualmente"
+              >
+                <Send className="w-3.5 h-3.5" />
+                <span>Abrir</span>
+              </a>
+            )}
+            <button
+              onClick={() => setLastSentWhatsAppNotice(null)}
+              className="w-7 h-7 rounded-lg bg-dark-800 hover:bg-dark-750 text-slate-400 hover:text-white flex items-center justify-center cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
       )}
 
     </div>

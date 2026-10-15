@@ -28,6 +28,9 @@ export function BranchManagementView({
   const [formSubtitle, setFormSubtitle] = useState('Filial Delivery & Balcão');
   const [formAddress, setFormAddress] = useState('');
   const [formPhone, setFormPhone] = useState('(69) 99222-8682');
+  const [formAutoNotifyWhatsApp, setFormAutoNotifyWhatsApp] = useState(true);
+  const [formWhatsappApiUrl, setFormWhatsappApiUrl] = useState('');
+  const [formWhatsappApiToken, setFormWhatsappApiToken] = useState('');
   const [formPixKey, setFormPixKey] = useState('69992228682');
   const [formPixName, setFormPixName] = useState('El Shadday Delivery');
   const [formDeliveryTime, setFormDeliveryTime] = useState('40 - 65 min');
@@ -40,6 +43,9 @@ export function BranchManagementView({
     setFormSubtitle('Filial Delivery & Balcão');
     setFormAddress('');
     setFormPhone('(69) 99222-8682');
+    setFormAutoNotifyWhatsApp(true);
+    setFormWhatsappApiUrl('');
+    setFormWhatsappApiToken('');
     setFormPixKey('69992228682');
     setFormPixName('El Shadday Delivery');
     setFormDeliveryTime('40 - 65 min');
@@ -55,7 +61,10 @@ export function BranchManagementView({
     setFormCity(branch.displayName ? branch.displayName.replace(' - RO', '') : '');
     setFormSubtitle(branch.subtitle || '');
     setFormAddress(branch.address || '');
-    setFormPhone(branch.phoneFormatted || branch.phone || '');
+    setFormPhone(branch.phoneFormatted || branch.whatsappFormatted || branch.phone || '(69) 99222-8682');
+    setFormAutoNotifyWhatsApp(branch.autoNotifyWhatsApp !== false);
+    setFormWhatsappApiUrl(branch.whatsappApiUrl || '');
+    setFormWhatsappApiToken(branch.whatsappApiToken || '');
     setFormPixKey(branch.pixKey || '');
     setFormPixName(branch.pixName || '');
     setFormDeliveryTime(branch.deliveryTime || '');
@@ -71,13 +80,20 @@ export function BranchManagementView({
       if (!formName.trim()) throw new Error('O nome da filial é obrigatório.');
       if (!formCity.trim()) throw new Error('A cidade da filial é obrigatória.');
 
+      const cleanPhoneDigits = formPhone.replace(/\D/g, '') || '5569992228682';
+
       const newB = createBranch({
         name: formName.trim(),
         displayName: `${formCity.trim()} - RO`,
         subtitle: formSubtitle.trim(),
         address: formAddress.trim(),
-        phone: formPhone.trim(),
+        phone: cleanPhoneDigits,
         phoneFormatted: formPhone.trim(),
+        whatsapp: cleanPhoneDigits,
+        whatsappFormatted: formPhone.trim(),
+        autoNotifyWhatsApp: formAutoNotifyWhatsApp,
+        whatsappApiUrl: formWhatsappApiUrl.trim(),
+        whatsappApiToken: formWhatsappApiToken.trim(),
         pixKey: formPixKey.trim(),
         pixName: formPixName.trim(),
         deliveryTime: formDeliveryTime.trim(),
@@ -99,13 +115,20 @@ export function BranchManagementView({
     if (!editingBranch) return;
     setErrorMsg('');
     try {
+      const cleanPhoneDigits = formPhone.replace(/\D/g, '') || '5569992228682';
+
       updateBranch(editingBranch.id, {
         name: formName.trim(),
         displayName: `${formCity.trim()} - RO`,
         subtitle: formSubtitle.trim(),
         address: formAddress.trim(),
         phoneFormatted: formPhone.trim(),
-        phone: formPhone.replace(/\D/g, ''),
+        phone: cleanPhoneDigits,
+        whatsappFormatted: formPhone.trim(),
+        whatsapp: cleanPhoneDigits,
+        autoNotifyWhatsApp: formAutoNotifyWhatsApp,
+        whatsappApiUrl: formWhatsappApiUrl.trim(),
+        whatsappApiToken: formWhatsappApiToken.trim(),
         pixKey: formPixKey.trim(),
         pixName: formPixName.trim(),
         deliveryTime: formDeliveryTime.trim(),
@@ -239,9 +262,31 @@ export function BranchManagementView({
                     <span className="line-clamp-1">{b.address || 'Endereço não informado'}</span>
                   </div>
 
-                  <div className="flex items-center gap-2 text-slate-300">
-                    <Phone className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                    <span>{b.phoneFormatted || b.phone || 'Sem telefone'}</span>
+                  <div className="flex items-center justify-between gap-2 text-slate-300">
+                    <div className="flex items-center gap-2">
+                      <Phone className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                      <span className="font-semibold text-white">WhatsApp: {b.phoneFormatted || b.whatsappFormatted || b.phone || 'Sem WhatsApp'}</span>
+                    </div>
+                    {b.phone && (
+                      <a
+                        href={`https://wa.me/${(b.whatsapp || b.phone).toString().replace(/\D/g, '')}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[10px] text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 px-2.5 py-0.5 rounded-lg border border-emerald-500/30 flex items-center gap-1 cursor-pointer font-bold"
+                      >
+                        <span>Testar</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] px-2.5 py-1 rounded-full font-bold flex items-center gap-1.5 bg-dark-950 border border-dark-750">
+                      <span className={`w-2 h-2 rounded-full ${b.autoNotifyWhatsApp !== false ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
+                      <span className={b.autoNotifyWhatsApp !== false ? 'text-emerald-400 font-extrabold' : 'text-slate-400'}>
+                        {b.autoNotifyWhatsApp !== false ? 'Notificação Automática via WhatsApp: ATIVADA' : 'Notificação Automática: DESATIVADA'}
+                      </span>
+                    </span>
                   </div>
 
                   <div className="flex items-center gap-2 text-slate-300">
@@ -406,33 +451,117 @@ export function BranchManagementView({
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs font-bold text-slate-300 block mb-1">
-                    Telefone / WhatsApp com DDD:
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="(69) 99222-8682"
-                    value={formPhone}
-                    onChange={(e) => setFormPhone(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-dark-950 border border-dark-750 text-white text-xs focus:border-brand-gold focus:outline-none"
-                  />
+              {/* Configurações de WhatsApp da Filial */}
+              <div className="p-4 rounded-2xl bg-dark-950 border border-emerald-500/40 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                      <Phone className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <span className="text-xs font-black text-white uppercase tracking-wider block">
+                        WhatsApp da Filial (Notificações & Atendimento)
+                      </span>
+                      <span className="text-[11px] text-slate-400 block">
+                        Número utilizado para disparar avisos de status do pedido aos clientes.
+                      </span>
+                    </div>
+                  </div>
+
+                  {formPhone && (
+                    <a
+                      href={`https://wa.me/${formPhone.replace(/\D/g, '')}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[11px] text-emerald-400 hover:text-emerald-300 font-bold bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/30 flex items-center gap-1 cursor-pointer whitespace-nowrap"
+                    >
+                      <span>Testar Número</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  )}
                 </div>
 
-                <div>
-                  <label className="text-xs font-bold text-slate-300 block mb-1">
-                    Status da Unidade:
-                  </label>
-                  <select
-                    value={formStatus}
-                    onChange={(e) => setFormStatus(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-dark-950 border border-dark-750 text-white text-xs focus:border-brand-gold focus:outline-none"
-                  >
-                    <option value="active">🟢 Ativa e Aberta para Pedidos</option>
-                    <option value="construction">🚧 Em Obras / Implantação (Em Breve)</option>
-                    <option value="closed">🔴 Fechada Temporariamente</option>
-                  </select>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-bold text-slate-300 block mb-1">
+                      Número do WhatsApp com DDD: *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="(69) 99222-8682"
+                      value={formPhone}
+                      onChange={(e) => setFormPhone(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-dark-900 border border-dark-750 text-white text-xs focus:border-emerald-400 focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-slate-300 block mb-1">
+                      Status da Unidade:
+                    </label>
+                    <select
+                      value={formStatus}
+                      onChange={(e) => setFormStatus(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-dark-900 border border-dark-750 text-white text-xs focus:border-brand-gold focus:outline-none"
+                    >
+                      <option value="active">🟢 Ativa e Aberta para Pedidos</option>
+                      <option value="construction">🚧 Em Obras / Implantação (Em Breve)</option>
+                      <option value="closed">🔴 Fechada Temporariamente</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Checkbox de Envio Automático */}
+                <label className="flex items-start gap-2.5 pt-1 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={formAutoNotifyWhatsApp}
+                    onChange={(e) => setFormAutoNotifyWhatsApp(e.target.checked)}
+                    className="w-4 h-4 mt-0.5 rounded text-emerald-500 accent-emerald-500 cursor-pointer"
+                  />
+                  <div>
+                    <span className="text-xs font-bold text-emerald-400 block">
+                      Disparar status automaticamente no WhatsApp do cliente
+                    </span>
+                    <span className="text-[11px] text-slate-400 block leading-relaxed">
+                      Ao avançar o pedido na cozinha (No Forno, Saiu p/ Entrega, Pronto no Balcão, Entregue ou Cancelado), envia automaticamente a mensagem no WhatsApp do cliente com os dados desta filial.
+                    </span>
+                  </div>
+                </label>
+
+                {/* API / Webhook Opcional */}
+                <div className="pt-2 border-t border-dark-850">
+                  <details className="text-xs text-slate-400">
+                    <summary className="cursor-pointer font-bold text-slate-300 hover:text-white flex items-center gap-1 select-none">
+                      <span>⚙️ Configuração Opcional: Webhook / API WhatsApp (Evolution API / Z-API / n8n)</span>
+                    </summary>
+                    <div className="mt-2.5 space-y-2 p-3 rounded-xl bg-dark-900 border border-dark-800">
+                      <div>
+                        <label className="text-[10px] text-slate-400 block mb-0.5">URL do Webhook / API (POST):</label>
+                        <input
+                          type="text"
+                          placeholder="Ex: https://api.z-api.io/instances/... ou Evolution API"
+                          value={formWhatsappApiUrl}
+                          onChange={(e) => setFormWhatsappApiUrl(e.target.value)}
+                          className="w-full px-2.5 py-1.5 rounded-lg bg-dark-950 border border-dark-750 text-white text-xs focus:border-emerald-400 focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-slate-400 block mb-0.5">Token de Autenticação (Bearer):</label>
+                        <input
+                          type="password"
+                          placeholder="Token da API (se necessário)"
+                          value={formWhatsappApiToken}
+                          onChange={(e) => setFormWhatsappApiToken(e.target.value)}
+                          className="w-full px-2.5 py-1.5 rounded-lg bg-dark-950 border border-dark-750 text-white text-xs focus:border-emerald-400 focus:outline-none"
+                        />
+                      </div>
+                      <p className="text-[10px] text-slate-500">
+                        * Deixe em branco para usar o envio padrão via WhatsApp Web / App nativo com 1 clique.
+                      </p>
+                    </div>
+                  </details>
                 </div>
               </div>
 

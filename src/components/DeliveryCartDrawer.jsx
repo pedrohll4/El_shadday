@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { ARIQUEMES_DISTRICTS, RESTAURANT_INFO, getStoredRestaurantInfo, calculateCardMachineFee, getCardMachineNoticeText } from '../data/menuData';
 import { dispatchOrderToKitchen } from '../services/ordersSyncService';
+import { cleanPhoneNumber } from '../services/whatsappNotificationService';
 
 export function DeliveryCartDrawer({ 
   isOpen, 
@@ -62,7 +63,8 @@ export function DeliveryCartDrawer({
   const total = subtotal + deliveryFee + cardFee;
 
   const pixKey = activeBranch?.pixKey || storeInfo?.pixKey || RESTAURANT_INFO.pixKey || '69992228682';
-  const restaurantPhone = activeBranch?.phone || storeInfo?.phone || RESTAURANT_INFO.phone || '5569992228682';
+  const rawRestaurantPhone = activeBranch?.whatsapp || activeBranch?.phone || storeInfo?.whatsapp || storeInfo?.phone || RESTAURANT_INFO.whatsapp || RESTAURANT_INFO.phone || '5569992228682';
+  const restaurantPhone = cleanPhoneNumber(rawRestaurantPhone);
 
   const handleCopyPix = () => {
     navigator.clipboard.writeText(pixKey);
@@ -157,15 +159,16 @@ ${reference.trim() ? `📌 *Referência:* ${reference.trim()}\n` : ''}🛵 *Taxa
     } else {
       deliveryText = 
 `🛍️ *Tipo:* Retirada no Balcão
-🏢 *Local:* Rua Maceió, 2333 - Setor 03, Ariquemes - RO
+🏢 *Local:* ${activeBranch?.address || 'Rua Maceió, 2333 - Setor 03, Ariquemes - RO'}
 🛵 *Taxa:* Grátis (Retirada)`;
     }
 
     // Full WhatsApp Message
+    const branchDisplayName = activeBranch?.displayName || activeBranch?.name || 'Ariquemes - RO';
     const whatsappMessage = 
 `🍕 *NOVO PEDIDO - EL SHADDAY DELIVERY*
 🆔 *Pedido:* #${orderId}
-📍 *Unidade:* Ariquemes - RO
+📍 *Unidade:* ${branchDisplayName}
 ----------------------------------------
 👤 *Cliente:* ${customerName.trim()}
 📱 *WhatsApp:* ${customerPhone.trim()}
@@ -197,7 +200,7 @@ Pedido gerado via Cardápio Digital El Shadday.`;
       district: deliveryType === 'delivery' ? currentDistrict.name : 'Balcão',
       address: deliveryType === 'delivery' 
         ? `${streetAddress.trim()}${addressNumber.trim() ? `, Nº ${addressNumber.trim()}` : ''}`
-        : 'Rua Maceió, 2333 - Setor 03, Ariquemes - RO',
+        : (activeBranch?.address || 'Rua Maceió, 2333 - Setor 03, Ariquemes - RO'),
       number: addressNumber.trim(),
       reference: reference.trim(),
       subtotal,
@@ -253,7 +256,7 @@ Pedido gerado via Cardápio Digital El Shadday.`;
               <div className="flex items-center gap-2 text-xs text-slate-400">
                 <span>{cartItems.length} {cartItems.length === 1 ? 'item' : 'itens'}</span>
                 <span>•</span>
-                <span className="text-brand-gold font-medium">Unidade Ariquemes</span>
+                <span className="text-brand-gold font-medium">{activeBranch?.displayName || activeBranch?.name || 'Unidade Ariquemes'}</span>
               </div>
             </div>
           </div>

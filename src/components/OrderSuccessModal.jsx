@@ -142,6 +142,11 @@ export function OrderSuccessModal({
             </div>
 
             <div className="flex items-center justify-between border-b border-dark-800 pb-2 text-xs">
+              <span className="text-slate-400 font-medium">Unidade / Filial:</span>
+              <span className="font-bold text-brand-gold">{orderData.branchName || 'Unidade Ariquemes'}</span>
+            </div>
+
+            <div className="flex items-center justify-between border-b border-dark-800 pb-2 text-xs">
               <span className="text-slate-400 font-medium">Cliente:</span>
               <span className="font-bold text-white">{orderData.customerName}</span>
             </div>
@@ -173,6 +178,17 @@ export function OrderSuccessModal({
                 R$ {orderData.total?.toFixed(2).replace('.', ',')}
               </span>
             </div>
+          </div>
+
+          {/* Automatic WhatsApp Status Tracking Info */}
+          <div className="bg-emerald-950/30 border border-emerald-500/30 rounded-2xl p-3.5 space-y-1.5">
+            <div className="flex items-center gap-2 text-xs font-bold text-emerald-400">
+              <MessageCircle className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+              <span>Acompanhe pelo WhatsApp em Tempo Real!</span>
+            </div>
+            <p className="text-[11px] text-slate-300 leading-relaxed">
+              Você receberá avisos automáticos no seu WhatsApp a cada etapa da cozinha: quando entrar no forno, quando o motoboy sair para entrega ou quando estiver pronto no balcão!
+            </p>
           </div>
 
           {/* WhatsApp Reopen Button */}
