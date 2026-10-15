@@ -899,6 +899,7 @@ export default function App() {
         onOpenBranchModal={() => setIsBranchModalOpen(true)}
         onScrollToBuffet={scrollToBuffet}
         onOpenAdmin={handleOpenAdminTrigger}
+        currentUser={currentUser}
       />
 
       {/* 1.1 Top Promotional Announcement Banner */}

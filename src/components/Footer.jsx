@@ -106,7 +106,7 @@ export function Footer({ onOpenAdmin }) {
                 className="inline-flex items-center gap-1.5 text-[11px] text-slate-500 hover:text-brand-gold transition-colors cursor-pointer"
               >
                 <Lock className="w-3.5 h-3.5" />
-                <span>Área Restrita da Pizzaria (Login da Cozinha)</span>
+                <span>Área Restrita (Acesso da Equipe)</span>
               </button>
             </div>
           </div>

@@ -12,7 +12,8 @@ export function Header({
   activeBranch,
   onOpenBranchModal,
   onScrollToBuffet,
-  onOpenAdmin
+  onOpenAdmin,
+  currentUser
 }) {
   return (
     <header className="sticky top-0 z-40 bg-dark-950/95 backdrop-blur-md border-b border-dark-800 transition-all duration-300 w-full max-w-full">
@@ -100,16 +101,16 @@ export function Header({
               </button>
             )}
 
-            {/* Admin / Cozinha Access Button */}
-            {onOpenAdmin && (
+            {/* Staff access - only visible if staff is already logged in */}
+            {currentUser && onOpenAdmin && (
               <button
                 type="button"
                 onClick={onOpenAdmin}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-dark-900 hover:bg-dark-850 text-slate-300 hover:text-white text-xs font-bold border border-dark-750 hover:border-slate-500 transition-all cursor-pointer"
-                title="Painel de Gestão da Filial e Cozinha KDS"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-brand-gold text-xs font-bold border border-brand-gold/30 hover:border-brand-gold transition-all cursor-pointer"
+                title="Voltar ao Painel da Filial e Cozinha"
               >
-                <ChefHat className="w-4 h-4 text-emerald-400" />
-                <span className="hidden lg:inline">Admin / Cozinha</span>
+                <ChefHat className="w-4 h-4 text-brand-gold" />
+                <span className="hidden lg:inline">Painel Admin</span>
               </button>
             )}
 
@@ -216,15 +217,15 @@ export function Header({
               </button>
             )}
 
-            {onOpenAdmin && (
+            {currentUser && onOpenAdmin && (
               <button
                 type="button"
                 onClick={onOpenAdmin}
-                className="flex items-center gap-1 text-slate-300 hover:text-white font-bold text-[11px] px-2 py-1.5 rounded-xl bg-dark-900 border border-dark-750 flex-shrink-0"
-                title="Painel da Filial e Cozinha"
+                className="flex items-center gap-1 text-brand-gold font-bold text-[11px] px-2 py-1.5 rounded-xl bg-dark-900 border border-brand-gold/30 flex-shrink-0"
+                title="Voltar ao Painel da Filial"
               >
-                <ChefHat className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Admin</span>
+                <ChefHat className="w-3.5 h-3.5 text-brand-gold" />
+                <span>Painel</span>
               </button>
             )}
           </div>

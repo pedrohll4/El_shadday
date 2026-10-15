@@ -18,44 +18,45 @@ export function AdminLoginModal({ isOpen, onClose, onLoginSuccess }) {
   const [activeRoleTab, setActiveRoleTab] = useState('MASTER');
   const [selectedBranchId, setSelectedBranchId] = useState('ariquemes');
   const [username, setUsername] = useState('admin');
-  const [password, setPassword] = useState('elshadday');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+
+  // Clear password whenever modal opens
+  React.useEffect(() => {
+    if (isOpen) {
+      setPassword('');
+      setError('');
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
   const handleSelectRoleTab = (tab) => {
     setActiveRoleTab(tab);
     setError('');
+    setPassword('');
     if (tab === 'MASTER') {
       setUsername('admin');
-      setPassword('elshadday');
     } else if (tab === 'BRANCH') {
       const u = selectedBranchId === 'ariquemes' ? 'admin.ariquemes' : 'admin.portovelho';
-      const p = selectedBranchId === 'ariquemes' ? 'ariquemes123' : 'portovelho123';
       setUsername(u);
-      setPassword(p);
     } else if (tab === 'KITCHEN') {
       const u = selectedBranchId === 'ariquemes' ? 'cozinha.ariquemes' : 'cozinha.portovelho';
-      const p = selectedBranchId === 'ariquemes' ? 'ariquemes123' : 'portovelho123';
       setUsername(u);
-      setPassword(p);
     }
   };
 
   const handleSelectBranch = (bId) => {
     setSelectedBranchId(bId);
     setError('');
+    setPassword('');
     if (activeRoleTab === 'BRANCH') {
       const u = bId === 'ariquemes' ? 'admin.ariquemes' : 'admin.portovelho';
-      const p = bId === 'ariquemes' ? 'ariquemes123' : 'portovelho123';
       setUsername(u);
-      setPassword(p);
     } else if (activeRoleTab === 'KITCHEN') {
       const u = bId === 'ariquemes' ? 'cozinha.ariquemes' : 'cozinha.portovelho';
-      const p = bId === 'ariquemes' ? 'ariquemes123' : 'portovelho123';
       setUsername(u);
-      setPassword(p);
     }
   };
 
@@ -219,9 +220,6 @@ export function AdminLoginModal({ isOpen, onClose, onLoginSuccess }) {
               <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block">
                 Senha de Acesso:
               </label>
-              <span className="text-[10px] text-brand-gold font-mono">
-                {activeRoleTab === 'MASTER' ? 'Padrão: elshadday' : selectedBranchId === 'ariquemes' ? 'Padrão: ariquemes123' : 'Padrão: portovelho123'}
-              </span>
             </div>
             
             <div className="relative">
@@ -232,7 +230,8 @@ export function AdminLoginModal({ isOpen, onClose, onLoginSuccess }) {
                   setPassword(e.target.value);
                   setError('');
                 }}
-                placeholder="••••••••"
+                placeholder="Digite a senha de acesso"
+                autoComplete="current-password"
                 className="w-full pl-3.5 pr-10 py-3 rounded-xl bg-dark-950 border border-dark-750 text-white text-sm focus:outline-none focus:border-brand-gold font-mono"
                 required
               />
@@ -246,17 +245,19 @@ export function AdminLoginModal({ isOpen, onClose, onLoginSuccess }) {
             </div>
           </div>
 
-          {/* Advanced Username (Collapsed / Optional) */}
+          {/* Username Input */}
           <div>
             <label className="text-[11px] font-medium text-slate-400 block mb-1">
-              Usuário (automático):
+              Usuário / Login:
             </label>
             <input
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="admin"
-              className="w-full px-3.5 py-2 rounded-xl bg-dark-950/70 border border-dark-800 text-slate-300 text-xs font-mono focus:outline-none focus:border-brand-gold"
+              placeholder="Ex: admin ou admin.ariquemes"
+              autoComplete="username"
+              className="w-full px-3.5 py-2.5 rounded-xl bg-dark-950/70 border border-dark-800 text-slate-200 text-xs font-mono focus:outline-none focus:border-brand-gold"
+              required
             />
           </div>
 

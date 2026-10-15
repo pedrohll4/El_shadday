@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ElShaddayLogo } from './ElShaddayLogo';
-import { Phone, Menu, X, Shield, CalendarCheck, Utensils } from 'lucide-react';
+import { Phone, Menu, X, CalendarCheck, Utensils } from 'lucide-react';
 
 export function BuffetHeader({ 
   company, 
@@ -127,14 +127,6 @@ export function BuffetHeader({
               )}
             </button>
 
-            {/* Admin Shield trigger */}
-            <button
-              onClick={onOpenAdmin}
-              className="p-2 text-slate-400 hover:text-[#E8D58A] rounded-lg hover:bg-[#1A202A] transition-colors border border-transparent hover:border-[#D8B85A]/30 cursor-pointer"
-              title="Área Administrativa El Shadday"
-            >
-              <Shield className="w-4 h-4" />
-            </button>
 
             {/* Mobile menu toggle */}
             <button
