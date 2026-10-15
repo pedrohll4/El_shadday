@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, Minus, Check, Sparkles, Package, Pizza as PizzaIcon, Info } from 'lucide-react';
+import { Plus, Minus, Check, Sparkles, Package, Pizza as PizzaIcon, Info, Star } from 'lucide-react';
 
 export function ProductCard({ 
   product, 
@@ -57,12 +57,17 @@ export function ProductCard({
         <div>
           {/* Top Pill Badges */}
           <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
-            {product.badge && (
+            {product.badge ? (
               <span className="px-2 py-0.5 text-[10px] font-extrabold rounded-md bg-brand-red text-white flex items-center gap-1">
                 <Sparkles className="w-2.5 h-2.5" />
                 <span>{product.badge}</span>
               </span>
-            )}
+            ) : product.isHighlight ? (
+              <span className="px-2 py-0.5 text-[10px] font-extrabold rounded-md bg-brand-gold text-dark-950 flex items-center gap-1">
+                <Star className="w-2.5 h-2.5 fill-dark-950 text-dark-950" />
+                <span>Destaque</span>
+              </span>
+            ) : null}
             {product.bordaGratis && (
               <span className="px-2 py-0.5 text-[9px] font-bold rounded-md bg-amber-400 text-dark-950">
                 Borda Catupiry Grátis

@@ -1,26 +1,25 @@
 import React from 'react';
-import { Sparkles, Flame, Package, Pizza, ArrowRight } from 'lucide-react';
-import { PRODUCTS } from '../data/menuData';
+import { Sparkles, Flame, Package, Pizza, ArrowRight, Star } from 'lucide-react';
 
 export function PromotionsShelf({ 
   onOpenBoxBuilder, 
   onOpenPizzaCustomizer, 
   onOpenComboCustomizer,
   onAddToCart,
-  products
+  products = []
 }) {
-  const allProducts = (products && products.length > 0) ? products : PRODUCTS;
-  // Select top highlight products or products marked as promotion / with discount
-  const highlights = allProducts.filter(p => 
-    p.isAvailable !== false && (
-      p.isPromo || 
-      (p.originalPrice && p.originalPrice > p.price) ||
-      p.id === 'caixa-20-esfirras' || 
-      p.id === 'combo-1-fm-10esf' || 
-      p.id === 'combo-2-pizzas-gg' ||
-      p.id === 'pizza-familia'
-    )
+  if (!products || !Array.isArray(products) || products.length === 0) {
+    return null;
+  }
+
+  // Only select products explicitly marked as highlight or promo
+  const highlights = products.filter(p => 
+    p && p.isAvailable !== false && (p.isHighlight || p.isPromo)
   ).slice(0, 8);
+
+  if (highlights.length === 0) {
+    return null;
+  }
 
   const handleAction = (product) => {
     if (product.isBox) {
@@ -78,12 +77,17 @@ export function PromotionsShelf({
 
                 {/* Floating Tag */}
                 <div className="absolute top-2 left-2 flex flex-wrap gap-1">
-                  {product.badge && (
+                  {product.badge ? (
                     <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-brand-red text-white shadow-md flex items-center gap-1">
                       <Sparkles className="w-2.5 h-2.5" />
                       {product.badge}
                     </span>
-                  )}
+                  ) : product.isHighlight ? (
+                    <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-brand-gold text-dark-950 shadow-md flex items-center gap-1">
+                      <Star className="w-2.5 h-2.5 fill-dark-950 text-dark-950" />
+                      Destaque
+                    </span>
+                  ) : null}
                   {product.bordaGratis && (
                     <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-amber-400 text-dark-950">
                       Borda Grátis
@@ -108,11 +112,11 @@ export function PromotionsShelf({
                   <div className="flex items-baseline gap-1">
                     <span className="text-[10px] text-brand-gold font-bold">R$</span>
                     <span className="text-base font-black text-white">
-                      {product.price.toFixed(2).replace('.', ',')}
+                      {(Number(product.price) || 0).toFixed(2).replace('.', ',')}
                     </span>
                     {product.originalPrice && (
                       <span className="text-[10px] text-slate-500 line-through">
-                        R$ {product.originalPrice.toFixed(2).replace('.', ',')}
+                        R$ {(Number(product.originalPrice) || 0).toFixed(2).replace('.', ',')}
                       </span>
                     )}
                   </div>

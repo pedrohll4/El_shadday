@@ -9,7 +9,7 @@ import {
   Camera, RotateCcw, Edit, Edit2, Eye, EyeOff, Tag, Percent,
   Utensils, ToggleLeft, ToggleRight, Save, Layers, CheckSquare,
   Pizza, ArrowUpRight, Info, CreditCard, Play, Film,
-  Building2, Users, Crown, Sliders, BarChart3
+  Building2, Users, Crown, Sliders, BarChart3, Star
 } from 'lucide-react';
 import { 
   RESTAURANT_INFO, 
@@ -458,6 +458,7 @@ export function AdminDashboard({
   const [prodFormImage, setProdFormImage] = useState('');
   const [prodFormIsAvailable, setProdFormIsAvailable] = useState(true);
   const [prodFormIsPromo, setProdFormIsPromo] = useState(false);
+  const [prodFormIsHighlight, setProdFormIsHighlight] = useState(false);
   const [prodFormBordaGratis, setProdFormBordaGratis] = useState(false);
   const [prodFormMaxSabores, setProdFormMaxSabores] = useState('2');
   const [prodFormTamanho, setProdFormTamanho] = useState('Família (8 fatias)');
@@ -685,6 +686,7 @@ export function AdminDashboard({
     setProdFormImage('https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&auto=format&fit=crop&q=80');
     setProdFormIsAvailable(true);
     setProdFormIsPromo(false);
+    setProdFormIsHighlight(false);
     setProdFormBordaGratis(false);
     setProdFormMaxSabores('2');
     setProdFormTamanho('Família (8 fatias)');
@@ -703,6 +705,7 @@ export function AdminDashboard({
     setProdFormImage(prod.image || '');
     setProdFormIsAvailable(prod.isAvailable !== false);
     setProdFormIsPromo(!!prod.isPromo || !!prod.originalPrice);
+    setProdFormIsHighlight(!!prod.isHighlight);
     setProdFormBordaGratis(!!prod.bordaGratis);
     setProdFormMaxSabores(prod.maxSabores !== undefined ? prod.maxSabores.toString() : '2');
     setProdFormTamanho(prod.tamanho || (prod.categoryId === 'pizzas' ? 'Família (8 fatias)' : ''));
@@ -734,6 +737,7 @@ export function AdminDashboard({
       image: prodFormImage.trim() || 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&auto=format&fit=crop&q=80',
       isAvailable: prodFormIsAvailable,
       isPromo: prodFormIsPromo,
+      isHighlight: !!prodFormIsHighlight,
       bordaGratis: prodFormBordaGratis,
       isBox: editingProduct ? editingProduct.isBox : (prodFormCategory === 'caixas'),
       isPizzaCustomizer: editingProduct ? (editingProduct.isPizzaCustomizer ?? (prodFormCategory === 'pizzas')) : (prodFormCategory === 'pizzas'),
@@ -792,6 +796,24 @@ export function AdminDashboard({
           if (copy.badge === 'Promoção 🔥') copy.badge = '';
           return copy;
         }
+      }
+      return p;
+    });
+    setProductsList(updated);
+    saveStoredProducts(updated);
+    syncProductsToCloud(updated);
+    dispatchConfigSync('PRODUCTS_UPDATE', updated);
+  };
+
+  const handleToggleProductHighlight = (prodId) => {
+    const updated = productsList.map(p => {
+      if (p.id === prodId) {
+        const nextState = !p.isHighlight;
+        triggerMenuToast(nextState ? `"${p.name}" agora está nos Destaques da Casa ⭐!` : `Destaque removido de "${p.name}".`);
+        return {
+          ...p,
+          isHighlight: nextState
+        };
       }
       return p;
     });
@@ -1035,7 +1057,9 @@ export function AdminDashboard({
   // Filtered products in Admin
   const filteredAdminProducts = useMemo(() => {
     let list = productsList;
-    if (menuCategoryFilter === 'promos') {
+    if (menuCategoryFilter === 'destaques') {
+      list = list.filter(p => p.isHighlight || p.isPromo);
+    } else if (menuCategoryFilter === 'promos') {
       list = list.filter(p => p.isPromo || p.originalPrice);
     } else if (menuCategoryFilter === 'pausados') {
       list = list.filter(p => p.isAvailable === false);
@@ -3057,6 +3081,19 @@ export function AdminDashboard({
 
                     <button
                       type="button"
+                      onClick={() => setMenuCategoryFilter('destaques')}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold whitespace-nowrap transition-colors cursor-pointer flex items-center gap-1 ${
+                        menuCategoryFilter === 'destaques'
+                          ? 'bg-brand-gold text-dark-950 font-black'
+                          : 'bg-dark-800 text-brand-gold hover:bg-dark-750'
+                      }`}
+                    >
+                      <Star className={`w-3 h-3 ${menuCategoryFilter === 'destaques' ? 'fill-dark-950 text-dark-950' : 'fill-brand-gold text-brand-gold'}`} />
+                      <span>Destaques da Casa ({productsList.filter(p => p.isHighlight || p.isPromo).length})</span>
+                    </button>
+
+                    <button
+                      type="button"
                       onClick={() => setMenuCategoryFilter('promos')}
                       className={`px-3 py-1 rounded-lg text-xs font-bold whitespace-nowrap transition-colors cursor-pointer flex items-center gap-1 ${
                         menuCategoryFilter === 'promos'
@@ -3137,6 +3174,12 @@ export function AdminDashboard({
                                 <span className="text-[9px] px-1.5 py-0.2 rounded font-bold uppercase bg-dark-950 text-slate-400 border border-dark-700">
                                   {CATEGORIES.find(c => c.id === product.categoryId)?.name || product.categoryId}
                                 </span>
+                                {product.isHighlight && (
+                                  <span className="text-[9px] px-1.5 py-0.2 rounded font-black uppercase bg-brand-gold text-dark-950 flex items-center gap-0.5 shadow-sm">
+                                    <Star className="w-2.5 h-2.5 fill-dark-950 text-dark-950" />
+                                    <span>Destaque</span>
+                                  </span>
+                                )}
                                 {product.badge && (
                                   <span className="text-[9px] px-1.5 py-0.2 rounded font-black uppercase bg-brand-red text-white">
                                     {product.badge}
@@ -3186,6 +3229,21 @@ export function AdminDashboard({
                               >
                                 {isAvailable ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
                                 <span>{isAvailable ? 'Disponível' : 'Pausado'}</span>
+                              </button>
+
+                              {/* Toggle Highlight */}
+                              <button
+                                type="button"
+                                onClick={() => handleToggleProductHighlight(product.id)}
+                                className={`px-2 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-colors cursor-pointer ${
+                                  product.isHighlight
+                                    ? 'bg-brand-gold/20 text-brand-gold border border-brand-gold/40 hover:bg-brand-gold/30'
+                                    : 'bg-dark-900 text-slate-400 hover:text-brand-gold hover:bg-dark-750'
+                                }`}
+                                title="Adicionar ou remover da vitrine 'Destaques da Casa' no topo do delivery"
+                              >
+                                <Star className={`w-3 h-3 ${product.isHighlight ? 'fill-brand-gold text-brand-gold' : ''}`} />
+                                <span>{product.isHighlight ? 'Destaque' : '+ Destaque'}</span>
                               </button>
 
                               {/* Toggle Promo */}
@@ -4916,8 +4974,8 @@ export function AdminDashboard({
                 </div>
 
                 {/* Switches */}
-                <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-dark-800">
-                  <label className="flex items-center gap-2.5 p-3 rounded-xl bg-dark-800/60 border border-dark-700 cursor-pointer">
+                <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2 border-t border-dark-800">
+                  <label className="flex items-center gap-2.5 p-3 rounded-xl bg-dark-800/60 border border-dark-700 cursor-pointer hover:border-dark-600 transition-colors">
                     <input
                       type="checkbox"
                       checked={prodFormIsAvailable}
@@ -4930,7 +4988,23 @@ export function AdminDashboard({
                     </div>
                   </label>
 
-                  <label className="flex items-center gap-2.5 p-3 rounded-xl bg-dark-800/60 border border-dark-700 cursor-pointer">
+                  <label className="flex items-center gap-2.5 p-3 rounded-xl bg-dark-800/60 border border-dark-700 cursor-pointer hover:border-brand-gold/40 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={prodFormIsHighlight}
+                      onChange={(e) => setProdFormIsHighlight(e.target.checked)}
+                      className="w-4 h-4 accent-brand-gold cursor-pointer"
+                    />
+                    <div>
+                      <div className="text-xs font-bold text-brand-gold flex items-center gap-1">
+                        <Star className="w-3 h-3 fill-brand-gold text-brand-gold" />
+                        <span>Destaques da Casa</span>
+                      </div>
+                      <div className="text-[10px] text-slate-400">Topo da tela principal</div>
+                    </div>
+                  </label>
+
+                  <label className="flex items-center gap-2.5 p-3 rounded-xl bg-dark-800/60 border border-dark-700 cursor-pointer hover:border-amber-400/40 transition-colors">
                     <input
                       type="checkbox"
                       checked={prodFormIsPromo}
@@ -4938,12 +5012,12 @@ export function AdminDashboard({
                       className="w-4 h-4 accent-amber-400 cursor-pointer"
                     />
                     <div>
-                      <div className="text-xs font-bold text-amber-300">Destaque Promoção</div>
-                      <div className="text-[10px] text-slate-400">Exibir na prateleira</div>
+                      <div className="text-xs font-bold text-amber-300">Selo Promoção</div>
+                      <div className="text-[10px] text-slate-400">Preço promocional 🔥</div>
                     </div>
                   </label>
 
-                  <label className="flex items-center gap-2.5 p-3 rounded-xl bg-dark-800/60 border border-dark-700 cursor-pointer">
+                  <label className="flex items-center gap-2.5 p-3 rounded-xl bg-dark-800/60 border border-dark-700 cursor-pointer hover:border-dark-600 transition-colors">
                     <input
                       type="checkbox"
                       checked={prodFormBordaGratis}
