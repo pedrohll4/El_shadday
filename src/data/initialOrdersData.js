@@ -168,3 +168,5 @@ export const INITIAL_MULTI_BRANCH_ORDERS = [
     ]
   }
 ];
+
+export const INITIAL_ORDERS = INITIAL_MULTI_BRANCH_ORDERS;

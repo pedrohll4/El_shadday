@@ -1,4 +1,4 @@
-import { BRANCHES as INITIAL_BRANCHES, DEFAULT_BRANCH_ID } from '../data/branchesData';
+import { BRANCHES as INITIAL_BRANCHES, DEFAULT_BRANCH_ID } from '../data/branchesData.js';
 
 const STORAGE_BRANCHES_KEY = 'el_shadday_branches_v2';
 
