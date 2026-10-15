@@ -347,6 +347,29 @@ export function BuffetSection({ onExploreFullBuffet }) {
           <p className="text-[11px] sm:text-xs text-slate-400 mt-1">
             Montagem completa, serviço de mesa e equipe uniformizada inclusos no seu evento.
           </p>
+
+          {onExploreFullBuffet && (
+            <div className="mt-4 pt-3 border-t border-[#D8B85A]/20 flex flex-col sm:flex-row items-center justify-between gap-3 text-left">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-[#D8B85A]/15 text-[#D8B85A] flex items-center justify-center flex-shrink-0 border border-[#D8B85A]/30">
+                  <Camera className="w-4 h-4" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-white">Quer ver nossa equipe e mesas montadas?</p>
+                  <p className="text-[11px] text-slate-400">Fotos de casamentos, formaturas e vídeos de eventos reais.</p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={onExploreFullBuffet}
+                className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#D8B85A] to-[#E8D58A] hover:opacity-95 text-[#15191F] font-black text-xs flex items-center justify-center gap-2 transition-all shadow-md hover:scale-[1.02] active:scale-[0.98] cursor-pointer whitespace-nowrap"
+              >
+                <span>Ver Apresentação Completa</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
         </div>
 
         {/* 3. Cardápio na Ordem Gastronômica Correta:
@@ -792,19 +815,26 @@ export function BuffetSection({ onExploreFullBuffet }) {
               </span>
             </button>
 
-            <div className="flex items-center justify-between pt-2 text-[11px] text-slate-400">
-              <span>Atendimento em Ariquemes e região</span>
-
-              {onExploreFullBuffet && (
+            {/* Botão de Destaque para a Apresentação Completa do Buffet */}
+            {onExploreFullBuffet && (
+              <div className="pt-3">
                 <button
                   type="button"
                   onClick={onExploreFullBuffet}
-                  className="text-[#D8B85A] hover:underline font-semibold inline-flex items-center gap-1 cursor-pointer"
+                  className="w-full py-3.5 px-5 rounded-xl bg-gradient-to-r from-[#D8B85A] via-[#E8D58A] to-[#D8B85A] hover:from-[#E8D58A] hover:to-[#D8B85A] text-[#15191F] font-black text-sm sm:text-base flex items-center justify-center gap-2.5 transition-all shadow-[0_4px_20px_rgba(216,184,90,0.35)] hover:shadow-[0_6px_28px_rgba(216,184,90,0.5)] hover:scale-[1.01] active:scale-[0.99] cursor-pointer group"
                 >
-                  <span>Ver apresentação completa</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
+                  <Sparkles className="w-5 h-5 text-[#15191F] group-hover:rotate-12 transition-transform" />
+                  <span className="uppercase tracking-wide">👑 Ver Apresentação Completa do Buffet</span>
+                  <ArrowRight className="w-5 h-5 text-[#15191F] group-hover:translate-x-1.5 transition-transform" />
                 </button>
-              )}
+                <p className="text-center text-[11px] sm:text-xs text-[#E8D58A] mt-2 font-medium">
+                  ✨ Conheça fotos em alta resolução, vídeos de eventos reais e toda nossa estrutura!
+                </p>
+              </div>
+            )}
+
+            <div className="flex items-center justify-center pt-2 text-[11px] text-slate-400">
+              <span>Atendimento em Ariquemes e região</span>
             </div>
 
           </form>

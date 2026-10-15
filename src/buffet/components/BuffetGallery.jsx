@@ -133,8 +133,24 @@ export function BuffetGallery({ galleryItems }) {
 
   // Calculate 3 visible items for desktop carousel
   const visiblePhotos = useMemo(() => {
-    if (filteredPhotos.length === 0) return [];
-    if (filteredPhotos.length <= 3) return filteredPhotos;
+    if (!filteredPhotos || filteredPhotos.length === 0) return [];
+
+    if (filteredPhotos.length === 1) {
+      return [
+        null,
+        { item: filteredPhotos[0], position: 'current', index: 0 },
+        null
+      ];
+    }
+
+    if (filteredPhotos.length === 2) {
+      const otherIndex = currentIndex === 0 ? 1 : 0;
+      return [
+        { item: filteredPhotos[otherIndex], position: 'prev', index: otherIndex },
+        { item: filteredPhotos[currentIndex], position: 'current', index: currentIndex },
+        { item: filteredPhotos[otherIndex], position: 'next', index: otherIndex }
+      ];
+    }
 
     const prevIndex = (currentIndex - 1 + filteredPhotos.length) % filteredPhotos.length;
     const nextIndex = (currentIndex + 1) % filteredPhotos.length;
@@ -307,7 +323,7 @@ export function BuffetGallery({ galleryItems }) {
             <div className="hidden md:grid grid-cols-12 gap-4 items-center">
               
               {/* Left/Prev Preview Card */}
-              {visiblePhotos[0] && (
+              {visiblePhotos[0]?.item && (
                 <div 
                   onClick={() => handlePrev()}
                   className="col-span-3 rounded-2xl overflow-hidden bg-[#181E27] border border-[#2A3442] opacity-50 hover:opacity-80 transition-all duration-300 cursor-pointer h-72 relative group"
@@ -317,7 +333,7 @@ export function BuffetGallery({ galleryItems }) {
                       {getItemPoster(visiblePhotos[0].item) ? (
                         <img 
                           src={getItemPoster(visiblePhotos[0].item)} 
-                          alt={visiblePhotos[0].item.title}
+                          alt={visiblePhotos[0].item.title || 'Foto El Shadday'}
                           className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
                           loading="lazy"
                         />
@@ -338,7 +354,7 @@ export function BuffetGallery({ galleryItems }) {
                   ) : (
                     <img 
                       src={visiblePhotos[0].item.url} 
-                      alt={visiblePhotos[0].item.title}
+                      alt={visiblePhotos[0].item.title || 'Foto El Shadday'}
                       className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
                       loading="lazy"
                     />
@@ -351,17 +367,21 @@ export function BuffetGallery({ galleryItems }) {
               )}
 
               {/* Center Highlighted Card */}
-              {visiblePhotos[1] && (
+              {visiblePhotos[1]?.item && (
                 <div 
-                  onClick={() => setLightboxIndex(visiblePhotos[1].index)}
-                  className="col-span-6 rounded-3xl overflow-hidden bg-[#181E27] border-2 border-[#D8B85A] shadow-[0_0_35px_rgba(216,184,90,0.25)] h-96 relative group cursor-pointer transition-all duration-300"
+                  onClick={() => setLightboxIndex(visiblePhotos[1].index ?? currentIndex)}
+                  className={`${
+                    !visiblePhotos[0]?.item && !visiblePhotos[2]?.item
+                      ? 'col-span-8 col-start-3'
+                      : 'col-span-6'
+                  } rounded-3xl overflow-hidden bg-[#181E27] border-2 border-[#D8B85A] shadow-[0_0_35px_rgba(216,184,90,0.25)] h-96 relative group cursor-pointer transition-all duration-300`}
                 >
                   {isVideoItem(visiblePhotos[1].item) ? (
                     getEmbedVideoUrl(visiblePhotos[1].item.url) ? (
                       <div className="w-full h-full relative bg-black">
                         <img 
                           src={getItemPoster(visiblePhotos[1].item) || visiblePhotos[1].item.url} 
-                          alt={visiblePhotos[1].item.title}
+                          alt={visiblePhotos[1].item.title || 'Foto El Shadday'}
                           className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700"
                         />
                         <div className="absolute inset-0 bg-black/35 flex items-center justify-center">
@@ -384,7 +404,7 @@ export function BuffetGallery({ galleryItems }) {
                   ) : (
                     <img 
                       src={visiblePhotos[1].item.url} 
-                      alt={visiblePhotos[1].item.title}
+                      alt={visiblePhotos[1].item.title || 'Foto El Shadday'}
                       className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700"
                     />
                   )}
@@ -428,7 +448,7 @@ export function BuffetGallery({ galleryItems }) {
                         {isVideoItem(visiblePhotos[1].item) ? 'Toque para assistir com som' : 'Toque na imagem para ampliar'}
                       </span>
                       <span className="text-[11px] text-slate-400 font-mono">
-                        {visiblePhotos[1].index + 1} / {filteredPhotos.length}
+                        {(visiblePhotos[1].index ?? currentIndex) + 1} / {filteredPhotos.length}
                       </span>
                     </div>
                   </div>
@@ -436,7 +456,7 @@ export function BuffetGallery({ galleryItems }) {
               )}
 
               {/* Right/Next Preview Card */}
-              {visiblePhotos[2] && (
+              {visiblePhotos[2]?.item && (
                 <div 
                   onClick={() => handleNext()}
                   className="col-span-3 rounded-2xl overflow-hidden bg-[#181E27] border border-[#2A3442] opacity-50 hover:opacity-80 transition-all duration-300 cursor-pointer h-72 relative group"
@@ -446,7 +466,7 @@ export function BuffetGallery({ galleryItems }) {
                       {getItemPoster(visiblePhotos[2].item) ? (
                         <img 
                           src={getItemPoster(visiblePhotos[2].item)} 
-                          alt={visiblePhotos[2].item.title}
+                          alt={visiblePhotos[2].item.title || 'Foto El Shadday'}
                           className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
                           loading="lazy"
                         />
@@ -467,7 +487,7 @@ export function BuffetGallery({ galleryItems }) {
                   ) : (
                     <img 
                       src={visiblePhotos[2].item.url} 
-                      alt={visiblePhotos[2].item.title}
+                      alt={visiblePhotos[2].item.title || 'Foto El Shadday'}
                       className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
                       loading="lazy"
                     />
@@ -774,24 +794,28 @@ export function BuffetGallery({ galleryItems }) {
               )}
 
               {/* Prev in Modal */}
-              <button
-                type="button"
-                onClick={() => setLightboxIndex(curr => (curr - 1 + filteredPhotos.length) % filteredPhotos.length)}
-                className="absolute left-3 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-[#11151B]/80 hover:bg-[#D8B85A] text-white hover:text-[#11151B] border border-[#D8B85A]/40 flex items-center justify-center transition-all cursor-pointer shadow-xl z-20"
-                title="Anterior"
-              >
-                <ChevronLeft className="w-6 h-6" />
-              </button>
+              {filteredPhotos.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => setLightboxIndex(curr => (curr - 1 + filteredPhotos.length) % filteredPhotos.length)}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-[#11151B]/80 hover:bg-[#D8B85A] text-white hover:text-[#11151B] border border-[#D8B85A]/40 flex items-center justify-center transition-all cursor-pointer shadow-xl z-20"
+                  title="Anterior"
+                >
+                  <ChevronLeft className="w-6 h-6" />
+                </button>
+              )}
 
               {/* Next in Modal */}
-              <button
-                type="button"
-                onClick={() => setLightboxIndex(curr => (curr + 1) % filteredPhotos.length)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-[#11151B]/80 hover:bg-[#D8B85A] text-white hover:text-[#11151B] border border-[#D8B85A]/40 flex items-center justify-center transition-all cursor-pointer shadow-xl z-20"
-                title="Próxima"
-              >
-                <ChevronRight className="w-6 h-6" />
-              </button>
+              {filteredPhotos.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => setLightboxIndex(curr => (curr + 1) % filteredPhotos.length)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-[#11151B]/80 hover:bg-[#D8B85A] text-white hover:text-[#11151B] border border-[#D8B85A]/40 flex items-center justify-center transition-all cursor-pointer shadow-xl z-20"
+                  title="Próxima"
+                >
+                  <ChevronRight className="w-6 h-6" />
+                </button>
+              )}
             </div>
 
             {/* Bottom Caption */}

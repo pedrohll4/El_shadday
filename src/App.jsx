@@ -765,7 +765,11 @@ export default function App() {
         <div className="bg-[#B3913A] text-[#15191F] font-bold text-xs py-2 px-4 text-center sticky top-0 z-50 flex items-center justify-center gap-3 shadow-md">
           <span>👑 Você está visualizando a Apresentação Completa de Buffet.</span>
           <button 
-            onClick={() => setAppView('delivery')} 
+            onClick={() => {
+              window.location.hash = '';
+              window.scrollTo({ top: 0, behavior: 'instant' });
+              setAppView('delivery');
+            }} 
             className="bg-[#15191F] text-[#E8D58A] px-3 py-1 rounded-md text-[11px] font-extrabold uppercase hover:bg-slate-900 transition-colors cursor-pointer"
           >
             Voltar para o Delivery El Shadday 🍕
@@ -773,7 +777,11 @@ export default function App() {
         </div>
         <BuffetApp 
           currentAppMode="buffet" 
-          onToggleAppMode={() => setAppView('delivery')} 
+          onToggleAppMode={() => {
+            window.location.hash = '';
+            window.scrollTo({ top: 0, behavior: 'instant' });
+            setAppView('delivery');
+          }} 
         />
       </div>
     );
@@ -998,7 +1006,13 @@ export default function App() {
       </main>
 
       {/* 5. Buffet Section at the Bottom (Quotation via WhatsApp) */}
-      <BuffetSection onExploreFullBuffet={() => setAppView('full-buffet')} />
+      <BuffetSection 
+        onExploreFullBuffet={() => {
+          window.location.hash = '';
+          window.scrollTo({ top: 0, behavior: 'instant' });
+          setAppView('full-buffet');
+        }} 
+      />
 
       {/* 6. Footer */}
       <Footer onOpenAdmin={handleOpenAdminTrigger} />
