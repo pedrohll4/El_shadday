@@ -188,6 +188,8 @@ Pedido gerado via Cardápio Digital El Shadday.`;
 
     const orderData = {
       orderId,
+      branchId: activeBranch?.id || 'ariquemes',
+      branchName: activeBranch?.displayName || activeBranch?.name || 'Unidade Ariquemes',
       createdAt: new Date().toISOString(),
       customerName: customerName.trim(),
       customerPhone: customerPhone.trim(),

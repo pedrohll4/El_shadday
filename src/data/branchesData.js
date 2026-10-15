@@ -4,7 +4,7 @@ export const BRANCHES = [
     name: 'Unidade Ariquemes',
     displayName: 'Ariquemes - RO',
     subtitle: 'Matriz • Delivery & Balcão',
-    status: 'active', // 'active' | 'construction'
+    status: 'active', // 'active' | 'construction' | 'closed'
     badge: 'Aberta para Pedidos',
     address: 'Rua Maceió, 2333 - Setor 03, Ariquemes - RO',
     phone: '5569992228682',
@@ -24,9 +24,12 @@ export const BRANCHES = [
     subtitle: 'Filial Capital • Em Breve',
     status: 'construction',
     badge: 'Em Construção 🚧',
-    address: 'Em fase de obras e implantação • Porto Velho - RO',
+    address: 'Av. Sete de Setembro, 1200 - Centro, Porto Velho - RO',
     phone: '5569992228682',
     phoneFormatted: '(69) 99222-8682',
+    pixKey: '69992228682',
+    pixType: 'Celular',
+    pixName: 'El Shadday Delivery Porto Velho',
     deliveryTime: 'Inauguração em breve',
     openingHours: 'Obras em andamento',
     description: 'Estamos preparando com muito carinho a melhor estrutura de delivery da capital rondoniense. Aguarde a inauguração!',
@@ -35,3 +38,31 @@ export const BRANCHES = [
 ];
 
 export const DEFAULT_BRANCH_ID = 'ariquemes';
+
+const STORAGE_BRANCHES_KEY = 'el_shadday_branches_v2';
+
+export function getStoredBranches() {
+  try {
+    const raw = localStorage.getItem(STORAGE_BRANCHES_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+  } catch (e) {
+    console.error('Error reading stored branches:', e);
+  }
+  return BRANCHES;
+}
+
+export function saveStoredBranches(branches) {
+  try {
+    localStorage.setItem(STORAGE_BRANCHES_KEY, JSON.stringify(branches));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('el_shadday_branches_updated', { detail: branches }));
+    }
+  } catch (e) {
+    console.error('Error saving stored branches:', e);
+  }
+}

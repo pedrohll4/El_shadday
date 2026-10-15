@@ -1,5 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
-import { BRANCHES, DEFAULT_BRANCH_ID } from './data/branchesData';
+import { BRANCHES, DEFAULT_BRANCH_ID, getStoredBranches } from './data/branchesData';
+import { INITIAL_MULTI_BRANCH_ORDERS } from './data/initialOrdersData';
+import { getCurrentUser, logoutUser, ROLES } from './services/authService';
 import { 
   PRODUCTS, 
   CATEGORIES, 
@@ -47,10 +49,12 @@ import { ShoppingBag, ArrowRight, Sparkles, ChevronRight, Phone, Search, ChefHat
 const getInitialOrders = () => {
   try {
     const saved = localStorage.getItem('el_shadday_all_orders');
-    return saved ? JSON.parse(saved) : [];
-  } catch (e) {
-    return [];
-  }
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch (e) {}
+  return INITIAL_MULTI_BRANCH_ORDERS;
 };
 
 export default function App() {
@@ -69,6 +73,24 @@ export default function App() {
       return 'delivery';
     }
   });
+
+  // Current Logged-in User Session & Roles
+  const [currentUser, setCurrentUser] = useState(() => getCurrentUser());
+
+  // Dynamic Branches State
+  const [branches, setBranches] = useState(() => getStoredBranches());
+
+  useEffect(() => {
+    const handleBranchesSync = (e) => {
+      if (e?.detail && Array.isArray(e.detail)) {
+        setBranches(e.detail);
+      } else {
+        setBranches(getStoredBranches());
+      }
+    };
+    window.addEventListener('el_shadday_branches_updated', handleBranchesSync);
+    return () => window.removeEventListener('el_shadday_branches_updated', handleBranchesSync);
+  }, []);
 
   // Branch Selection State
   const [selectedBranchId, setSelectedBranchId] = useState(() => {
@@ -431,12 +453,12 @@ export default function App() {
 
   // Active branch object
   const activeBranch = useMemo(() => {
-    return BRANCHES.find(b => b.id === selectedBranchId) || BRANCHES[0];
-  }, [selectedBranchId]);
+    return branches.find(b => b.id === selectedBranchId) || branches[0] || BRANCHES[0];
+  }, [branches, selectedBranchId]);
 
   // Branch switch handler
   const handleSelectBranch = (branchId) => {
-    const branch = BRANCHES.find(b => b.id === branchId);
+    const branch = branches.find(b => b.id === branchId);
     if (!branch) return;
 
     if (branch.status === 'construction') {
@@ -535,7 +557,10 @@ export default function App() {
     }
   };
 
-  const handleAdminLoginSuccess = () => {
+  const handleAdminLoginSuccess = (authenticatedUser) => {
+    if (authenticatedUser) {
+      setCurrentUser(authenticatedUser);
+    }
     setIsAdminLoggedIn(true);
     sessionStorage.setItem('el_shadday_admin_auth', 'true');
     setIsAdminLoginModalOpen(false);
@@ -544,6 +569,8 @@ export default function App() {
   };
 
   const handleAdminLogout = () => {
+    logoutUser();
+    setCurrentUser(null);
     setIsAdminLoggedIn(false);
     sessionStorage.removeItem('el_shadday_admin_auth');
     setAppView('delivery');
@@ -723,6 +750,10 @@ export default function App() {
         onLogout={handleAdminLogout}
         onBackToSite={handleBackToSiteFromAdmin}
         onSwitchToBuffet={() => setAppView('full-buffet')}
+        currentUser={currentUser}
+        branches={branches}
+        currentBranchId={selectedBranchId}
+        onSelectBranch={handleSelectBranch}
       />
     );
   }
@@ -1000,6 +1031,7 @@ export default function App() {
         onClose={() => setIsBranchModalOpen(false)}
         selectedBranchId={selectedBranchId}
         onSelectBranch={handleSelectBranch}
+        branches={branches}
       />
 
       {/* Porto Velho Construction Modal */}

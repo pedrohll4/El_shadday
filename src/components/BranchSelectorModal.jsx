@@ -1,14 +1,29 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, MapPin, Clock, Phone, ChevronRight, CheckCircle2, AlertTriangle, Sparkles, Building2 } from 'lucide-react';
-import { BRANCHES } from '../data/branchesData';
+import { getStoredBranches } from '../data/branchesData';
 import { ElShaddayLogo, GoldFiligree } from '../buffet/components/ElShaddayLogo';
 
 export function BranchSelectorModal({ 
   isOpen, 
   onClose, 
   selectedBranchId, 
-  onSelectBranch 
+  onSelectBranch,
+  branches: customBranches
 }) {
+  const [branchesList, setBranchesList] = useState(() => customBranches || getStoredBranches());
+
+  useEffect(() => {
+    if (customBranches) {
+      setBranchesList(customBranches);
+      return;
+    }
+    const handleUpdate = () => {
+      setBranchesList(getStoredBranches());
+    };
+    window.addEventListener('el_shadday_branches_updated', handleUpdate);
+    return () => window.removeEventListener('el_shadday_branches_updated', handleUpdate);
+  }, [customBranches]);
+
   if (!isOpen) return null;
 
   return (
@@ -45,7 +60,7 @@ export function BranchSelectorModal({
 
         {/* Branches Grid */}
         <div className="p-3 sm:p-6 space-y-3 sm:space-y-4 max-h-[75dvh] overflow-y-auto">
-          {BRANCHES.map((branch) => {
+          {branchesList.map((branch) => {
             const isActive = branch.status === 'active';
             const isCurrent = selectedBranchId === branch.id;
 

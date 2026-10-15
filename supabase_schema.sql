@@ -233,22 +233,59 @@ INSERT INTO storage.buckets (id, name, public)
 VALUES ('gallery', 'gallery', true)
 ON CONFLICT (id) DO NOTHING;
 
+-- 8. EXTENSÃO MULTI-FILIAIS & GESTÃO DE CONTAS (MASTER, FILIAIS E COZINHA)
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS branch_id TEXT DEFAULT 'ariquemes';
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS branch_name TEXT DEFAULT 'Unidade Ariquemes';
+CREATE INDEX IF NOT EXISTS idx_orders_branch_id ON public.orders (branch_id);
+
+-- Tabela de Filiais
+CREATE TABLE IF NOT EXISTS public.branches (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    display_name TEXT NOT NULL,
+    subtitle TEXT,
+    status TEXT NOT NULL DEFAULT 'active', -- 'active', 'construction', 'closed'
+    badge TEXT,
+    address TEXT,
+    phone TEXT,
+    phone_formatted TEXT,
+    pix_key TEXT,
+    pix_type TEXT,
+    pix_name TEXT,
+    delivery_time TEXT,
+    opening_hours TEXT,
+    description TEXT,
+    banner_image TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+);
+
+-- Tabela de Usuários / Contas (RBAC)
+CREATE TABLE IF NOT EXISTS public.app_users (
+    id TEXT PRIMARY KEY,
+    username TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'BRANCH_ADMIN', -- 'SUPER_ADMIN', 'BRANCH_ADMIN', 'KITCHEN'
+    branch_id TEXT NOT NULL DEFAULT 'ariquemes',
+    branch_name TEXT DEFAULT 'Unidade Ariquemes',
+    password TEXT NOT NULL,
+    active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+);
+
+ALTER TABLE public.branches ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.app_users ENABLE ROW LEVEL SECURITY;
+
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Acesso público a arquivos da galeria' AND tablename = 'objects' AND schemaname = 'storage') THEN
-    CREATE POLICY "Acesso público a arquivos da galeria" ON storage.objects FOR SELECT USING (bucket_id = 'gallery');
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Acesso público a filiais' AND tablename = 'branches') THEN
+    CREATE POLICY "Acesso público a filiais" ON public.branches FOR ALL USING (true) WITH CHECK (true);
   END IF;
 
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Upload público de arquivos da galeria' AND tablename = 'objects' AND schemaname = 'storage') THEN
-    CREATE POLICY "Upload público de arquivos da galeria" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'gallery');
-  END IF;
-
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Update público de arquivos da galeria' AND tablename = 'objects' AND schemaname = 'storage') THEN
-    CREATE POLICY "Update público de arquivos da galeria" ON storage.objects FOR UPDATE USING (bucket_id = 'gallery');
-  END IF;
-
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Delete público de arquivos da galeria' AND tablename = 'objects' AND schemaname = 'storage') THEN
-    CREATE POLICY "Delete público de arquivos da galeria" ON storage.objects FOR DELETE USING (bucket_id = 'gallery');
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Acesso público a usuários' AND tablename = 'app_users') THEN
+    CREATE POLICY "Acesso público a usuários" ON public.app_users FOR ALL USING (true) WITH CHECK (true);
   END IF;
 END $$;
+
 

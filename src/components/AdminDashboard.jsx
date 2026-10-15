@@ -8,7 +8,8 @@ import {
   AlertCircle, X, ShieldAlert, Sparkles, CheckCheck,
   Camera, RotateCcw, Edit, Edit2, Eye, EyeOff, Tag, Percent,
   Utensils, ToggleLeft, ToggleRight, Save, Layers, CheckSquare,
-  Pizza, ArrowUpRight, Info, CreditCard, Play, Film
+  Pizza, ArrowUpRight, Info, CreditCard, Play, Film,
+  Building2, Users, Crown, Sliders, BarChart3
 } from 'lucide-react';
 import { 
   RESTAURANT_INFO, 
@@ -45,9 +46,14 @@ import {
 import { dispatchConfigSync } from '../services/configSyncService';
 import { ImageUploader } from './ImageUploader';
 import { isVideoUrl, getVideoPosterUrl } from '../utils/imageCompressor';
+import { ROLES, ROLE_LABELS, getCurrentUser } from '../services/authService';
+import { getStoredBranches } from '../data/branchesData';
+import { MasterFinancialView } from './admin/MasterFinancialView';
+import { BranchManagementView } from './admin/BranchManagementView';
+import { UserManagementView } from './admin/UserManagementView';
 
 export function AdminDashboard({ 
-  orders, 
+  orders = [], 
   onUpdateOrderStatus, 
   onUpdatePaymentStatus, 
   onCancelOrder,
@@ -55,10 +61,64 @@ export function AdminDashboard({
   onCreateKitchenOrder,
   onLogout, 
   onBackToSite,
-  onSwitchToBuffet
+  onSwitchToBuffet,
+  currentUser: propUser,
+  branches: propBranches,
+  currentBranchId,
+  onSelectBranch
 }) {
-  // Navigation: 'kds' (Kitchen Display) | 'pdv' (Point of Sale / Criar Pedidos) | 'gallery' (Fotos do Buffet)
-  const [activeAdminTab, setActiveAdminTab] = useState('kds');
+  const [currentUser, setCurrentUser] = useState(() => propUser || getCurrentUser());
+  const [branchesList, setBranchesList] = useState(() => propBranches || getStoredBranches());
+  const [masterBranchFilter, setMasterBranchFilter] = useState('all');
+
+  // Keep currentUser synced if prop changes
+  useEffect(() => {
+    if (propUser) setCurrentUser(propUser);
+  }, [propUser]);
+
+  // Keep branches synced if prop changes
+  useEffect(() => {
+    if (propBranches) setBranchesList(propBranches);
+  }, [propBranches]);
+
+  // Listen to branch updates
+  useEffect(() => {
+    const handleBranchesUpdate = (e) => {
+      if (e?.detail && Array.isArray(e.detail)) {
+        setBranchesList(e.detail);
+      } else {
+        setBranchesList(getStoredBranches());
+      }
+    };
+    window.addEventListener('el_shadday_branches_updated', handleBranchesUpdate);
+    return () => window.removeEventListener('el_shadday_branches_updated', handleBranchesUpdate);
+  }, []);
+
+  // Determine current active branch object
+  const currentBranch = useMemo(() => {
+    const targetId = (currentUser?.role === ROLES.SUPER_ADMIN && masterBranchFilter !== 'all')
+      ? masterBranchFilter
+      : (currentUser?.branchId || currentBranchId || 'ariquemes');
+    return branchesList.find(b => b.id === targetId) || branchesList[0];
+  }, [branchesList, currentUser, masterBranchFilter, currentBranchId]);
+
+  // Filter orders according to user's role and selected branch
+  const scopedOrders = useMemo(() => {
+    if (currentUser?.role === ROLES.SUPER_ADMIN) {
+      if (masterBranchFilter === 'all') return orders;
+      return orders.filter(o => (o.branchId || 'ariquemes') === masterBranchFilter);
+    }
+    const branchId = currentUser?.branchId || currentBranchId || 'ariquemes';
+    return orders.filter(o => (o.branchId || 'ariquemes') === branchId);
+  }, [orders, currentUser, masterBranchFilter, currentBranchId]);
+
+  // Navigation tab based on role
+  const [activeAdminTab, setActiveAdminTab] = useState(() => {
+    const user = propUser || getCurrentUser();
+    if (user?.role === ROLES.SUPER_ADMIN) return 'master-overview';
+    if (user?.role === ROLES.BRANCH_ADMIN) return 'menu';
+    return 'kds';
+  });
 
   // KDS Filters
   const [selectedFilter, setSelectedFilter] = useState('todos'); // 'todos' | 'atrasados' | 'pendentes' | 'preparo' | 'entrega' | 'concluidos' | 'nao_pagos' | 'cancelados'
@@ -1085,8 +1145,8 @@ export function AdminDashboard({
 
   // Metrics calculations (Excluding cancelled orders!)
   const activeOrdersList = useMemo(() => {
-    return orders.filter(o => o.orderStatus !== 'CANCELADO');
-  }, [orders]);
+    return scopedOrders.filter(o => o.orderStatus !== 'CANCELADO');
+  }, [scopedOrders]);
 
   const totalRevenue = useMemo(() => {
     return activeOrdersList
@@ -1115,12 +1175,12 @@ export function AdminDashboard({
   }, [activeOrdersList]);
 
   const cancelledCount = useMemo(() => {
-    return orders.filter(o => o.orderStatus === 'CANCELADO').length;
-  }, [orders]);
+    return scopedOrders.filter(o => o.orderStatus === 'CANCELADO').length;
+  }, [scopedOrders]);
 
   // Filtered orders list for KDS
   const filteredOrders = useMemo(() => {
-    return orders.filter(order => {
+    return scopedOrders.filter(order => {
       const isCancelled = order.orderStatus === 'CANCELADO';
 
       // Specific filter tabs
@@ -1397,6 +1457,8 @@ export function AdminDashboard({
 
     const newOrder = {
       orderId,
+      branchId: currentBranch?.id || 'ariquemes',
+      branchName: currentBranch?.displayName || currentBranch?.name || 'Unidade Ariquemes',
       createdAt: new Date().toISOString(),
       customerName: pdvCustomerName.trim(),
       customerPhone: pdvCustomerPhone.trim(),
@@ -1457,27 +1519,85 @@ export function AdminDashboard({
       <header className="bg-dark-900 border-b border-dark-800 sticky top-0 z-40 px-3 sm:px-6 py-3 shadow-md">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
           
+          {/* Brand & Role Header */}
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-brand-gold/20 flex items-center justify-center text-brand-gold border border-brand-gold/30">
-              <ChefHat className="w-6 h-6" />
+            <div className={`w-11 h-11 rounded-2xl flex items-center justify-center border ${
+              currentUser?.role === ROLES.SUPER_ADMIN
+                ? 'bg-brand-gold/20 text-brand-gold border-brand-gold/40'
+                : currentUser?.role === ROLES.BRANCH_ADMIN
+                ? 'bg-blue-500/20 text-blue-400 border border-blue-500/40'
+                : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
+            }`}>
+              {currentUser?.role === ROLES.SUPER_ADMIN ? (
+                <Crown className="w-6 h-6" />
+              ) : currentUser?.role === ROLES.BRANCH_ADMIN ? (
+                <Building2 className="w-6 h-6" />
+              ) : (
+                <ChefHat className="w-6 h-6" />
+              )}
             </div>
+
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="font-display font-extrabold text-base sm:text-lg text-white">
-                  Painel de Controle El Shadday
+                  {currentUser?.role === ROLES.SUPER_ADMIN
+                    ? 'Painel Master El Shadday'
+                    : currentUser?.role === ROLES.BRANCH_ADMIN
+                    ? `Admin • ${currentBranch?.name || 'Filial'}`
+                    : `Cozinha KDS • ${currentBranch?.name || 'Filial'}`}
                 </h1>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 animate-pulse">
-                  🟢 KDS Sincronizado
+                
+                <span className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full border ${
+                  currentUser?.role === ROLES.SUPER_ADMIN
+                    ? 'bg-brand-gold/20 text-brand-gold border-brand-gold/40'
+                    : currentUser?.role === ROLES.BRANCH_ADMIN
+                    ? 'bg-blue-500/20 text-blue-400 border border-blue-500/40'
+                    : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 animate-pulse'
+                }`}>
+                  {ROLE_LABELS[currentUser?.role] || 'Painel de Gestão'}
                 </span>
               </div>
               <p className="text-[11px] text-slate-400">
-                Gestão da Cozinha, Entregas & PDV de Balcão
+                {currentUser?.role === ROLES.SUPER_ADMIN
+                  ? 'Diretoria • Faturamento, Lucro Consolidado, Filiais e Usuários'
+                  : currentUser?.role === ROLES.BRANCH_ADMIN
+                  ? `${currentBranch?.displayName} • Gestão de Cardápio, Preços & Vendas da Filial`
+                  : `${currentBranch?.displayName} • Comandas em Tempo Real e Operação`}
               </p>
             </div>
           </div>
 
-          {/* Quick Header Actions */}
+          {/* Quick Header Actions & Branch Switcher */}
           <div className="flex items-center gap-2 flex-wrap">
+            
+            {/* Super Admin Branch Filter Dropdown */}
+            {currentUser?.role === ROLES.SUPER_ADMIN && (
+              <div className="flex items-center gap-1.5 bg-dark-950 px-3 py-1.5 rounded-2xl border border-dark-750">
+                <Store className="w-3.5 h-3.5 text-brand-gold" />
+                <span className="text-[11px] text-slate-400 font-bold hidden sm:inline">Filial:</span>
+                <select
+                  value={masterBranchFilter}
+                  onChange={(e) => setMasterBranchFilter(e.target.value)}
+                  className="bg-transparent text-xs font-black text-white focus:outline-none cursor-pointer"
+                >
+                  <option value="all" className="bg-dark-900 text-white">Todas as Filiais (Global)</option>
+                  {branchesList.map(b => (
+                    <option key={b.id} value={b.id} className="bg-dark-900 text-white">
+                      {b.name} ({b.displayName})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* User chip */}
+            {currentUser && (
+              <div className="hidden xl:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-dark-950 border border-dark-800 text-xs">
+                <span className="text-slate-400">Olá,</span>
+                <span className="font-bold text-white">{currentUser.name}</span>
+              </div>
+            )}
+
             <button
               onClick={handleUnlockAndTestAudio}
               className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
@@ -1512,131 +1632,235 @@ export function AdminDashboard({
         </div>
 
         {/* Navigation Tabs */}
-        <div className="max-w-7xl mx-auto mt-3 flex items-center gap-2 border-t border-dark-800 pt-2.5 overflow-x-auto scrollbar-none pb-1">
-          <button
-            type="button"
-            onClick={() => setActiveAdminTab('kds')}
-            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
-              activeAdminTab === 'kds'
-                ? 'bg-brand-gold text-dark-950 shadow-glow-gold font-black'
-                : 'bg-dark-800 text-slate-300 hover:bg-dark-750 hover:text-white border border-dark-750'
-            }`}
-          >
-            <ChefHat className="w-4 h-4" />
-            <span>Pedidos da Cozinha (KDS)</span>
-            <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
-              activeAdminTab === 'kds' ? 'bg-dark-950 text-brand-gold' : 'bg-dark-900 text-slate-400'
-            }`}>
-              {activeOrdersList.length}
-            </span>
-          </button>
+        {currentUser?.role !== ROLES.KITCHEN && (
+          <div className="max-w-7xl mx-auto mt-3 flex items-center gap-2 border-t border-dark-800 pt-2.5 overflow-x-auto scrollbar-none pb-1">
+            
+            {/* SUPER ADMIN TABS */}
+            {currentUser?.role === ROLES.SUPER_ADMIN && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setActiveAdminTab('master-overview')}
+                  className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
+                    activeAdminTab === 'master-overview'
+                      ? 'bg-brand-gold text-dark-950 shadow-glow-gold font-black'
+                      : 'bg-dark-800 text-slate-300 hover:bg-dark-750 hover:text-white border border-dark-750'
+                  }`}
+                >
+                  <BarChart3 className="w-4 h-4" />
+                  <span>Faturamento & Lucro Master</span>
+                </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveAdminTab('pdv')}
-            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
-              activeAdminTab === 'pdv'
-                ? 'bg-brand-gold text-dark-950 shadow-glow-gold font-black'
-                : 'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 border border-emerald-500/40'
-            }`}
-          >
-            <Plus className="w-4 h-4 stroke-[3]" />
-            <span>Novo Pedido (PDV)</span>
-            {pdvCart.length > 0 && (
-              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-500 text-dark-950 font-black">
-                {pdvCart.length} itens
-              </span>
+                <button
+                  type="button"
+                  onClick={() => setActiveAdminTab('branches')}
+                  className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
+                    activeAdminTab === 'branches'
+                      ? 'bg-brand-gold text-dark-950 shadow-glow-gold font-black'
+                      : 'bg-dark-800 text-slate-300 hover:bg-dark-750 hover:text-white border border-dark-750'
+                  }`}
+                >
+                  <Building2 className="w-4 h-4" />
+                  <span>Gestão de Filiais</span>
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                    activeAdminTab === 'branches' ? 'bg-dark-950 text-brand-gold' : 'bg-dark-900 text-slate-400'
+                  }`}>
+                    {branchesList.length}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveAdminTab('users')}
+                  className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
+                    activeAdminTab === 'users'
+                      ? 'bg-brand-gold text-dark-950 shadow-glow-gold font-black'
+                      : 'bg-dark-800 text-slate-300 hover:bg-dark-750 hover:text-white border border-dark-750'
+                  }`}
+                >
+                  <Users className="w-4 h-4" />
+                  <span>Contas & Usuários</span>
+                </button>
+              </>
             )}
-          </button>
 
-          <button
-            type="button"
-            onClick={() => {
-              setActiveAdminTab('menu');
-              if (menuSubTab === 'card-fee') {
-                setMenuSubTab('products');
-              }
-            }}
-            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
-              activeAdminTab === 'menu' && menuSubTab !== 'card-fee'
-                ? 'bg-brand-gold text-dark-950 shadow-glow-gold font-black'
-                : 'bg-dark-800 text-slate-300 hover:bg-dark-750 hover:text-white border border-dark-750'
-            }`}
-          >
-            <Utensils className="w-4 h-4" />
-            <span>Cardápio & Promoções</span>
-            <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
-              activeAdminTab === 'menu' && menuSubTab !== 'card-fee' ? 'bg-dark-950 text-brand-gold' : 'bg-dark-900 text-slate-400'
-            }`}>
-              {productsList.length}
-            </span>
-          </button>
-
-          {/* Botão de Acesso Direto: Taxa da Maquininha */}
-          <button
-            type="button"
-            onClick={() => {
-              setActiveAdminTab('menu');
-              setMenuSubTab('card-fee');
-            }}
-            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
-              activeAdminTab === 'menu' && menuSubTab === 'card-fee'
-                ? 'bg-gradient-to-r from-amber-400 to-brand-gold text-dark-950 shadow-glow-gold font-black ring-2 ring-amber-300'
-                : 'bg-amber-500/15 text-amber-300 hover:bg-amber-500/25 border border-amber-500/40'
-            }`}
-            title="Clique aqui para configurar a taxa da maquininha de cartão"
-          >
-            <CreditCard className="w-4 h-4 text-amber-400" />
-            <span>💳 Taxa da Maquininha</span>
-            {restaurantSettings.cardMachineSettings?.active ? (
-              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-500 text-dark-950 font-black">
-                {restaurantSettings.cardMachineSettings?.type === 'percentage'
-                  ? `${restaurantSettings.cardMachineSettings.percentageRate}%`
-                  : restaurantSettings.cardMachineSettings?.type === 'fixed'
-                  ? `R$ ${restaurantSettings.cardMachineSettings.fixedRate}`
-                  : 'Ativa'}
-              </span>
-            ) : (
-              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-dark-950/80 text-amber-400/80 border border-amber-500/30">
-                Ajustar
-              </span>
+            {/* BRANCH ADMIN TAB: LOCAL METRICS */}
+            {currentUser?.role === ROLES.BRANCH_ADMIN && (
+              <button
+                type="button"
+                onClick={() => setActiveAdminTab('branch-overview')}
+                className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
+                  activeAdminTab === 'branch-overview'
+                    ? 'bg-brand-gold text-dark-950 shadow-glow-gold font-black'
+                    : 'bg-dark-800 text-slate-300 hover:bg-dark-750 hover:text-white border border-dark-750'
+                }`}
+              >
+                <BarChart3 className="w-4 h-4" />
+                <span>Desempenho da Filial</span>
+              </button>
             )}
-          </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveAdminTab('gallery')}
-            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
-              activeAdminTab === 'gallery'
-                ? 'bg-brand-gold text-dark-950 shadow-glow-gold font-black'
-                : 'bg-dark-800 text-slate-300 hover:bg-dark-750 hover:text-white border border-dark-750'
-            }`}
-          >
-            <Camera className="w-4 h-4 text-brand-gold" />
-            <span>Galeria de Fotos (Buffet)</span>
-            <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
-              activeAdminTab === 'gallery' ? 'bg-dark-950 text-brand-gold' : 'bg-dark-900 text-slate-400'
-            }`}>
-              {galleryList.length}
-            </span>
-          </button>
-
-          {onSwitchToBuffet && (
+            {/* COMMON TABS (SUPER ADMIN & BRANCH ADMIN) */}
             <button
               type="button"
-              onClick={onSwitchToBuffet}
-              className="ml-auto px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-1.5 bg-gradient-to-r from-amber-500/20 to-brand-gold/20 text-brand-gold hover:text-white hover:bg-brand-gold/30 border border-brand-gold/40 transition-all cursor-pointer whitespace-nowrap"
-              title="Acessar o site do Buffet"
+              onClick={() => {
+                setActiveAdminTab('menu');
+                if (menuSubTab === 'card-fee') {
+                  setMenuSubTab('products');
+                }
+              }}
+              className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
+                activeAdminTab === 'menu' && menuSubTab !== 'card-fee'
+                  ? 'bg-brand-gold text-dark-950 shadow-glow-gold font-black'
+                  : 'bg-dark-800 text-slate-300 hover:bg-dark-750 hover:text-white border border-dark-750'
+              }`}
             >
-              <Sparkles className="w-4 h-4" />
-              <span>Ver Site do Buffet 👑</span>
+              <Utensils className="w-4 h-4" />
+              <span>{currentUser?.role === ROLES.SUPER_ADMIN ? 'Cardápio & Preços' : 'Cardápio da Filial'}</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                activeAdminTab === 'menu' && menuSubTab !== 'card-fee' ? 'bg-dark-950 text-brand-gold' : 'bg-dark-900 text-slate-400'
+              }`}>
+                {productsList.length}
+              </span>
             </button>
-          )}
-        </div>
+
+            <button
+              type="button"
+              onClick={() => setActiveAdminTab('pdv')}
+              className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
+                activeAdminTab === 'pdv'
+                  ? 'bg-brand-gold text-dark-950 shadow-glow-gold font-black'
+                  : 'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 border border-emerald-500/40'
+              }`}
+            >
+              <Plus className="w-4 h-4 stroke-[3]" />
+              <span>Novo Pedido (PDV)</span>
+              {pdvCart.length > 0 && (
+                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-500 text-dark-950 font-black">
+                  {pdvCart.length} itens
+                </span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveAdminTab('kds')}
+              className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
+                activeAdminTab === 'kds'
+                  ? 'bg-brand-gold text-dark-950 shadow-glow-gold font-black'
+                  : 'bg-dark-800 text-slate-300 hover:bg-dark-750 hover:text-white border border-dark-750'
+              }`}
+            >
+              <ChefHat className="w-4 h-4" />
+              <span>{currentUser?.role === ROLES.SUPER_ADMIN ? 'Cozinha KDS' : 'Cozinha da Filial'}</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                activeAdminTab === 'kds' ? 'bg-dark-950 text-brand-gold' : 'bg-dark-900 text-slate-400'
+              }`}>
+                {activeOrdersList.length}
+              </span>
+            </button>
+
+            {/* Botão de Acesso Direto: Taxa da Maquininha */}
+            <button
+              type="button"
+              onClick={() => {
+                setActiveAdminTab('menu');
+                setMenuSubTab('card-fee');
+              }}
+              className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
+                activeAdminTab === 'menu' && menuSubTab === 'card-fee'
+                  ? 'bg-gradient-to-r from-amber-400 to-brand-gold text-dark-950 shadow-glow-gold font-black ring-2 ring-amber-300'
+                  : 'bg-amber-500/15 text-amber-300 hover:bg-amber-500/25 border border-amber-500/40'
+              }`}
+              title="Clique aqui para configurar a taxa da maquininha de cartão"
+            >
+              <CreditCard className="w-4 h-4 text-amber-400" />
+              <span>💳 Taxa Maquininha</span>
+            </button>
+
+            {currentUser?.role === ROLES.SUPER_ADMIN && (
+              <button
+                type="button"
+                onClick={() => setActiveAdminTab('gallery')}
+                className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
+                  activeAdminTab === 'gallery'
+                    ? 'bg-brand-gold text-dark-950 shadow-glow-gold font-black'
+                    : 'bg-dark-800 text-slate-300 hover:bg-dark-750 hover:text-white border border-dark-750'
+                }`}
+              >
+                <Camera className="w-4 h-4 text-brand-gold" />
+                <span>Galeria (Buffet)</span>
+              </button>
+            )}
+
+            {onSwitchToBuffet && (
+              <button
+                type="button"
+                onClick={onSwitchToBuffet}
+                className="ml-auto px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-1.5 bg-gradient-to-r from-amber-500/20 to-brand-gold/20 text-brand-gold hover:text-white hover:bg-brand-gold/30 border border-brand-gold/40 transition-all cursor-pointer whitespace-nowrap"
+                title="Acessar o site do Buffet"
+              >
+                <Sparkles className="w-4 h-4" />
+                <span>Buffet 👑</span>
+              </button>
+            )}
+          </div>
+        )}
       </header>
 
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-5 space-y-6">
+        
+        {/* VIEW 0A: MASTER FINANCIAL & PROFIT VIEW */}
+        {activeAdminTab === 'master-overview' && (
+          <MasterFinancialView
+            orders={orders}
+            branches={branchesList}
+            onNavigateToBranchMenu={(bId) => {
+              setMasterBranchFilter(bId);
+              setActiveAdminTab('menu');
+            }}
+            onNavigateToBranchKitchen={(bId) => {
+              setMasterBranchFilter(bId);
+              setActiveAdminTab('kds');
+            }}
+          />
+        )}
+
+        {/* VIEW 0B: BRANCH OVERVIEW (FOR BRANCH ADMIN) */}
+        {activeAdminTab === 'branch-overview' && (
+          <MasterFinancialView
+            orders={orders.filter(o => (o.branchId || 'ariquemes') === (currentUser?.branchId || 'ariquemes'))}
+            branches={branchesList.filter(b => b.id === (currentUser?.branchId || 'ariquemes'))}
+            onNavigateToBranchMenu={() => setActiveAdminTab('menu')}
+            onNavigateToBranchKitchen={() => setActiveAdminTab('kds')}
+          />
+        )}
+
+        {/* VIEW 0C: BRANCHES MANAGEMENT (SUPER ADMIN) */}
+        {activeAdminTab === 'branches' && (
+          <BranchManagementView
+            branches={branchesList}
+            onRefreshBranches={() => setBranchesList(getStoredBranches())}
+            onNavigateToBranchMenu={(bId) => {
+              setMasterBranchFilter(bId);
+              setActiveAdminTab('menu');
+            }}
+            onNavigateToBranchKitchen={(bId) => {
+              setMasterBranchFilter(bId);
+              setActiveAdminTab('kds');
+            }}
+          />
+        )}
+
+        {/* VIEW 0D: USERS MANAGEMENT (SUPER ADMIN) */}
+        {activeAdminTab === 'users' && (
+          <UserManagementView
+            branches={branchesList}
+            currentUser={currentUser}
+            onRefreshUsers={() => {}}
+          />
+        )}
         
         {/* ============================================================== */}
         {/* VIEW 1: KITCHEN DISPLAY SYSTEM (KDS) & ORDERS FEED             */}

@@ -18,6 +18,8 @@ function mapSupabaseRowToOrder(row) {
   if (!row) return null;
   return {
     orderId: row.id,
+    branchId: row.branch_id || 'ariquemes',
+    branchName: row.branch_name || 'Unidade Ariquemes',
     customerName: row.customer_name,
     customerPhone: row.customer_phone,
     deliveryAddress: row.delivery_address,
@@ -50,6 +52,8 @@ export async function dispatchOrderToKitchen(orderData) {
     try {
       const { error } = await supabase.from('orders').upsert({
         id: orderData.orderId,
+        branch_id: orderData.branchId || 'ariquemes',
+        branch_name: orderData.branchName || 'Unidade Ariquemes',
         customer_name: orderData.customerName || 'Cliente',
         customer_phone: orderData.customerPhone || '',
         delivery_address: orderData.deliveryAddress || {},
