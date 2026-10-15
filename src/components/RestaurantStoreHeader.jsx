@@ -66,7 +66,7 @@ export function RestaurantStoreHeader({
 
               {/* Category Breadcrumbs / Tags */}
               <p className="text-xs sm:text-sm text-slate-300 font-medium">
-                Pizzas Artesanais • Caixas de Esfirras • Combos • Buffet
+                Pizzas Artesanais • Caixas de Esfirras • Combos{activeBranch?.id === 'ariquemes' ? ' • Buffet' : ''}
               </p>
 
               {/* iFood Rating & Location Row */}

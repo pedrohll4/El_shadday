@@ -16,7 +16,7 @@ import {
 } from '../../services/authService';
 
 export function UserManagementView({ 
-  branches, 
+  branches = [], 
   currentUser, 
   onRefreshUsers 
 }) {

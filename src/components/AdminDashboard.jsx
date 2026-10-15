@@ -9,7 +9,7 @@ import {
   Camera, RotateCcw, Edit, Edit2, Eye, EyeOff, Tag, Percent,
   Utensils, ToggleLeft, ToggleRight, Save, Layers, CheckSquare,
   Pizza, ArrowUpRight, Info, CreditCard, Play, Film,
-  Building2, Users, Crown, Sliders, BarChart3, Star
+  Building2, Users, Crown, Sliders, BarChart3, Star, QrCode
 } from 'lucide-react';
 import { 
   RESTAURANT_INFO, 
@@ -101,22 +101,28 @@ export function AdminDashboard({
     return () => window.removeEventListener('el_shadday_branches_updated', handleBranchesUpdate);
   }, []);
 
-  // Determine current active branch object
+  // Determine current active branch object safely
   const currentBranch = useMemo(() => {
+    const list = branchesList || [];
     const targetId = (currentUser?.role === ROLES.SUPER_ADMIN && masterBranchFilter !== 'all')
       ? masterBranchFilter
-      : (currentUser?.branchId || currentBranchId || 'ariquemes');
-    return branchesList.find(b => b.id === targetId) || branchesList[0];
+      : (currentUser?.branchId === 'all' ? (currentBranchId || 'ariquemes') : (currentUser?.branchId || currentBranchId || 'ariquemes'));
+    return list.find(b => b.id === targetId) || list[0] || {
+      id: 'ariquemes',
+      name: 'Unidade Ariquemes',
+      displayName: 'Ariquemes - RO'
+    };
   }, [branchesList, currentUser, masterBranchFilter, currentBranchId]);
 
-  // Filter orders according to user's role and selected branch
+  // Filter orders according to user's role and selected branch safely
   const scopedOrders = useMemo(() => {
+    if (!Array.isArray(orders)) return [];
     if (currentUser?.role === ROLES.SUPER_ADMIN) {
-      if (masterBranchFilter === 'all') return orders;
-      return orders.filter(o => (o.branchId || 'ariquemes') === masterBranchFilter);
+      if (masterBranchFilter === 'all') return orders.filter(Boolean);
+      return orders.filter(o => o && (o.branchId || 'ariquemes') === masterBranchFilter);
     }
     const branchId = currentUser?.branchId || currentBranchId || 'ariquemes';
-    return orders.filter(o => (o.branchId || 'ariquemes') === branchId);
+    return orders.filter(o => o && (o.branchId || 'ariquemes') === branchId);
   }, [orders, currentUser, masterBranchFilter, currentBranchId]);
 
   // Navigation tab based on role
@@ -127,6 +133,21 @@ export function AdminDashboard({
     return 'kds';
   });
 
+  // Automatically sync tab when user role changes (Prevents black screen or empty views)
+  useEffect(() => {
+    if (currentUser?.role === ROLES.KITCHEN) {
+      setActiveAdminTab('kds');
+    } else if (currentUser?.role === ROLES.BRANCH_ADMIN) {
+      if (['master-overview', 'branches', 'users', 'gallery'].includes(activeAdminTab)) {
+        setActiveAdminTab('menu');
+      }
+    } else if (currentUser?.role === ROLES.SUPER_ADMIN) {
+      if (activeAdminTab === 'branch-overview') {
+        setActiveAdminTab('master-overview');
+      }
+    }
+  }, [currentUser]);
+
   // KDS Filters
   const [selectedFilter, setSelectedFilter] = useState('todos'); // 'todos' | 'atrasados' | 'pendentes' | 'preparo' | 'entrega' | 'concluidos' | 'nao_pagos' | 'cancelados'
   const [searchQuery, setSearchQuery] = useState('');
@@ -136,7 +157,7 @@ export function AdminDashboard({
   // Audio chimes
   const audioCtxRef = useRef(null);
   const [isAudioUnlocked, setIsAudioUnlocked] = useState(false);
-  const knownOrderIdsRef = useRef(new Set(orders.map(o => o.orderId)));
+  const knownOrderIdsRef = useRef(new Set((orders || []).map(o => o?.orderId).filter(Boolean)));
 
   // WhatsApp Settings & Notification States
   const [whatsAppSettings, setWhatsAppSettings] = useState(() => getWhatsAppSettings());
@@ -764,7 +785,8 @@ export function AdminDashboard({
       isBox: editingProduct ? editingProduct.isBox : (prodFormCategory === 'caixas'),
       isPizzaCustomizer: editingProduct ? (editingProduct.isPizzaCustomizer ?? (prodFormCategory === 'pizzas')) : (prodFormCategory === 'pizzas'),
       maxSabores: prodFormCategory === 'pizzas' ? (parseInt(prodFormMaxSabores) || 2) : editingProduct?.maxSabores,
-      tamanho: prodFormCategory === 'pizzas' ? (prodFormTamanho.trim() || 'Família (8 fatias)') : editingProduct?.tamanho
+      tamanho: prodFormCategory === 'pizzas' ? (prodFormTamanho.trim() || 'Família (8 fatias)') : editingProduct?.tamanho,
+      branchId: editingProduct?.branchId || (currentUser?.role === ROLES.SUPER_ADMIN && masterBranchFilter !== 'all' ? masterBranchFilter : (currentUser?.branchId || currentBranch?.id || 'ariquemes'))
     };
 
     let updated;
@@ -1076,9 +1098,18 @@ export function AdminDashboard({
     return list;
   }, [pizzaFlavors, flavorCategoryFilter, flavorSearch]);
 
-  // Filtered products in Admin
+  // Filtered products in Admin (Scoped by Branch)
   const filteredAdminProducts = useMemo(() => {
     let list = productsList;
+
+    // Filter products by branch: Branch Admin only sees their own branch; Super Admin can filter
+    if (currentUser?.role === ROLES.BRANCH_ADMIN) {
+      const bId = currentUser?.branchId || currentBranch?.id || 'ariquemes';
+      list = list.filter(p => p.branchId === bId || (!p.branchId && bId === 'ariquemes') || p.branchId === 'all');
+    } else if (currentUser?.role === ROLES.SUPER_ADMIN && masterBranchFilter !== 'all') {
+      list = list.filter(p => p.branchId === masterBranchFilter || (!p.branchId && masterBranchFilter === 'ariquemes') || p.branchId === 'all');
+    }
+
     if (menuCategoryFilter === 'destaques') {
       list = list.filter(p => p.isHighlight || p.isPromo);
     } else if (menuCategoryFilter === 'promos') {
@@ -1098,7 +1129,7 @@ export function AdminDashboard({
       );
     }
     return list;
-  }, [productsList, menuCategoryFilter, menuSearch]);
+  }, [productsList, menuCategoryFilter, menuSearch, currentUser, currentBranch, masterBranchFilter]);
 
   // Sound chime helper using Web Audio API + Speech Synthesis
   const playChime = (isTest = false) => {
@@ -1151,9 +1182,10 @@ export function AdminDashboard({
     playChime(true);
   };
 
-  // Watch for incoming new orders and sound the alarm
+  // Watch for incoming new orders and sound the alarm safely
   useEffect(() => {
-    const newOrders = orders.filter(o => o.orderId && !knownOrderIdsRef.current.has(o.orderId));
+    const list = Array.isArray(orders) ? orders : [];
+    const newOrders = list.filter(o => o?.orderId && !knownOrderIdsRef.current.has(o.orderId));
     
     if (newOrders.length > 0) {
       newOrders.forEach(o => knownOrderIdsRef.current.add(o.orderId));
@@ -1178,12 +1210,14 @@ export function AdminDashboard({
 
   // Format elapsed time in minutes
   const getElapsedMinutes = (createdAt) => {
+    if (!createdAt) return 0;
     const diffMs = now - new Date(createdAt).getTime();
     return Math.max(0, Math.floor(diffMs / 60000));
   };
 
   // Check if order is delayed (active and older than 35 minutes)
   const isOrderDelayed = (order) => {
+    if (!order) return false;
     if (order.orderStatus === 'CONCLUIDO' || order.orderStatus === 'CANCELADO') return false;
     const elapsed = getElapsedMinutes(order.createdAt);
     return elapsed >= 35; // 35+ minutes threshold for warning
@@ -1191,13 +1225,13 @@ export function AdminDashboard({
 
   // Metrics calculations (Excluding cancelled orders!)
   const activeOrdersList = useMemo(() => {
-    return scopedOrders.filter(o => o.orderStatus !== 'CANCELADO');
+    return scopedOrders.filter(o => o && o.orderStatus !== 'CANCELADO');
   }, [scopedOrders]);
 
   const totalRevenue = useMemo(() => {
     return activeOrdersList
-      .filter(o => o.paymentStatus === 'PAGO_APROVADO' || o.orderStatus === 'CONCLUIDO')
-      .reduce((acc, o) => acc + (o.total || 0), 0);
+      .filter(o => o && (o.paymentStatus === 'PAGO_APROVADO' || o.orderStatus === 'CONCLUIDO'))
+      .reduce((acc, o) => acc + (Number(o.total) || 0), 0);
   }, [activeOrdersList]);
 
   const pendingCount = useMemo(() => {
@@ -1832,7 +1866,23 @@ export function AdminDashboard({
               <span>💳 Taxa Maquininha</span>
             </button>
 
-            {currentUser?.role === ROLES.SUPER_ADMIN && (
+            {/* QR Code Tab for this Branch */}
+            <button
+              type="button"
+              onClick={() => setActiveAdminTab('qrcode')}
+              className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
+                activeAdminTab === 'qrcode'
+                  ? 'bg-brand-gold text-dark-950 shadow-glow-gold font-black'
+                  : 'bg-dark-800 text-slate-300 hover:bg-dark-750 hover:text-white border border-dark-750'
+              }`}
+              title="Ver e imprimir QR Code exclusivo desta filial"
+            >
+              <QrCode className="w-4 h-4 text-brand-gold" />
+              <span>QR Code da Filial</span>
+            </button>
+
+            {/* Buffet Gallery (Only Ariquemes has Buffet) */}
+            {currentBranch?.id === 'ariquemes' && (currentUser?.role === ROLES.SUPER_ADMIN || currentUser?.branchId === 'ariquemes') && (
               <button
                 type="button"
                 onClick={() => setActiveAdminTab('gallery')}
@@ -1843,16 +1893,17 @@ export function AdminDashboard({
                 }`}
               >
                 <Camera className="w-4 h-4 text-brand-gold" />
-                <span>Galeria (Buffet)</span>
+                <span>Galeria (Buffet Ariquemes)</span>
               </button>
             )}
 
-            {onSwitchToBuffet && (
+            {/* Buffet Shortcut (Only Ariquemes has Buffet) */}
+            {onSwitchToBuffet && currentBranch?.id === 'ariquemes' && (
               <button
                 type="button"
                 onClick={onSwitchToBuffet}
                 className="ml-auto px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-1.5 bg-gradient-to-r from-amber-500/20 to-brand-gold/20 text-brand-gold hover:text-white hover:bg-brand-gold/30 border border-brand-gold/40 transition-all cursor-pointer whitespace-nowrap"
-                title="Acessar o site do Buffet"
+                title="Acessar apresentação do Buffet El Shadday Ariquemes"
               >
                 <Sparkles className="w-4 h-4" />
                 <span>Buffet 👑</span>
@@ -4571,6 +4622,199 @@ export function AdminDashboard({
                   })}
                 </div>
               )}
+
+            </div>
+          </div>
+        )}
+
+        {/* ============================================================== */}
+        {/* VIEW 5: FILIAL QR CODE & DIRECT ACCESS                         */}
+        {/* ============================================================== */}
+        {activeAdminTab === 'qrcode' && (
+          <div className="space-y-6 animate-fade-in">
+            <div className="bg-dark-900 border border-brand-gold/30 rounded-3xl p-6 sm:p-8 shadow-2xl">
+              
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-6 border-b border-dark-800">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-2xl bg-brand-gold/20 flex items-center justify-center text-brand-gold border border-brand-gold/40">
+                    <QrCode className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-brand-gold/20 text-brand-gold border border-brand-gold/30">
+                        Acesso Direto por QR Code
+                      </span>
+                    </div>
+                    <h2 className="text-xl sm:text-2xl font-display font-black text-white mt-0.5">
+                      QR Code e Link Oficial da {currentBranch?.name || 'Filial'}
+                    </h2>
+                    <p className="text-xs text-slate-400">
+                      Disponibilize nas mesas, no balcão e no WhatsApp para o cliente abrir diretamente o cardápio desta filial!
+                    </p>
+                  </div>
+                </div>
+
+                {currentUser?.role === ROLES.SUPER_ADMIN && (
+                  <div className="flex items-center gap-2 bg-dark-950 p-2 rounded-2xl border border-dark-800">
+                    <span className="text-xs text-slate-400 font-bold">Trocar Filial:</span>
+                    <select
+                      value={masterBranchFilter}
+                      onChange={(e) => setMasterBranchFilter(e.target.value)}
+                      className="bg-dark-900 text-xs font-bold text-white px-2.5 py-1.5 rounded-xl border border-dark-750 focus:outline-none"
+                    >
+                      {branchesList.map(b => (
+                        <option key={b.id} value={b.id}>{b.name} ({b.displayName})</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {/* QR Code Card Display */}
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-center">
+                
+                {/* Visual QR Code Card (Printable!) */}
+                <div className="md:col-span-5 flex flex-col items-center">
+                  <div id="printable-branch-qrcode" className="p-6 bg-white rounded-3xl shadow-2xl border-4 border-brand-gold text-dark-950 text-center max-w-xs w-full flex flex-col items-center">
+                    <div className="font-display font-black text-lg text-dark-950 uppercase tracking-tight">
+                      EL SHADDAY DELIVERY
+                    </div>
+                    <div className="text-xs font-extrabold text-amber-600 mb-3 uppercase">
+                      📍 {currentBranch?.displayName || 'Ariquemes - RO'}
+                    </div>
+
+                    {/* QR Code Image */}
+                    <div className="w-56 h-56 bg-slate-50 p-2 rounded-2xl border border-slate-200 shadow-inner flex items-center justify-center">
+                      <img
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(
+                          (typeof window !== 'undefined' ? `${window.location.origin}${window.location.pathname}` : 'https://elshaddaydelivery.com.br/') + `?filial=${currentBranch?.id || 'ariquemes'}`
+                        )}&color=000000&bgcolor=ffffff&qzone=1`}
+                        alt={`QR Code ${currentBranch?.name}`}
+                        className="w-full h-full object-contain rounded-xl"
+                      />
+                    </div>
+
+                    <div className="mt-3 font-extrabold text-xs text-dark-950">
+                      Aponte a câmera do celular para pedir
+                    </div>
+                    <div className="text-[10px] text-slate-500 font-medium">
+                      Pizzas Artesanais & Esfirras • {currentBranch?.phoneFormatted || '(69) 99222-8682'}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Information & Action Buttons */}
+                <div className="md:col-span-7 space-y-4">
+                  
+                  <div className="p-4 rounded-2xl bg-dark-950 border border-dark-800 space-y-2">
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
+                      🔗 Link Direto do Cardápio desta Filial:
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        readOnly
+                        value={(typeof window !== 'undefined' ? `${window.location.origin}${window.location.pathname}` : 'https://elshaddaydelivery.com.br/') + `?filial=${currentBranch?.id || 'ariquemes'}`}
+                        className="flex-1 px-3.5 py-2.5 rounded-xl bg-dark-900 border border-dark-750 text-brand-gold text-xs font-mono font-bold select-all focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const url = (typeof window !== 'undefined' ? `${window.location.origin}${window.location.pathname}` : 'https://elshaddaydelivery.com.br/') + `?filial=${currentBranch?.id || 'ariquemes'}`;
+                          navigator.clipboard.writeText(url);
+                          alert('✅ Link copiado com sucesso! Você pode colar nas redes sociais ou enviar no WhatsApp.');
+                        }}
+                        className="px-4 py-2.5 rounded-xl bg-brand-gold hover:bg-amber-400 text-dark-950 font-black text-xs transition-colors flex items-center gap-1.5 cursor-pointer shadow-md"
+                      >
+                        <Copy className="w-4 h-4" />
+                        <span>Copiar Link</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Highlights of Branch Isolation */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    <div className="p-3.5 rounded-2xl bg-dark-950 border border-dark-800 space-y-1">
+                      <div className="font-bold text-white flex items-center gap-1.5">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                        <span>Isolamento Total</span>
+                      </div>
+                      <p className="text-slate-400 text-[11px] leading-relaxed">
+                        Ao escanear, o cliente entra <strong>exclusivamente</strong> na unidade de {currentBranch?.displayName || 'Ariquemes'}, sem misturar cardápio ou pedidos com outras cidades.
+                      </p>
+                    </div>
+
+                    <div className="p-3.5 rounded-2xl bg-dark-950 border border-dark-800 space-y-1">
+                      <div className="font-bold text-white flex items-center gap-1.5">
+                        <Phone className="w-4 h-4 text-emerald-400" />
+                        <span>WhatsApp da Unidade</span>
+                      </div>
+                      <p className="text-slate-400 text-[11px] leading-relaxed">
+                        Os pedidos vão direto para o WhatsApp oficial desta filial: <strong>{currentBranch?.phoneFormatted || '(69) 99222-8682'}</strong>.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Print and Open buttons */}
+                  <div className="flex flex-wrap items-center gap-3 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const url = (typeof window !== 'undefined' ? `${window.location.origin}${window.location.pathname}` : 'https://elshaddaydelivery.com.br/') + `?filial=${currentBranch?.id || 'ariquemes'}`;
+                        window.open(url, '_blank');
+                      }}
+                      className="px-4 py-3 rounded-xl bg-dark-800 hover:bg-dark-750 text-white font-bold text-xs border border-dark-700 flex items-center gap-2 transition-colors cursor-pointer"
+                    >
+                      <ArrowUpRight className="w-4 h-4 text-brand-gold" />
+                      <span>Testar Cardápio em Nova Guia</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const printWin = window.open('', '_blank', 'width=700,height=900');
+                        if (!printWin) return;
+                        const url = (typeof window !== 'undefined' ? `${window.location.origin}${window.location.pathname}` : 'https://elshaddaydelivery.com.br/') + `?filial=${currentBranch?.id || 'ariquemes'}`;
+                        const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=350x350&data=${encodeURIComponent(url)}&color=000000&bgcolor=ffffff&qzone=1`;
+                        printWin.document.write(`
+                          <html>
+                            <head>
+                              <title>QR Code - ${currentBranch?.name}</title>
+                              <style>
+                                body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: #fff; color: #111; }
+                                .card { border: 4px solid #D8B85A; padding: 40px; border-radius: 24px; text-align: center; max-width: 450px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+                                h1 { margin: 0 0 5px; font-size: 26px; font-weight: 900; }
+                                h2 { margin: 0 0 20px; font-size: 16px; color: #b48e35; font-weight: 800; }
+                                img { width: 280px; height: 280px; border-radius: 16px; margin: 10px 0; }
+                                p { font-size: 14px; font-weight: bold; margin-top: 15px; }
+                                .sub { font-size: 12px; color: #666; font-weight: normal; }
+                              </style>
+                            </head>
+                            <body>
+                              <div class="card">
+                                <h1>EL SHADDAY DELIVERY</h1>
+                                <h2>${currentBranch?.displayName || 'Ariquemes - RO'}</h2>
+                                <img src="${qrSrc}" alt="QR Code" />
+                                <p>Aponte a câmera do celular para pedir!</p>
+                                <div class="sub">Delivery & Balcão • ${currentBranch?.phoneFormatted || '(69) 99222-8682'}</div>
+                              </div>
+                            </body>
+                          </html>
+                        `);
+                        printWin.document.close();
+                        printWin.focus();
+                        setTimeout(() => printWin.print(), 500);
+                      }}
+                      className="px-5 py-3 rounded-xl bg-gradient-to-r from-brand-gold via-amber-400 to-brand-gold text-dark-950 font-black text-xs shadow-glow-gold hover:scale-102 active:scale-98 transition-all flex items-center gap-2 cursor-pointer"
+                    >
+                      <Printer className="w-4 h-4" />
+                      <span>Imprimir Placa de Mesa / Balcão com QR Code</span>
+                    </button>
+                  </div>
+
+                </div>
+
+              </div>
 
             </div>
           </div>

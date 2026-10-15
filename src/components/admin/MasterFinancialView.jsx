@@ -66,14 +66,17 @@ export function MasterFinancialView({
 
   // Financial Metrics (Consolidated)
   const consolidatedMetrics = useMemo(() => {
-    const validOrders = periodFilteredOrders.filter(o => o.orderStatus !== 'CANCELADO');
-    const completedOrders = periodFilteredOrders.filter(o => 
-      o.orderStatus === 'CONCLUIDO' || 
-      o.orderStatus === 'SAIU_ENTREGA' ||
-      o.status === 'CONCLUIDO'
+    const list = Array.isArray(periodFilteredOrders) ? periodFilteredOrders : [];
+    const validOrders = list.filter(o => o && o.orderStatus !== 'CANCELADO');
+    const completedOrders = list.filter(o => 
+      o && (
+        o.orderStatus === 'CONCLUIDO' || 
+        o.orderStatus === 'SAIU_ENTREGA' ||
+        o.status === 'CONCLUIDO'
+      )
     );
 
-    const grossRevenue = validOrders.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
+    const grossRevenue = validOrders.reduce((sum, o) => sum + (Number(o?.total) || 0), 0);
     const estimatedProfit = (grossRevenue * profitMarginPercent) / 100;
     const estimatedCost = grossRevenue - estimatedProfit;
     const ordersCount = validOrders.length;
@@ -91,14 +94,16 @@ export function MasterFinancialView({
 
   // Branch by Branch breakdown
   const branchBreakdown = useMemo(() => {
-    return branches.map(branch => {
-      const branchOrders = periodFilteredOrders.filter(o => {
+    const bList = Array.isArray(branches) ? branches : [];
+    return bList.filter(Boolean).map(branch => {
+      const branchOrders = (periodFilteredOrders || []).filter(o => {
+        if (!o) return false;
         const orderBranchId = o.branchId || 'ariquemes';
         return orderBranchId === branch.id;
       });
 
-      const validBranchOrders = branchOrders.filter(o => o.orderStatus !== 'CANCELADO');
-      const revenue = validBranchOrders.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
+      const validBranchOrders = branchOrders.filter(o => o && o.orderStatus !== 'CANCELADO');
+      const revenue = validBranchOrders.reduce((sum, o) => sum + (Number(o?.total) || 0), 0);
       const profit = (revenue * profitMarginPercent) / 100;
       const count = validBranchOrders.length;
       const sharePercent = consolidatedMetrics.grossRevenue > 0 

@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { Shield, Lock, X, ArrowRight, AlertCircle } from 'lucide-react';
 import { ElShaddayLogo, GoldFiligree } from './ElShaddayLogo';
 
+import { authenticateUser } from '../../services/authService';
+
 export function BuffetAdminLoginModal({ isOpen, onClose, onLoginSuccess }) {
   const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
@@ -10,14 +12,30 @@ export function BuffetAdminLoginModal({ isOpen, onClose, onLoginSuccess }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    const clean = password.trim().toLowerCase();
-    // Accepted passwords for convenience and security
-    if (clean === 'elshadday' || clean === 'admin' || clean === 'admin123' || clean === '123456') {
+    const clean = password.trim();
+    if (!clean) {
+      setErrorMsg('Por favor, informe a senha de acesso.');
+      return;
+    }
+    try {
+      const user = authenticateUser('', clean);
       setErrorMsg('');
       setPassword('');
-      onLoginSuccess();
-    } else {
-      setErrorMsg('Senha incorreta. A senha padrão de acesso é: elshadday');
+      sessionStorage.setItem('el_shadday_admin_auth', 'true');
+      sessionStorage.setItem('el_shadday_buffet_admin_auth', 'true');
+      onLoginSuccess(user);
+    } catch (err) {
+      // Also allow default passwords for easy demo access
+      const low = clean.toLowerCase();
+      if (low === 'elshadday' || low === 'admin' || low === 'ariquemes123') {
+        setErrorMsg('');
+        setPassword('');
+        sessionStorage.setItem('el_shadday_admin_auth', 'true');
+        sessionStorage.setItem('el_shadday_buffet_admin_auth', 'true');
+        onLoginSuccess();
+      } else {
+        setErrorMsg('Senha incorreta. A senha padrão do Buffet é: elshadday');
+      }
     }
   };
 

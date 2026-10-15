@@ -12,7 +12,7 @@ import {
 } from '../../services/branchesService';
 
 export function BranchManagementView({ 
-  branches, 
+  branches = [], 
   onRefreshBranches, 
   onNavigateToBranchMenu, 
   onNavigateToBranchKitchen 

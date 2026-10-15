@@ -19,7 +19,8 @@ export function CategoryNav({
   searchQuery, 
   onSearchChange,
   onScrollToBuffet,
-  products
+  products,
+  showBuffet = true
 }) {
   return (
     <div className="sticky top-[104px] sm:top-20 z-30 bg-dark-950/95 backdrop-blur-md border-b border-dark-800 py-2 sm:py-2.5 shadow-xl transition-all w-full max-w-full">
@@ -86,8 +87,8 @@ export function CategoryNav({
             );
           })}
 
-          {/* Buffet Category Chip */}
-          {onScrollToBuffet && (
+          {/* Buffet Category Chip (Exclusive to Ariquemes) */}
+          {onScrollToBuffet && showBuffet && (
             <button
               type="button"
               onClick={onScrollToBuffet}

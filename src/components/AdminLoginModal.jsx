@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   X, Lock, KeyRound, ShieldAlert, ArrowRight, Eye, EyeOff, 
-  Crown, Building2, ChefHat, Sparkles, CheckCircle2 
+  Crown, Building2, ChefHat, Sparkles, CheckCircle2, MapPin
 } from 'lucide-react';
 import { 
   authenticateUser, 
@@ -9,34 +9,81 @@ import {
   ROLES, 
   ROLE_LABELS 
 } from '../services/authService';
+import { getStoredBranches } from '../data/branchesData';
 
 export function AdminLoginModal({ isOpen, onClose, onLoginSuccess }) {
+  const branches = getStoredBranches();
+  
+  // Tabs: 'MASTER' | 'BRANCH' | 'KITCHEN'
+  const [activeRoleTab, setActiveRoleTab] = useState('MASTER');
+  const [selectedBranchId, setSelectedBranchId] = useState('ariquemes');
   const [username, setUsername] = useState('admin');
   const [password, setPassword] = useState('elshadday');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
-  const [selectedDemoIndex, setSelectedDemoIndex] = useState(0);
 
   if (!isOpen) return null;
+
+  const handleSelectRoleTab = (tab) => {
+    setActiveRoleTab(tab);
+    setError('');
+    if (tab === 'MASTER') {
+      setUsername('admin');
+      setPassword('elshadday');
+    } else if (tab === 'BRANCH') {
+      const u = selectedBranchId === 'ariquemes' ? 'admin.ariquemes' : 'admin.portovelho';
+      const p = selectedBranchId === 'ariquemes' ? 'ariquemes123' : 'portovelho123';
+      setUsername(u);
+      setPassword(p);
+    } else if (tab === 'KITCHEN') {
+      const u = selectedBranchId === 'ariquemes' ? 'cozinha.ariquemes' : 'cozinha.portovelho';
+      const p = selectedBranchId === 'ariquemes' ? 'ariquemes123' : 'portovelho123';
+      setUsername(u);
+      setPassword(p);
+    }
+  };
+
+  const handleSelectBranch = (bId) => {
+    setSelectedBranchId(bId);
+    setError('');
+    if (activeRoleTab === 'BRANCH') {
+      const u = bId === 'ariquemes' ? 'admin.ariquemes' : 'admin.portovelho';
+      const p = bId === 'ariquemes' ? 'ariquemes123' : 'portovelho123';
+      setUsername(u);
+      setPassword(p);
+    } else if (activeRoleTab === 'KITCHEN') {
+      const u = bId === 'ariquemes' ? 'cozinha.ariquemes' : 'cozinha.portovelho';
+      const p = bId === 'ariquemes' ? 'ariquemes123' : 'portovelho123';
+      setUsername(u);
+      setPassword(p);
+    }
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
     setError('');
 
     try {
-      const user = authenticateUser(username, password);
+      const targetRole = activeRoleTab === 'MASTER' 
+        ? ROLES.SUPER_ADMIN 
+        : activeRoleTab === 'BRANCH' 
+        ? ROLES.BRANCH_ADMIN 
+        : ROLES.KITCHEN;
+
+      const user = authenticateUser(username, password, {
+        role: targetRole,
+        branchId: activeRoleTab === 'MASTER' ? 'all' : selectedBranchId
+      });
+
+      if (!user) {
+        throw new Error('Não foi possível identificar o usuário.');
+      }
+
       onLoginSuccess(user);
       onClose();
     } catch (err) {
-      setError(err.message || 'Usuário ou senha incorretos.');
+      setError(err.message || 'Senha ou usuário incorreto. Tente novamente.');
     }
-  };
-
-  const handleApplyPreset = (preset, idx) => {
-    setUsername(preset.username);
-    setPassword(preset.password);
-    setSelectedDemoIndex(idx);
-    setError('');
   };
 
   return (
@@ -44,7 +91,7 @@ export function AdminLoginModal({ isOpen, onClose, onLoginSuccess }) {
       <div className="relative w-full max-w-lg bg-dark-900 border border-brand-gold/40 rounded-3xl shadow-2xl overflow-hidden">
         
         {/* Header */}
-        <div className="p-6 border-b border-dark-800 bg-gradient-to-r from-dark-900 via-dark-850 to-dark-900 flex items-center justify-between">
+        <div className="p-5 sm:p-6 border-b border-dark-800 bg-gradient-to-r from-dark-900 via-dark-850 to-dark-900 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 rounded-2xl bg-brand-gold/20 flex items-center justify-center text-brand-gold border border-brand-gold/40">
               <Lock className="w-5 h-5" />
@@ -52,14 +99,14 @@ export function AdminLoginModal({ isOpen, onClose, onLoginSuccess }) {
             <div>
               <div className="flex items-center gap-1.5">
                 <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-brand-gold/20 text-brand-gold border border-brand-gold/30">
-                  Sistema Multi-Filiais
+                  Acesso Restrito
                 </span>
               </div>
               <h2 className="font-display font-extrabold text-lg sm:text-xl text-white">
-                Acesso aos Painéis El Shadday
+                Painel El Shadday
               </h2>
               <p className="text-xs text-slate-400">
-                Entre como Master, Gerente de Filial ou Cozinha KDS
+                Escolha seu perfil ou digite sua senha de acesso
               </p>
             </div>
           </div>
@@ -73,7 +120,7 @@ export function AdminLoginModal({ isOpen, onClose, onLoginSuccess }) {
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-5 sm:p-6 space-y-4">
           
           {error && (
             <div className="p-3 rounded-xl bg-red-500/15 border border-red-500/30 text-red-400 text-xs flex items-center gap-2 animate-fade-in">
@@ -82,82 +129,111 @@ export function AdminLoginModal({ isOpen, onClose, onLoginSuccess }) {
             </div>
           )}
 
-          {/* Quick Demo Access Switcher */}
+          {/* Role Selection Tabs */}
           <div className="space-y-1.5">
-            <div className="text-[11px] font-bold text-slate-300 flex items-center justify-between">
-              <span>⚡ Teste Rápido com 1 Clique:</span>
-              <span className="text-[10px] text-brand-gold font-normal">Selecione para preencher</span>
-            </div>
+            <label className="text-[11px] font-bold text-slate-300 block">
+              Selecione o Tipo de Acesso:
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => handleSelectRoleTab('MASTER')}
+                className={`p-2.5 rounded-2xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-1 ${
+                  activeRoleTab === 'MASTER'
+                    ? 'bg-brand-gold text-dark-950 border-brand-gold font-black shadow-glow-gold'
+                    : 'bg-dark-950/80 border-dark-800 text-slate-400 hover:text-white hover:bg-dark-850'
+                }`}
+              >
+                <Crown className={`w-4 h-4 ${activeRoleTab === 'MASTER' ? 'text-dark-950' : 'text-brand-gold'}`} />
+                <span className="text-xs font-extrabold leading-tight">Master Geral</span>
+                <span className={`text-[10px] ${activeRoleTab === 'MASTER' ? 'text-dark-950/80 font-bold' : 'text-slate-500'}`}>Diretoria</span>
+              </button>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {INITIAL_USERS.map((usr, idx) => {
-                const isSelected = selectedDemoIndex === idx;
-                const isMaster = usr.role === ROLES.SUPER_ADMIN;
-                const isKitchen = usr.role === ROLES.KITCHEN;
+              <button
+                type="button"
+                onClick={() => handleSelectRoleTab('BRANCH')}
+                className={`p-2.5 rounded-2xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-1 ${
+                  activeRoleTab === 'BRANCH'
+                    ? 'bg-blue-600 text-white border-blue-500 font-black shadow-md'
+                    : 'bg-dark-950/80 border-dark-800 text-slate-400 hover:text-white hover:bg-dark-850'
+                }`}
+              >
+                <Building2 className={`w-4 h-4 ${activeRoleTab === 'BRANCH' ? 'text-white' : 'text-blue-400'}`} />
+                <span className="text-xs font-extrabold leading-tight">Admin Filial</span>
+                <span className={`text-[10px] ${activeRoleTab === 'BRANCH' ? 'text-blue-100 font-bold' : 'text-slate-500'}`}>Gerência</span>
+              </button>
 
-                return (
-                  <button
-                    key={usr.id}
-                    type="button"
-                    onClick={() => handleApplyPreset(usr, idx)}
-                    className={`p-2 rounded-xl text-left border transition-all cursor-pointer flex flex-col justify-between ${
-                      isSelected
-                        ? 'bg-brand-gold/20 border-brand-gold text-white ring-1 ring-brand-gold'
-                        : 'bg-dark-950/80 border-dark-800 text-slate-400 hover:bg-dark-850 hover:text-slate-200'
-                    }`}
-                  >
-                    <div className="flex items-center gap-1.5">
-                      {isMaster ? (
-                        <Crown className="w-3.5 h-3.5 text-brand-gold flex-shrink-0" />
-                      ) : isKitchen ? (
-                        <ChefHat className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
-                      ) : (
-                        <Building2 className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
-                      )}
-                      <span className="text-[11px] font-extrabold line-clamp-1">
-                        {isMaster ? 'Master Geral' : isKitchen ? `Cozinha ${usr.branchId === 'ariquemes' ? 'Ariq.' : 'PVH'}` : `Admin ${usr.branchId === 'ariquemes' ? 'Ariq.' : 'PVH'}`}
-                      </span>
-                    </div>
-                    <div className="text-[10px] text-slate-500 font-mono mt-0.5 truncate">
-                      @{usr.username}
-                    </div>
-                  </button>
-                );
-              })}
+              <button
+                type="button"
+                onClick={() => handleSelectRoleTab('KITCHEN')}
+                className={`p-2.5 rounded-2xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-1 ${
+                  activeRoleTab === 'KITCHEN'
+                    ? 'bg-emerald-600 text-white border-emerald-500 font-black shadow-md'
+                    : 'bg-dark-950/80 border-dark-800 text-slate-400 hover:text-white hover:bg-dark-850'
+                }`}
+              >
+                <ChefHat className={`w-4 h-4 ${activeRoleTab === 'KITCHEN' ? 'text-white' : 'text-emerald-400'}`} />
+                <span className="text-xs font-extrabold leading-tight">Cozinha KDS</span>
+                <span className={`text-[10px] ${activeRoleTab === 'KITCHEN' ? 'text-emerald-100 font-bold' : 'text-slate-500'}`}>Comandas</span>
+              </button>
             </div>
           </div>
 
-          <div>
-            <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block mb-1">
-              Usuário / Login:
-            </label>
-            <input
-              type="text"
-              value={username}
-              onChange={(e) => {
-                setUsername(e.target.value);
-                setSelectedDemoIndex(-1);
-              }}
-              placeholder="Ex: admin, admin.ariquemes ou cozinha.portovelho"
-              className="w-full px-3.5 py-2.5 rounded-xl bg-dark-950 border border-dark-750 text-white text-xs font-mono focus:outline-none focus:border-brand-gold"
-              required
-            />
-          </div>
+          {/* Branch Picker (Only when not master) */}
+          {activeRoleTab !== 'MASTER' && (
+            <div className="space-y-1.5 animate-fade-in">
+              <label className="text-[11px] font-bold text-slate-300 flex items-center justify-between">
+                <span>Qual Filial Você Opera?</span>
+                <span className="text-[10px] text-brand-gold font-normal">Ariquemes ou Porto Velho</span>
+              </label>
 
+              <div className="grid grid-cols-2 gap-2">
+                {branches.map(b => {
+                  const isSel = selectedBranchId === b.id;
+                  return (
+                    <button
+                      key={b.id}
+                      type="button"
+                      onClick={() => handleSelectBranch(b.id)}
+                      className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex items-center gap-2 ${
+                        isSel
+                          ? 'bg-brand-gold/15 border-brand-gold text-white font-bold ring-1 ring-brand-gold'
+                          : 'bg-dark-950 border-dark-800 text-slate-400 hover:text-white hover:bg-dark-850'
+                      }`}
+                    >
+                      <MapPin className={`w-4 h-4 ${isSel ? 'text-brand-gold' : 'text-slate-500'}`} />
+                      <div className="min-w-0">
+                        <div className="text-xs font-bold leading-tight truncate">{b.displayName || b.name}</div>
+                        <div className="text-[10px] text-slate-500 truncate">{b.id === 'ariquemes' ? 'Buffet & Delivery' : 'Delivery Capital'}</div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Password Input */}
           <div>
-            <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block mb-1">
-              Senha de Acesso:
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block">
+                Senha de Acesso:
+              </label>
+              <span className="text-[10px] text-brand-gold font-mono">
+                {activeRoleTab === 'MASTER' ? 'Padrão: elshadday' : selectedBranchId === 'ariquemes' ? 'Padrão: ariquemes123' : 'Padrão: portovelho123'}
+              </span>
+            </div>
+            
             <div className="relative">
               <input
                 type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => {
                   setPassword(e.target.value);
-                  setSelectedDemoIndex(-1);
+                  setError('');
                 }}
                 placeholder="••••••••"
-                className="w-full pl-3.5 pr-10 py-2.5 rounded-xl bg-dark-950 border border-dark-750 text-white text-xs focus:outline-none focus:border-brand-gold"
+                className="w-full pl-3.5 pr-10 py-3 rounded-xl bg-dark-950 border border-dark-750 text-white text-sm focus:outline-none focus:border-brand-gold font-mono"
                 required
               />
               <button
@@ -170,13 +246,27 @@ export function AdminLoginModal({ isOpen, onClose, onLoginSuccess }) {
             </div>
           </div>
 
+          {/* Advanced Username (Collapsed / Optional) */}
+          <div>
+            <label className="text-[11px] font-medium text-slate-400 block mb-1">
+              Usuário (automático):
+            </label>
+            <input
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="admin"
+              className="w-full px-3.5 py-2 rounded-xl bg-dark-950/70 border border-dark-800 text-slate-300 text-xs font-mono focus:outline-none focus:border-brand-gold"
+            />
+          </div>
+
           <div className="pt-2">
             <button
               type="submit"
-              className="w-full py-3.5 px-4 rounded-xl bg-brand-gold hover:bg-amber-400 text-dark-950 font-black text-xs sm:text-sm shadow-glow-gold transition-all duration-200 hover:scale-101 flex items-center justify-center gap-2 cursor-pointer"
+              className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-brand-gold via-amber-400 to-brand-gold text-dark-950 font-black text-sm shadow-glow-gold transition-all duration-200 hover:scale-101 active:scale-98 flex items-center justify-center gap-2 cursor-pointer"
             >
               <span>Entrar no Painel</span>
-              <ArrowRight className="w-4 h-4" />
+              <ArrowRight className="w-4 h-4 text-dark-950" />
             </button>
           </div>
 

@@ -151,14 +151,21 @@ export function logoutUser() {
   setCurrentUser(null);
 }
 
-export function authenticateUser(username, password) {
-  const cleanUsername = String(username || '').trim().toLowerCase();
-  const cleanPassword = String(password || '').trim();
+export function authenticateUser(username, password, options = {}) {
+  let cleanUsername = String(username || '').trim().toLowerCase();
+  let cleanPassword = String(password || '').trim();
 
-  // Master fallback: allow 'master' or 'admin' with 'elshadday'
-  if ((cleanUsername === 'admin' || cleanUsername === 'master') && cleanPassword === 'elshadday') {
-    const users = getStoredUsers();
-    let masterUser = users.find(u => u.role === ROLES.SUPER_ADMIN && u.active);
+  // If only 1 parameter was supplied, treat as password
+  if (!cleanPassword && cleanUsername) {
+    cleanPassword = cleanUsername;
+    cleanUsername = '';
+  }
+
+  const users = getStoredUsers();
+
+  // 1. Master fallback: password 'elshadday' or username admin/master with 'elshadday'
+  if (cleanPassword === 'elshadday' || ((cleanUsername === 'admin' || cleanUsername === 'master') && cleanPassword === 'elshadday')) {
+    let masterUser = users.find(u => u.role === ROLES.SUPER_ADMIN && u.active !== false);
     if (!masterUser) {
       masterUser = INITIAL_USERS[0];
     }
@@ -166,16 +173,56 @@ export function authenticateUser(username, password) {
     return masterUser;
   }
 
-  const users = getStoredUsers();
-  const found = users.find(u => 
-    u.username.toLowerCase() === cleanUsername && 
-    u.password === cleanPassword &&
-    u.active !== false
-  );
+  // 2. Exact match by username AND password
+  if (cleanUsername && cleanPassword) {
+    const found = users.find(u => 
+      u.username.toLowerCase() === cleanUsername && 
+      u.password === cleanPassword &&
+      u.active !== false
+    );
+    if (found) {
+      setCurrentUser(found);
+      return found;
+    }
+  }
 
-  if (found) {
-    setCurrentUser(found);
-    return found;
+  // 3. Match by password with optional role / branch context
+  if (cleanPassword) {
+    const matchByPass = users.filter(u => u.password === cleanPassword && u.active !== false);
+    if (matchByPass.length > 0) {
+      // If role specified
+      if (options.role) {
+        const byRole = matchByPass.find(u => u.role === options.role && (!options.branchId || u.branchId === options.branchId));
+        if (byRole) {
+          setCurrentUser(byRole);
+          return byRole;
+        }
+      }
+      // If branch specified
+      if (options.branchId) {
+        const byBranch = matchByPass.find(u => u.branchId === options.branchId);
+        if (byBranch) {
+          setCurrentUser(byBranch);
+          return byBranch;
+        }
+      }
+      // Default to first matching user
+      const chosen = matchByPass[0];
+      setCurrentUser(chosen);
+      return chosen;
+    }
+  }
+
+  // 4. Match username as alias/id
+  if (cleanUsername) {
+    const byAlias = users.find(u => 
+      u.username.toLowerCase() === cleanUsername && 
+      u.active !== false
+    );
+    if (byAlias && (!cleanPassword || byAlias.password === cleanPassword)) {
+      setCurrentUser(byAlias);
+      return byAlias;
+    }
   }
 
   throw new Error('Usuário ou senha incorretos, ou conta desativada.');

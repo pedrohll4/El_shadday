@@ -57,6 +57,60 @@ const getInitialOrders = () => {
   return INITIAL_MULTI_BRANCH_ORDERS;
 };
 
+// Error Boundary to prevent blank/black screens on any unexpected runtime error
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error, errorInfo) {
+    console.error("ErrorBoundary caught an error:", error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-dark-950 text-white flex flex-col items-center justify-center p-6 text-center">
+          <div className="w-16 h-16 rounded-3xl bg-amber-500/20 text-brand-gold border border-brand-gold/40 flex items-center justify-center mb-4 text-3xl font-black">
+            ⚠️
+          </div>
+          <h2 className="text-xl sm:text-2xl font-black mb-2 text-white font-display">
+            Restaurando Painel El Shadday
+          </h2>
+          <p className="text-xs sm:text-sm text-slate-400 max-w-md mb-6">
+            Ocorreu uma pequena oscilação temporária na interface. Seus pedidos e configurações permanecem 100% seguros.
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <button
+              onClick={() => {
+                this.setState({ hasError: false });
+                window.location.reload();
+              }}
+              className="px-5 py-3 rounded-xl bg-gradient-to-r from-brand-gold via-amber-400 to-brand-gold text-dark-950 font-black text-xs hover:scale-102 transition-transform shadow-glow-gold cursor-pointer"
+            >
+              🔄 Recarregar Painel
+            </button>
+            <button
+              onClick={() => {
+                this.setState({ hasError: false });
+                sessionStorage.removeItem('el_shadday_admin_auth');
+                window.location.hash = '';
+                window.location.href = window.location.pathname;
+              }}
+              className="px-5 py-3 rounded-xl bg-dark-900 text-slate-200 border border-dark-750 hover:text-white text-xs font-bold transition-colors cursor-pointer"
+            >
+              🍕 Ir para o Cardápio Delivery
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export default function App() {
   // App View mode: 'delivery' (default & primary) | 'admin' (kitchen KDS) | 'full-buffet' (showcase)
   const [appView, setAppView] = useState(() => {
@@ -92,18 +146,45 @@ export default function App() {
     return () => window.removeEventListener('el_shadday_branches_updated', handleBranchesSync);
   }, []);
 
-  // Branch Selection State
+  // Branch Selection State (with QR Code URL query parameter support: ?filial=ariquemes ou ?filial=porto-velho)
   const [selectedBranchId, setSelectedBranchId] = useState(() => {
     try {
+      const params = new URLSearchParams(window.location.search);
+      const filialParam = params.get('filial') || params.get('branch');
+      if (filialParam) {
+        return filialParam;
+      }
       return localStorage.getItem('el_shadday_selected_branch') || DEFAULT_BRANCH_ID;
     } catch (e) {
       return DEFAULT_BRANCH_ID;
     }
   });
 
+  // Auto-detect QR Code branch URL parameter on mount/update
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const filialParam = params.get('filial') || params.get('branch');
+      if (filialParam) {
+        const found = branches.find(b => 
+          b.id.toLowerCase() === filialParam.toLowerCase() ||
+          b.displayName.toLowerCase().includes(filialParam.toLowerCase())
+        );
+        if (found) {
+          setSelectedBranchId(found.id);
+          localStorage.setItem('el_shadday_selected_branch', found.id);
+          localStorage.setItem('el_shadday_has_seen_branch_modal', 'true');
+          setIsBranchModalOpen(false);
+        }
+      }
+    } catch (e) {}
+  }, [branches]);
+
   // Open branch selector modal on first visit or when user clicks to switch
   const [isBranchModalOpen, setIsBranchModalOpen] = useState(() => {
     try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('filial') || params.get('branch')) return false; // Scanned direct QR Code
       const hasChosen = localStorage.getItem('el_shadday_has_seen_branch_modal');
       return !hasChosen; // Open on first visit
     } catch (e) {
@@ -705,18 +786,23 @@ export default function App() {
     return () => window.removeEventListener('scroll', handleScrollObserver);
   }, [searchQuery, appView]);
 
+  // Branch-scoped menu products (Ariquemes vs Porto Velho)
+  const branchProducts = useMemo(() => {
+    return products.filter(p => !p.branchId || p.branchId === selectedBranchId || p.branchId === 'all');
+  }, [products, selectedBranchId]);
+
   // Search Results
   const searchResults = useMemo(() => {
     if (!searchQuery.trim()) return [];
     const query = searchQuery.toLowerCase().trim();
-    return products.filter(p => 
+    return branchProducts.filter(p => 
       p.isAvailable !== false && (
         p.name.toLowerCase().includes(query) ||
         p.description?.toLowerCase().includes(query) ||
         p.details?.toLowerCase().includes(query)
       )
     );
-  }, [searchQuery, products]);
+  }, [searchQuery, branchProducts]);
 
   // Cart summary
   const totalCartCount = cartItems.reduce((acc, item) => acc + item.quantity, 0);
@@ -740,21 +826,23 @@ export default function App() {
   // VIEW 1: KITCHEN KDS / PAINEL DA COZINHA
   if (appView === 'admin') {
     return (
-      <AdminDashboard
-        orders={allOrders}
-        onUpdateOrderStatus={handleUpdateOrderStatus}
-        onUpdatePaymentStatus={handleUpdatePaymentStatus}
-        onCancelOrder={handleCancelOrder}
-        onDeleteOrder={handleDeleteOrder}
-        onCreateKitchenOrder={handleCreateKitchenOrder}
-        onLogout={handleAdminLogout}
-        onBackToSite={handleBackToSiteFromAdmin}
-        onSwitchToBuffet={() => setAppView('full-buffet')}
-        currentUser={currentUser}
-        branches={branches}
-        currentBranchId={selectedBranchId}
-        onSelectBranch={handleSelectBranch}
-      />
+      <ErrorBoundary>
+        <AdminDashboard
+          orders={allOrders}
+          onUpdateOrderStatus={handleUpdateOrderStatus}
+          onUpdatePaymentStatus={handleUpdatePaymentStatus}
+          onCancelOrder={handleCancelOrder}
+          onDeleteOrder={handleDeleteOrder}
+          onCreateKitchenOrder={handleCreateKitchenOrder}
+          onLogout={handleAdminLogout}
+          onBackToSite={handleBackToSiteFromAdmin}
+          onSwitchToBuffet={() => setAppView('full-buffet')}
+          currentUser={currentUser}
+          branches={branches}
+          currentBranchId={selectedBranchId}
+          onSelectBranch={handleSelectBranch}
+        />
+      </ErrorBoundary>
     );
   }
 
@@ -826,7 +914,7 @@ export default function App() {
 
       {/* 2.1 Promotions & Highlights Shelf */}
       <PromotionsShelf
-        products={products}
+        products={branchProducts}
         onOpenBoxBuilder={(prod) => {
           setSelectedBoxForBuilder(prod);
           setIsBoxBuilderOpen(true);
@@ -850,7 +938,8 @@ export default function App() {
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
           onScrollToBuffet={scrollToBuffet}
-          products={products}
+          products={branchProducts}
+          showBuffet={selectedBranchId === 'ariquemes'}
         />
       </div>
 
@@ -927,7 +1016,7 @@ export default function App() {
             ) : (
               /* CONTINUOUS FLOW MODE: All categories displayed in full sequence! */
               CATEGORIES.map((cat) => {
-                const categoryProducts = products.filter(p => p.categoryId === cat.id && p.isAvailable !== false);
+                const categoryProducts = branchProducts.filter(p => p.categoryId === cat.id && p.isAvailable !== false);
                 if (categoryProducts.length === 0) return null;
 
                 return (
@@ -1005,14 +1094,16 @@ export default function App() {
         </div>
       </main>
 
-      {/* 5. Buffet Section at the Bottom (Quotation via WhatsApp) */}
-      <BuffetSection 
-        onExploreFullBuffet={() => {
-          window.location.hash = '';
-          window.scrollTo({ top: 0, behavior: 'instant' });
-          setAppView('full-buffet');
-        }} 
-      />
+      {/* 5. Buffet Section at the Bottom (Exclusive to Ariquemes) */}
+      {selectedBranchId === 'ariquemes' && (
+        <BuffetSection 
+          onExploreFullBuffet={() => {
+            window.location.hash = '';
+            window.scrollTo({ top: 0, behavior: 'instant' });
+            setAppView('full-buffet');
+          }} 
+        />
+      )}
 
       {/* 6. Footer */}
       <Footer onOpenAdmin={handleOpenAdminTrigger} />
