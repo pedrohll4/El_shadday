@@ -641,6 +641,12 @@ export default function App() {
   const handleAdminLoginSuccess = (authenticatedUser) => {
     if (authenticatedUser) {
       setCurrentUser(authenticatedUser);
+      if (authenticatedUser.branchId && authenticatedUser.branchId !== 'all') {
+        setSelectedBranchId(authenticatedUser.branchId);
+        try {
+          localStorage.setItem('el_shadday_selected_branch', authenticatedUser.branchId);
+        } catch (e) {}
+      }
     }
     setIsAdminLoggedIn(true);
     sessionStorage.setItem('el_shadday_admin_auth', 'true');
@@ -788,7 +794,12 @@ export default function App() {
 
   // Branch-scoped menu products (Ariquemes vs Porto Velho)
   const branchProducts = useMemo(() => {
-    return products.filter(p => !p.branchId || p.branchId === selectedBranchId || p.branchId === 'all');
+    return products.filter(p => {
+      if (p.branchId === 'all') return true;
+      if (p.branchId === selectedBranchId) return true;
+      if (!p.branchId && selectedBranchId === 'ariquemes') return true;
+      return false;
+    });
   }, [products, selectedBranchId]);
 
   // Search Results

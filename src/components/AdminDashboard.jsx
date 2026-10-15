@@ -138,9 +138,15 @@ export function AdminDashboard({
   // Automatically sync tab when user role changes (Prevents black screen or empty views)
   useEffect(() => {
     if (currentUser?.role === ROLES.KITCHEN) {
-      setActiveAdminTab('kds');
+      if (activeAdminTab !== 'kds') {
+        setActiveAdminTab('kds');
+      }
     } else if (currentUser?.role === ROLES.BRANCH_ADMIN) {
-      if (['master-overview', 'branches', 'users', 'gallery'].includes(activeAdminTab)) {
+      const disallowed = ['master-overview', 'branches', 'users'];
+      if ((currentUser?.branchId || currentBranch?.id) !== 'ariquemes') {
+        disallowed.push('gallery');
+      }
+      if (disallowed.includes(activeAdminTab)) {
         setActiveAdminTab('menu');
       }
     } else if (currentUser?.role === ROLES.SUPER_ADMIN) {
@@ -148,7 +154,7 @@ export function AdminDashboard({
         setActiveAdminTab('master-overview');
       }
     }
-  }, [currentUser]);
+  }, [currentUser, activeAdminTab, currentBranch]);
 
   // KDS Filters
   const [selectedFilter, setSelectedFilter] = useState('todos'); // 'todos' | 'atrasados' | 'pendentes' | 'preparo' | 'entrega' | 'concluidos' | 'nao_pagos' | 'cancelados'
@@ -1102,17 +1108,20 @@ export function AdminDashboard({
     return list;
   }, [pizzaFlavors, flavorCategoryFilter, flavorSearch]);
 
-  // Filtered products in Admin (Scoped by Branch)
-  const filteredAdminProducts = useMemo(() => {
-    let list = productsList;
-
-    // Filter products by branch: Branch Admin only sees their own branch; Super Admin can filter
+  // Scoped products in Admin (Scoped strictly by Branch)
+  const scopedProductsList = useMemo(() => {
     if (currentUser?.role === ROLES.BRANCH_ADMIN) {
       const bId = currentUser?.branchId || currentBranch?.id || 'ariquemes';
-      list = list.filter(p => p.branchId === bId || (!p.branchId && bId === 'ariquemes') || p.branchId === 'all');
+      return productsList.filter(p => p.branchId === bId || (!p.branchId && bId === 'ariquemes') || p.branchId === 'all');
     } else if (currentUser?.role === ROLES.SUPER_ADMIN && masterBranchFilter !== 'all') {
-      list = list.filter(p => p.branchId === masterBranchFilter || (!p.branchId && masterBranchFilter === 'ariquemes') || p.branchId === 'all');
+      return productsList.filter(p => p.branchId === masterBranchFilter || (!p.branchId && masterBranchFilter === 'ariquemes') || p.branchId === 'all');
     }
+    return productsList;
+  }, [productsList, currentUser, currentBranch, masterBranchFilter]);
+
+  // Filtered products in Admin (Category & Search over scoped products)
+  const filteredAdminProducts = useMemo(() => {
+    let list = scopedProductsList;
 
     if (menuCategoryFilter === 'destaques') {
       list = list.filter(p => p.isHighlight || p.isPromo);
@@ -1133,7 +1142,7 @@ export function AdminDashboard({
       );
     }
     return list;
-  }, [productsList, menuCategoryFilter, menuSearch, currentUser, currentBranch, masterBranchFilter]);
+  }, [scopedProductsList, menuCategoryFilter, menuSearch]);
 
   // Sound chime helper using Web Audio API + Speech Synthesis
   const playChime = (isTest = false) => {
@@ -1294,7 +1303,7 @@ export function AdminDashboard({
 
       return true;
     });
-  }, [orders, selectedFilter, searchQuery, now]);
+  }, [scopedOrders, selectedFilter, searchQuery, now]);
 
   // Print ticket helper
   const handlePrintOrder = (order) => {
@@ -1783,7 +1792,7 @@ export function AdminDashboard({
               <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
                 activeAdminTab === 'menu' ? 'bg-dark-950 text-brand-gold' : 'bg-dark-900 text-slate-400'
               }`}>
-                {productsList.length}
+                {scopedProductsList.length}
               </span>
             </button>
 
@@ -1934,7 +1943,7 @@ export function AdminDashboard({
       <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-5 space-y-6">
         
         {/* VIEW 0A: MASTER FINANCIAL & PROFIT VIEW */}
-        {activeAdminTab === 'master-overview' && (
+        {activeAdminTab === 'master-overview' && currentUser?.role === ROLES.SUPER_ADMIN && (
           <MasterFinancialView
             orders={orders}
             branches={branchesList}
@@ -1950,7 +1959,7 @@ export function AdminDashboard({
         )}
 
         {/* VIEW 0B: BRANCH OVERVIEW (FOR BRANCH ADMIN) */}
-        {activeAdminTab === 'branch-overview' && (
+        {activeAdminTab === 'branch-overview' && currentUser?.role === ROLES.BRANCH_ADMIN && (
           <MasterFinancialView
             orders={orders.filter(o => (o.branchId || 'ariquemes') === (currentUser?.branchId || 'ariquemes'))}
             branches={branchesList.filter(b => b.id === (currentUser?.branchId || 'ariquemes'))}
@@ -1960,7 +1969,7 @@ export function AdminDashboard({
         )}
 
         {/* VIEW 0C: BRANCHES MANAGEMENT (SUPER ADMIN) */}
-        {activeAdminTab === 'branches' && (
+        {activeAdminTab === 'branches' && currentUser?.role === ROLES.SUPER_ADMIN && (
           <BranchManagementView
             branches={branchesList}
             onRefreshBranches={() => setBranchesList(getStoredBranches())}
@@ -1976,7 +1985,7 @@ export function AdminDashboard({
         )}
 
         {/* VIEW 0D: USERS MANAGEMENT (SUPER ADMIN) */}
-        {activeAdminTab === 'users' && (
+        {activeAdminTab === 'users' && currentUser?.role === ROLES.SUPER_ADMIN && (
           <UserManagementView
             branches={branchesList}
             currentUser={currentUser}
@@ -2025,33 +2034,56 @@ export function AdminDashboard({
 
               {/* WhatsApp Quick Status & Auto-Notify */}
               <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setActiveAdminTab('whatsapp')}
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-400 text-xs font-semibold transition-colors cursor-pointer"
-                  title="Clique para gerenciar a conexão do WhatsApp desta filial"
-                >
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                  <span>WhatsApp: <strong>{currentBranch?.phoneFormatted || '(69) 99222-8682'}</strong></span>
-                </button>
+                {currentUser?.role !== ROLES.KITCHEN ? (
+                  <button
+                    type="button"
+                    onClick={() => setActiveAdminTab('whatsapp')}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-400 text-xs font-semibold transition-colors cursor-pointer"
+                    title="Clique para gerenciar a conexão do WhatsApp desta filial"
+                  >
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <span>WhatsApp: <strong>{currentBranch?.phoneFormatted || '(69) 99222-8682'}</strong></span>
+                  </button>
+                ) : (
+                  <div
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-semibold select-none"
+                    title="WhatsApp da filial ativo para envio de status"
+                  >
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <span>WhatsApp: <strong>{currentBranch?.phoneFormatted || '(69) 99222-8682'}</strong></span>
+                  </div>
+                )}
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    const nextState = !whatsAppSettings.autoNotify;
-                    const updated = { ...whatsAppSettings, autoNotify: nextState };
-                    setWhatsAppSettings(updated);
-                    saveWhatsAppSettings(updated);
-                  }}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                    whatsAppSettings.autoNotify
-                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                      : 'bg-dark-800 text-slate-400 border border-dark-750'
-                  }`}
-                  title="Ativar ou pausar envio automático de mensagens no WhatsApp do cliente"
-                >
-                  {whatsAppSettings.autoNotify ? '🔔 Avisos: ON' : '🔕 Avisos: OFF'}
-                </button>
+                {currentUser?.role !== ROLES.KITCHEN ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const nextState = !whatsAppSettings.autoNotify;
+                      const updated = { ...whatsAppSettings, autoNotify: nextState };
+                      setWhatsAppSettings(updated);
+                      saveWhatsAppSettings(updated);
+                    }}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      whatsAppSettings.autoNotify
+                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                        : 'bg-dark-800 text-slate-400 border border-dark-750'
+                    }`}
+                    title="Ativar ou pausar envio automático de mensagens no WhatsApp do cliente"
+                  >
+                    {whatsAppSettings.autoNotify ? '🔔 Avisos: ON' : '🔕 Avisos: OFF'}
+                  </button>
+                ) : (
+                  <div
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold select-none ${
+                      whatsAppSettings.autoNotify
+                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                        : 'bg-dark-800 text-slate-400 border border-dark-750'
+                    }`}
+                    title="Avisos automáticos de status via WhatsApp"
+                  >
+                    {whatsAppSettings.autoNotify ? '🔔 Avisos: ON' : '🔕 Avisos: OFF'}
+                  </div>
+                )}
               </div>
 
             </div>
@@ -2470,7 +2502,7 @@ export function AdminDashboard({
         {/* ============================================================== */}
         {/* VIEW 2: PDV DE BALCÃO (POINT OF SALE / CRIAR PEDIDOS COZINHA)  */}
         {/* ============================================================== */}
-        {activeAdminTab === 'pdv' && (
+        {activeAdminTab === 'pdv' && currentUser?.role !== ROLES.KITCHEN && (
           <div className="space-y-6 animate-fade-in">
             
             {/* PDV Header Banner */}
@@ -2955,7 +2987,7 @@ export function AdminDashboard({
         {/* ============================================================== */}
         {/* VIEW 3: CARDÁPIO (PRODUTOS & SABORES) / CONFIGURAÇÕES DA FILIAL */}
         {/* ============================================================== */}
-        {(activeAdminTab === 'menu' || activeAdminTab === 'settings') && (
+        {(activeAdminTab === 'menu' || activeAdminTab === 'settings') && currentUser?.role !== ROLES.KITCHEN && (
           <div className="space-y-6 animate-fade-in">
             
             {/* Header Box */}
@@ -3191,7 +3223,7 @@ export function AdminDashboard({
                     <div className="text-xs text-slate-400 flex items-center gap-2">
                       <span>Exibindo:</span>
                       <span className="font-mono text-brand-gold font-bold">{filteredAdminProducts.length}</span>
-                      <span>de {productsList.length} itens</span>
+                      <span>de {scopedProductsList.length} itens</span>
                     </div>
                   </div>
 
@@ -3206,7 +3238,7 @@ export function AdminDashboard({
                           : 'bg-dark-800 text-slate-300 hover:bg-dark-750 hover:text-white'
                       }`}
                     >
-                      Todos ({productsList.length})
+                      Todos ({scopedProductsList.length})
                     </button>
 
                     <button
@@ -3219,7 +3251,7 @@ export function AdminDashboard({
                       }`}
                     >
                       <Star className={`w-3 h-3 ${menuCategoryFilter === 'destaques' ? 'fill-dark-950 text-dark-950' : 'fill-brand-gold text-brand-gold'}`} />
-                      <span>Destaques da Casa ({productsList.filter(p => p.isHighlight || p.isPromo).length})</span>
+                      <span>Destaques da Casa ({scopedProductsList.filter(p => p.isHighlight || p.isPromo).length})</span>
                     </button>
 
                     <button
@@ -3232,7 +3264,7 @@ export function AdminDashboard({
                       }`}
                     >
                       <Sparkles className="w-3 h-3 text-amber-400" />
-                      <span>Em Promoção ({productsList.filter(p => p.isPromo || p.originalPrice).length})</span>
+                      <span>Em Promoção ({scopedProductsList.filter(p => p.isPromo || p.originalPrice).length})</span>
                     </button>
 
                     <button
@@ -3245,7 +3277,7 @@ export function AdminDashboard({
                       }`}
                     >
                       <EyeOff className="w-3 h-3 text-rose-400" />
-                      <span>Pausados/Esgotados ({productsList.filter(p => p.isAvailable === false).length})</span>
+                      <span>Pausados/Esgotados ({scopedProductsList.filter(p => p.isAvailable === false).length})</span>
                     </button>
 
                     {CATEGORIES.map(cat => (
@@ -3259,7 +3291,7 @@ export function AdminDashboard({
                             : 'bg-dark-800 text-slate-300 hover:bg-dark-750 hover:text-white'
                         }`}
                       >
-                        {cat.name} ({productsList.filter(p => p.categoryId === cat.id).length})
+                        {cat.name} ({scopedProductsList.filter(p => p.categoryId === cat.id).length})
                       </button>
                     ))}
                   </div>
@@ -4384,7 +4416,7 @@ export function AdminDashboard({
         {/* ============================================================== */}
         {/* VIEW 4: BUFFET PHOTO GALLERY MANAGEMENT                        */}
         {/* ============================================================== */}
-        {activeAdminTab === 'gallery' && (
+        {activeAdminTab === 'gallery' && currentUser?.role !== ROLES.KITCHEN && (currentBranch?.id === 'ariquemes' || currentUser?.role === ROLES.SUPER_ADMIN) && (
           <div className="space-y-6 animate-fade-in">
             <div className="bg-dark-900 border border-dark-800 rounded-3xl p-5 sm:p-7 shadow-xl">
               
@@ -4623,7 +4655,7 @@ export function AdminDashboard({
         {/* ============================================================== */}
         {/* VIEW 5: FILIAL QR CODE & DIRECT ACCESS                         */}
         {/* ============================================================== */}
-        {activeAdminTab === 'qrcode' && (
+        {activeAdminTab === 'qrcode' && currentUser?.role !== ROLES.KITCHEN && (
           <div className="space-y-6 animate-fade-in">
             <div className="bg-dark-900 border border-brand-gold/30 rounded-3xl p-6 sm:p-8 shadow-2xl">
               
@@ -4816,7 +4848,7 @@ export function AdminDashboard({
         {/* ============================================================== */}
         {/* VIEW 6: GERENCIADOR DE CONEXÕES WHATSAPP (MULTI-FILIAL)        */}
         {/* ============================================================== */}
-        {activeAdminTab === 'whatsapp' && (
+        {activeAdminTab === 'whatsapp' && currentUser?.role !== ROLES.KITCHEN && (
           <div className="space-y-6 animate-fade-in">
             <WhatsAppManagerView 
               currentUser={currentUser} 
