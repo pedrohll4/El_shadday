@@ -943,7 +943,7 @@ export default function App() {
       />
 
       {/* 3. Category Navigation & Search */}
-      <div ref={menuSectionRef}>
+      <div ref={menuSectionRef} id="menu-section">
         <CategoryNav
           activeCategory={activeCategory}
           onSelectCategory={handleSelectCategory}

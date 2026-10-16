@@ -18,11 +18,11 @@ export function DesktopSidebarCart({
 
   return (
     <aside className="hidden lg:block lg:col-span-4 xl:col-span-4">
-      <div className="sticky top-28 bg-dark-900 border border-dark-800 rounded-3xl p-5 shadow-2xl flex flex-col justify-between max-h-[calc(100vh-140px)]">
+      <div className="sticky top-28 bg-dark-900/90 backdrop-blur-xl border border-white/5 rounded-3xl p-5 shadow-2xl flex flex-col justify-between max-h-[calc(100vh-140px)]">
         
         {/* Cart Header */}
         <div>
-          <div className="flex items-center justify-between pb-3.5 border-b border-dark-800">
+          <div className="flex items-center justify-between pb-3.5 border-b border-white/5">
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-xl bg-brand-gold/15 text-brand-gold flex items-center justify-center">
                 <ShoppingBag className="w-4 h-4" />
@@ -51,7 +51,7 @@ export function DesktopSidebarCart({
           </div>
 
           {/* Delivery Mode Indicator */}
-          <div className="mt-3 p-2 rounded-xl bg-dark-950/80 border border-dark-800 flex items-center justify-between text-xs text-slate-300">
+          <div className="mt-3 p-2.5 rounded-xl bg-dark-950/80 border border-white/5 flex items-center justify-between text-xs text-slate-300">
             <div className="flex items-center gap-2">
               {deliveryMode === 'delivery' ? (
                 <>
@@ -75,7 +75,7 @@ export function DesktopSidebarCart({
         <div className="my-4 flex-1 overflow-y-auto pr-1 space-y-3 max-h-[300px] scrollbar-thin">
           {cartItems.length === 0 ? (
             <div className="text-center py-10 px-4 space-y-3">
-              <div className="w-16 h-16 rounded-full bg-dark-950 border border-dark-800 flex items-center justify-center mx-auto text-slate-600">
+              <div className="w-16 h-16 rounded-full bg-dark-950 border border-white/5 flex items-center justify-center mx-auto text-slate-600">
                 <ShoppingBag className="w-8 h-8 stroke-1" />
               </div>
               <div>
@@ -89,7 +89,7 @@ export function DesktopSidebarCart({
             cartItems.map((item) => (
               <div 
                 key={item.cartId || item.id}
-                className="p-3 rounded-2xl bg-dark-950 border border-dark-800/80 flex flex-col gap-2"
+                className="p-3 rounded-2xl bg-dark-950/90 border border-white/5 flex flex-col gap-2"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
@@ -129,7 +129,7 @@ export function DesktopSidebarCart({
                 </div>
 
                 {/* Counter & Remove */}
-                <div className="flex items-center justify-between pt-1 border-t border-dark-850">
+                <div className="flex items-center justify-between pt-1 border-t border-white/5">
                   <span className="text-[10px] text-slate-500">
                     R$ {item.price.toFixed(2).replace('.', ',')} cada
                   </span>
@@ -150,7 +150,7 @@ export function DesktopSidebarCart({
                     <button
                       type="button"
                       onClick={() => onUpdateQuantity(item.id, 1)}
-                      className="w-5 h-5 rounded-md bg-brand-gold hover:bg-amber-400 text-dark-950 flex items-center justify-center cursor-pointer"
+                      className="w-5 h-5 rounded-md bg-brand-gold hover:bg-amber-400 text-dark-950 flex items-center justify-center font-bold cursor-pointer"
                     >
                       <Plus className="w-3 h-3 stroke-[3]" />
                     </button>
@@ -163,7 +163,7 @@ export function DesktopSidebarCart({
 
         {/* Cart Financial Summary & Checkout Trigger */}
         {cartItems.length > 0 && (
-          <div className="pt-3 border-t border-dark-800 space-y-3">
+          <div className="pt-3 border-t border-white/5 space-y-3">
             <div className="space-y-1.5 text-xs">
               <div className="flex justify-between text-slate-400">
                 <span>Subtotal:</span>
@@ -173,7 +173,7 @@ export function DesktopSidebarCart({
                 <span>{deliveryMode === 'delivery' ? 'Taxa Estimada:' : 'Retirada:'}</span>
                 <span>{currentFee > 0 ? `R$ ${currentFee.toFixed(2).replace('.', ',')}` : 'Grátis'}</span>
               </div>
-              <div className="flex justify-between font-black text-sm text-white pt-1 border-t border-dark-800">
+              <div className="flex justify-between font-black text-sm text-white pt-1 border-t border-white/5">
                 <span>Total a Pagar:</span>
                 <span className="text-brand-gold text-base">
                   R$ {total.toFixed(2).replace('.', ',')}

@@ -1,7 +1,6 @@
 import React from 'react';
 import { 
-  ShoppingBag, Phone, MapPin, Clock, Flame, ChevronRight, 
-  Crown, Sparkles, Building2, UtensilsCrossed, ChefHat 
+  ShoppingBag, MapPin, Crown, ChefHat, Sparkles
 } from 'lucide-react';
 import { RESTAURANT_INFO } from '../data/menuData';
 
@@ -16,26 +15,18 @@ export function Header({
   currentUser
 }) {
   return (
-    <header className="sticky top-0 z-40 bg-dark-950/95 backdrop-blur-md border-b border-dark-800 transition-all duration-300 w-full max-w-full">
+    <header className="sticky top-0 z-40 bg-dark-950/90 backdrop-blur-xl border-b border-white/5 transition-all duration-300 w-full max-w-full shadow-[0_4px_20px_rgba(0,0,0,0.5)]">
       
-      {/* 1. Top Banner Notice with Promotion */}
-      <div className="bg-gradient-to-r from-brand-goldDark via-brand-gold to-brand-goldDark text-dark-950 px-3 py-1 text-[11px] sm:text-xs font-semibold tracking-wide flex items-center justify-center gap-1.5 shadow-inner text-center">
-        <Flame className="w-3.5 h-3.5 text-dark-950 flex-shrink-0 animate-bounce" />
-        <span className="truncate">
-          <strong>PROMOÇÃO:</strong> Borda de Catupiry 100% GRÁTIS em todas as pizzas!
-        </span>
-      </div>
-
-      {/* 2. Main Navigation Bar */}
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+      {/* Main Navigation Bar */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         
-        {/* DESKTOP LAYOUT (sm and above): All in 1 elegant row */}
+        {/* DESKTOP LAYOUT (sm and above): Elegant, unified row */}
         <div className="hidden sm:flex items-center justify-between h-20">
           
-          {/* Logo & Brand Info */}
+          {/* Left: Brand Identity */}
           <div className="flex items-center gap-3">
             <a href="#" className="relative group flex items-center gap-3">
-              <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-brand-gold p-0.5 bg-dark-900 shadow-glow-gold transition-transform duration-300 group-hover:scale-105 flex-shrink-0">
+              <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-brand-gold/80 p-0.5 bg-dark-900 shadow-glow-gold transition-all duration-300 group-hover:scale-105 group-hover:border-brand-gold flex-shrink-0">
                 <img 
                   src={RESTAURANT_INFO.logoUrl} 
                   alt={RESTAURANT_INFO.name}
@@ -48,60 +39,60 @@ export function Header({
                   <span className="font-display font-black text-xl tracking-tight text-white group-hover:text-brand-gold transition-colors">
                     EL SHADDAY
                   </span>
-                  <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                  <span className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                    <span>Aberto</span>
+                    <span>Aberto Agora</span>
                   </span>
                 </div>
                 
                 <span className="text-[11px] text-slate-400 font-medium">
-                  Delivery de Esfirras & Pizzas
+                  Esfihas & Pizzas Artesanais
                 </span>
               </div>
             </a>
           </div>
 
-          {/* Active Branch Switcher (Desktop) - High Visibility */}
+          {/* Center: City / Branch Selector (Refined Luxury Pill) */}
           <div className="flex items-center">
             <button
               type="button"
               onClick={onOpenBranchModal}
-              className="flex items-center gap-2.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-dark-900 via-dark-850 to-dark-900 hover:bg-dark-800 border-2 border-brand-gold/60 hover:border-brand-gold text-left transition-all cursor-pointer group shadow-sm hover:shadow-glow-gold active:scale-98"
+              className="flex items-center gap-2.5 px-4 py-2 rounded-full bg-dark-900/80 hover:bg-dark-850 border border-brand-gold/40 hover:border-brand-gold text-left transition-all cursor-pointer group shadow-sm hover:shadow-glow-gold active:scale-98"
               title="Clique para alternar entre Ariquemes e Porto Velho"
             >
-              <div className="w-7 h-7 rounded-lg bg-brand-gold/20 flex items-center justify-center text-brand-gold flex-shrink-0 border border-brand-gold/40">
-                <MapPin className="w-4 h-4 animate-bounce" />
+              <div className="w-6 h-6 rounded-full bg-brand-gold/15 flex items-center justify-center text-brand-gold flex-shrink-0">
+                <MapPin className="w-3.5 h-3.5 text-brand-gold" />
               </div>
               <div className="flex flex-col">
-                <span className="text-[10px] uppercase font-black text-brand-gold tracking-wider leading-none">
-                  Filial Selecionada:
+                <span className="text-[9px] uppercase font-bold text-slate-400 tracking-wider leading-none">
+                  Filial Selecionada
                 </span>
                 <span className="text-xs font-black text-white group-hover:text-amber-300 leading-tight">
                   {activeBranch?.displayName || 'Ariquemes - RO'}
                 </span>
               </div>
-              <div className="px-2 py-0.5 rounded-lg bg-brand-gold text-dark-950 text-[11px] font-black group-hover:bg-amber-400 transition-colors ml-1">
-                ⇄ Trocar Cidade
-              </div>
+              <span className="text-[10px] font-bold text-brand-gold/90 group-hover:text-brand-gold ml-1 pl-2 border-l border-white/10">
+                ⇄ Trocar
+              </span>
             </button>
           </div>
 
-          {/* Right Action Buttons (Desktop) */}
-          <div className="flex items-center gap-2.5">
-            {/* Buffet Anchor Button (Exclusive to Ariquemes) */}
+          {/* Right Action Buttons */}
+          <div className="flex items-center gap-3">
+            {/* Buffet Anchor (Ariquemes only) */}
             {onScrollToBuffet && activeBranch?.id === 'ariquemes' && (
               <button
                 type="button"
                 onClick={onScrollToBuffet}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-dark-900 hover:bg-dark-850 text-brand-gold hover:text-amber-300 text-xs font-bold border border-brand-gold/30 hover:border-brand-gold transition-all cursor-pointer"
-                title="Conhecer serviços de Buffet para eventos (Exclusivo Ariquemes)"
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-dark-900/60 hover:bg-dark-850 text-slate-300 hover:text-brand-gold text-xs font-bold border border-white/10 hover:border-brand-gold/40 transition-all cursor-pointer"
+                title="Conhecer serviços de Buffet para eventos"
               >
                 <Crown className="w-4 h-4 text-brand-gold" />
                 <span>Buffet & Eventos</span>
               </button>
             )}
 
-            {/* Staff access - only visible if staff is already logged in */}
+            {/* Staff / Admin access if authenticated */}
             {currentUser && onOpenAdmin && (
               <button
                 type="button"
@@ -118,20 +109,20 @@ export function Header({
             <button
               type="button"
               onClick={onOpenCart}
-              className="relative flex items-center gap-2 bg-gradient-to-r from-brand-gold to-amber-500 hover:from-amber-400 hover:to-brand-gold text-dark-950 font-extrabold px-4 py-2.5 rounded-xl shadow-glow-gold transition-all duration-300 hover:scale-105 active:scale-95 cursor-pointer"
+              className="relative flex items-center gap-2.5 bg-gradient-to-r from-brand-gold via-amber-400 to-brand-gold hover:from-amber-400 hover:to-brand-gold text-dark-950 font-black px-4 py-2.5 rounded-xl shadow-glow-gold transition-all duration-300 hover:scale-103 active:scale-97 cursor-pointer"
             >
               <ShoppingBag className="w-5 h-5 text-dark-950 flex-shrink-0" />
               <div className="flex flex-col items-start leading-tight">
                 <span className="text-xs font-black">Minha Sacola</span>
                 {cartTotal > 0 && (
-                  <span className="text-[10px] font-black text-dark-950/80">
+                  <span className="text-[10px] font-extrabold text-dark-950/80">
                     R$ {cartTotal.toFixed(2).replace('.', ',')}
                   </span>
                 )}
               </div>
 
               {cartCount > 0 && (
-                <span className="bg-dark-950 text-brand-gold text-xs font-black w-5 h-5 rounded-full flex items-center justify-center border border-brand-gold ml-0.5">
+                <span className="bg-dark-950 text-brand-gold text-[11px] font-black min-w-[20px] h-5 px-1 rounded-full flex items-center justify-center border border-brand-gold/60 ml-0.5">
                   {cartCount}
                 </span>
               )}
@@ -140,39 +131,49 @@ export function Header({
 
         </div>
 
-        {/* MOBILE LAYOUT (< sm): 2 clean, spacious rows designed specifically for smartphones */}
-        <div className="sm:hidden py-2 space-y-2">
+        {/* MOBILE LAYOUT (< sm): Clean, compact and spacious */}
+        <div className="sm:hidden py-3 space-y-2">
           
-          {/* Mobile Row 1: Logo & Cart */}
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2">
             {/* Logo + Brand */}
-            <a href="#" className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-full overflow-hidden border border-brand-gold p-0.5 bg-dark-900 flex-shrink-0 shadow-sm">
+            <a href="#" className="flex items-center gap-2 min-w-0">
+              <div className="w-9 h-9 rounded-full overflow-hidden border border-brand-gold/70 p-0.5 bg-dark-900 flex-shrink-0 shadow-sm">
                 <img 
                   src={RESTAURANT_INFO.logoUrl} 
                   alt={RESTAURANT_INFO.name}
                   className="w-full h-full object-cover rounded-full"
                 />
               </div>
-              <div className="flex flex-col leading-none">
+              <div className="flex flex-col min-w-0 leading-tight">
                 <div className="flex items-center gap-1.5">
-                  <span className="font-display font-black text-base text-white tracking-tight">
+                  <span className="font-display font-black text-base text-white tracking-tight truncate">
                     EL SHADDAY
                   </span>
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse flex-shrink-0"></span>
                 </div>
-                <span className="text-[10px] text-slate-400 mt-0.5">
-                  Delivery & Buffet
+                <span className="text-[10px] text-slate-400 truncate">
+                  Esfihas & Pizzas
                 </span>
               </div>
             </a>
 
-            {/* Mobile Actions: Cart */}
-            <div className="flex items-center gap-1.5">
+            {/* Cart & Actions */}
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {onScrollToBuffet && activeBranch?.id === 'ariquemes' && (
+                <button
+                  type="button"
+                  onClick={onScrollToBuffet}
+                  className="p-2 rounded-xl bg-dark-900 border border-brand-gold/30 text-brand-gold"
+                  title="Buffet"
+                >
+                  <Crown className="w-4 h-4" />
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={onOpenCart}
-                className="relative px-3.5 py-2 rounded-xl bg-gradient-to-r from-brand-gold to-amber-500 text-dark-950 font-black text-xs flex items-center gap-1.5 shadow-md active:scale-95"
+                className="relative px-3 py-2 rounded-xl bg-gradient-to-r from-brand-gold to-amber-400 text-dark-950 font-black text-xs flex items-center gap-1.5 shadow-md active:scale-95"
               >
                 <ShoppingBag className="w-4 h-4 flex-shrink-0" />
                 <span>
@@ -187,47 +188,23 @@ export function Header({
             </div>
           </div>
 
-          {/* Mobile Row 2: Prominent Branch Switcher & Buffet Shortcut */}
-          <div className="flex items-center justify-between gap-2 pt-1 border-t border-dark-800/60 text-xs">
+          {/* Mobile City Selector Pill */}
+          <div className="flex items-center justify-between gap-2 pt-1 border-t border-white/5">
             <button
               type="button"
               onClick={onOpenBranchModal}
-              className="flex-1 flex items-center justify-between gap-1.5 px-2.5 py-1.5 rounded-xl bg-dark-900 border-2 border-brand-gold/60 active:border-brand-gold text-left active:scale-98 transition-all shadow-sm"
-              title="Trocar entre Ariquemes e Porto Velho"
+              className="w-full flex items-center justify-between px-3 py-1.5 rounded-lg bg-dark-900/90 border border-brand-gold/30 text-left active:scale-98 transition-all"
             >
               <div className="flex items-center gap-1.5 min-w-0">
                 <MapPin className="w-3.5 h-3.5 text-brand-gold flex-shrink-0" />
-                <span className="font-black text-white text-[11px] truncate">
-                  {activeBranch?.displayName || 'Ariquemes - RO'}
+                <span className="text-[11px] font-bold text-slate-300 truncate">
+                  Filial: <strong className="text-white">{activeBranch?.displayName || 'Ariquemes - RO'}</strong>
                 </span>
               </div>
-              <span className="text-[10px] bg-brand-gold text-dark-950 font-black px-2 py-0.5 rounded-lg flex-shrink-0">
-                ⇄ Trocar Cidade
+              <span className="text-[10px] font-extrabold text-brand-gold">
+                ⇄ Trocar
               </span>
             </button>
-
-            {onScrollToBuffet && activeBranch?.id === 'ariquemes' && (
-              <button
-                type="button"
-                onClick={onScrollToBuffet}
-                className="flex items-center gap-1 text-brand-gold font-bold text-[11px] px-2.5 py-1.5 rounded-xl bg-dark-900 border border-brand-gold/30 flex-shrink-0"
-              >
-                <Crown className="w-3.5 h-3.5" />
-                <span>Buffet</span>
-              </button>
-            )}
-
-            {currentUser && onOpenAdmin && (
-              <button
-                type="button"
-                onClick={onOpenAdmin}
-                className="flex items-center gap-1 text-brand-gold font-bold text-[11px] px-2 py-1.5 rounded-xl bg-dark-900 border border-brand-gold/30 flex-shrink-0"
-                title="Voltar ao Painel da Filial"
-              >
-                <ChefHat className="w-3.5 h-3.5 text-brand-gold" />
-                <span>Painel</span>
-              </button>
-            )}
           </div>
 
         </div>
