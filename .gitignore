@@ -22,3 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Local media assets and generator scripts
+asset_*
+banner_*
+logo_el_shadday.png
+generate_banner_*.py
