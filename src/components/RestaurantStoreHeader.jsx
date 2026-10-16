@@ -4,6 +4,7 @@ import {
   ChevronRight, ArrowRight, Award, ShieldCheck, HeartHandshake, Crown
 } from 'lucide-react';
 import { RESTAURANT_INFO } from '../data/menuData';
+import { Interactive3DFoodStage } from './Interactive3DFoodStage';
 
 export function RestaurantStoreHeader({ 
   activeBranch, 
@@ -155,65 +156,9 @@ export function RestaurantStoreHeader({
 
           </div>
 
-          {/* RIGHT COLUMN: 3D Appetizing Floating Showcase */}
-          <div className="lg:col-span-5 flex flex-col items-center justify-center relative select-none">
-            
-            {/* 3D Interactive Floating Stage */}
-            <div 
-              className="relative w-full max-w-[340px] sm:max-w-[380px] h-[280px] sm:h-[320px] flex items-center justify-center overflow-visible cursor-pointer"
-              onClick={handleScrollToMenu}
-              title="Clique para ir direto aos sabores do cardápio"
-            >
-              
-              {/* Radial Auric Glow Aura */}
-              <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-brand-gold/25 via-amber-500/15 to-transparent blur-3xl animate-aura-glow pointer-events-none"></div>
-              <div className="absolute w-56 h-56 rounded-full bg-[radial-gradient(circle,rgba(255,213,109,0.3)_0%,rgba(203,172,87,0.12)_45%,transparent_75%)] blur-2xl pointer-events-none"></div>
-
-              {/* Floating Savory Embers & Steam */}
-              <div className="absolute inset-0 overflow-hidden pointer-events-none">
-                <span className="absolute bottom-10 left-1/4 w-2 h-2 rounded-full bg-brand-gold shadow-[0_0_10px_#ffd56d] ember-1"></span>
-                <span className="absolute bottom-14 right-1/4 w-1.5 h-1.5 rounded-full bg-amber-400 shadow-[0_0_8px_#e5b842] ember-2"></span>
-                <span className="absolute bottom-8 right-1/3 w-1.5 h-1.5 rounded-full bg-amber-200 shadow-[0_0_8px_#fff] ember-3"></span>
-                <span className="absolute bottom-12 left-1/3 w-2 h-2 rounded-full bg-brand-gold shadow-[0_0_8px_#ffd56d] ember-4"></span>
-              </div>
-
-              {/* Dynamic Levitation Ground Shadow */}
-              <div className="absolute bottom-4 w-60 sm:w-68 h-6 bg-[radial-gradient(ellipse,rgba(0,0,0,0.85)_0%,rgba(14,14,16,0.5)_50%,transparent_75%)] rounded-full blur-md animate-shadow-breathe pointer-events-none"></div>
-
-              {/* Floating 3D Food Element */}
-              <div className="relative z-10 w-full h-full flex items-center justify-center animate-esfiha-float group">
-                <img
-                  src="https://yzeemqzxlgudynydvpof.supabase.co/storage/v1/object/public/gallery/hero_pizza_esfiha_round.webp"
-                  alt="Esfirra Aberta Redonda Dourada e Fatia de Pizza Artesanal El Shadday"
-                  className="w-full max-h-[260px] sm:max-h-[300px] object-contain transition-transform duration-500 group-hover:scale-105"
-                  style={{
-                    mixBlendMode: 'screen',
-                    maskImage: 'radial-gradient(ellipse 92% 90% at 50% 50%, black 72%, transparent 100%)',
-                    WebkitMaskImage: 'radial-gradient(ellipse 92% 90% at 50% 50%, black 72%, transparent 100%)'
-                  }}
-                />
-              </div>
-
-              {/* Floating Quality Badge (Glassmorphic) */}
-              <div className="absolute bottom-2 right-2 sm:right-4 z-20 flex items-center gap-1.5 px-3 py-1.5 bg-dark-900/90 backdrop-blur-md border border-brand-gold/40 rounded-full shadow-[0_4px_16px_rgba(0,0,0,0.7)]">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-gold opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-brand-gold"></span>
-                </span>
-                <Flame className="w-3.5 h-3.5 text-brand-gold" />
-                <span className="text-[11px] font-black text-brand-gold tracking-tight">
-                  Queijo Puxando • Na Hora
-                </span>
-              </div>
-
-            </div>
-
-            {/* Micro Interaction Hint */}
-            <p className="text-[11px] text-slate-400 flex items-center gap-1.5 mt-1 font-medium">
-              <Sparkles className="w-3 h-3 text-brand-gold" />
-              <span>Clique para ver os sabores e montar seu pedido</span>
-            </p>
-
+          {/* RIGHT COLUMN: Interactive 3D Food Stage (Rotate, Drag & Specular Shimmer) */}
+          <div className="lg:col-span-5 flex flex-col items-center justify-center relative">
+            <Interactive3DFoodStage />
           </div>
 
         </div>
