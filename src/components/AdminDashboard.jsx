@@ -67,6 +67,7 @@ export function AdminDashboard({
   onUpdatePaymentStatus, 
   onCancelOrder,
   onDeleteOrder,
+  onClearAllOrders,
   onCreateKitchenOrder,
   onLogout, 
   onBackToSite,
@@ -220,13 +221,11 @@ export function AdminDashboard({
   // Sincronizar galeria com Supabase se configurado & escutar atualizações
   useEffect(() => {
     const handleGallerySync = (e) => {
-      if (e?.detail && Array.isArray(e.detail) && e.detail.length > 0) {
+      if (e?.detail && Array.isArray(e.detail)) {
         setGalleryList(e.detail);
       } else {
         const stored = getStoredBuffetGallery();
-        if (stored && stored.length > 0) {
-          setGalleryList(stored);
-        }
+        setGalleryList(stored);
       }
     };
 
@@ -243,11 +242,9 @@ export function AdminDashboard({
           .then(({ data: csData }) => {
             if (Array.isArray(csData?.buffet_gallery)) {
               const cleanCs = csData.buffet_gallery.filter(p => !isFakeGalleryItem(p));
-              if (cleanCs.length > 0) {
-                console.log('[AdminDashboard] Galeria carregada de company_settings:', cleanCs.length, 'itens');
-                setGalleryList(cleanCs);
-                saveStoredBuffetGallery(cleanCs);
-              }
+              console.log('[AdminDashboard] Galeria carregada de company_settings:', cleanCs.length, 'itens');
+              setGalleryList(cleanCs);
+              saveStoredBuffetGallery(cleanCs);
             }
           });
       };
@@ -258,21 +255,17 @@ export function AdminDashboard({
         .select('*')
         .order('position', { ascending: true })
         .then(({ data, error }) => {
-          if (!error && Array.isArray(data)) {
+          if (!error && Array.isArray(data) && data.length > 0) {
             const clean = data.filter(p => !isFakeGalleryItem(p));
-            if (clean.length > 0) {
-              console.log('[AdminDashboard] Galeria carregada de buffet_gallery:', clean.length, 'itens');
-              setGalleryList(clean);
-              saveStoredBuffetGallery(clean);
-            } else {
-              loadFromCompanySettings();
-            }
+            console.log('[AdminDashboard] Galeria carregada de buffet_gallery:', clean.length, 'itens');
+            setGalleryList(clean);
+            saveStoredBuffetGallery(clean);
           } else {
             loadFromCompanySettings();
           }
         });
 
-      // Realtime seguro: NUNCA sobrescreve a lista local com array vazio
+      // Realtime: sincroniza alterações em buffet_gallery
       supabase
         .channel('realtime_buffet_gallery_admin')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'buffet_gallery' }, () => {
@@ -281,12 +274,10 @@ export function AdminDashboard({
             .select('*')
             .order('position', { ascending: true })
             .then(({ data }) => {
-              if (Array.isArray(data) && data.length > 0) {
+              if (Array.isArray(data)) {
                 const clean = data.filter(p => !isFakeGalleryItem(p));
-                if (clean.length > 0) {
-                  setGalleryList(clean);
-                  saveStoredBuffetGallery(clean);
-                }
+                setGalleryList(clean);
+                saveStoredBuffetGallery(clean);
               }
             });
         })
@@ -587,7 +578,7 @@ export function AdminDashboard({
   // Sync menu & promos & pizza flavors across tabs/windows
   useEffect(() => {
     const handleProductsSync = (e) => {
-      if (e?.detail && Array.isArray(e.detail) && e.detail.length > 0) {
+      if (e?.detail && Array.isArray(e.detail)) {
         setProductsList(e.detail);
       } else {
         setProductsList(getStoredProducts());
@@ -638,6 +629,8 @@ export function AdminDashboard({
     window.addEventListener('pizza_flavors_updated', handleFlavorsSync);
     window.addEventListener('storage', handleProductsSync);
 
+    let channelCompanySettingsAdmin = null;
+
     // Hydrate products & promo settings & pizza flavors & store info from Supabase if configured
     if (isSupabaseConfigured && supabase) {
       supabase
@@ -647,7 +640,7 @@ export function AdminDashboard({
         .single()
         .then(({ data, error }) => {
           if (!error && data) {
-            if (Array.isArray(data.menu_products) && data.menu_products.length > 0) {
+            if (Array.isArray(data.menu_products)) {
               setProductsList(data.menu_products);
               saveStoredProducts(data.menu_products);
             }
@@ -655,7 +648,7 @@ export function AdminDashboard({
               setPromoSettings(data.promo_settings);
               saveStoredPromoSettings(data.promo_settings);
             }
-            if (Array.isArray(data.pizza_flavors) && data.pizza_flavors.length > 0) {
+            if (Array.isArray(data.pizza_flavors)) {
               setPizzaFlavors(data.pizza_flavors);
               saveStoredPizzaFlavors(data.pizza_flavors);
             }
@@ -691,6 +684,27 @@ export function AdminDashboard({
             }
           }
         });
+
+      channelCompanySettingsAdmin = supabase
+        .channel('realtime_cs_menu_admin')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'company_settings' }, (payload) => {
+          const fresh = payload.new;
+          if (fresh) {
+            if (Array.isArray(fresh.menu_products)) {
+              setProductsList(fresh.menu_products);
+              saveStoredProducts(fresh.menu_products);
+            }
+            if (Array.isArray(fresh.pizza_flavors)) {
+              setPizzaFlavors(fresh.pizza_flavors);
+              saveStoredPizzaFlavors(fresh.pizza_flavors);
+            }
+            if (fresh.promo_settings) {
+              setPromoSettings(fresh.promo_settings);
+              saveStoredPromoSettings(fresh.promo_settings);
+            }
+          }
+        })
+        .subscribe();
     }
 
     return () => {
@@ -699,6 +713,9 @@ export function AdminDashboard({
       window.removeEventListener('delivery_restaurant_info_updated', handleStoreSync);
       window.removeEventListener('pizza_flavors_updated', handleFlavorsSync);
       window.removeEventListener('storage', handleProductsSync);
+      if (channelCompanySettingsAdmin && supabase) {
+        supabase.removeChannel(channelCompanySettingsAdmin);
+      }
     };
   }, []);
 
@@ -2193,10 +2210,27 @@ export function AdminDashboard({
             <div className="space-y-4">
               <div className="flex items-center justify-between text-xs text-slate-400 px-1">
                 <span>Mostrando <strong>{filteredOrders.length}</strong> pedidos</span>
-                <span className="flex items-center gap-1 text-[11px] text-brand-gold">
-                  <RefreshCw className="w-3 h-3 animate-spin-slow" />
-                  Sincronização em tempo real ativa
-                </span>
+                <div className="flex items-center gap-3">
+                  {orders.length > 0 && onClearAllOrders && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (window.confirm("⚠️ ATENÇÃO: Deseja realmente excluir permanentemente TODOS os pedidos do banco de dados e do painel?")) {
+                          onClearAllOrders();
+                        }
+                      }}
+                      className="px-2.5 py-1 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                      title="Excluir permanentemente todos os pedidos"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      <span>Limpar Todos</span>
+                    </button>
+                  )}
+                  <span className="flex items-center gap-1 text-[11px] text-brand-gold">
+                    <RefreshCw className="w-3 h-3 animate-spin-slow" />
+                    Sincronização em tempo real ativa
+                  </span>
+                </div>
               </div>
 
               {filteredOrders.length === 0 ? (

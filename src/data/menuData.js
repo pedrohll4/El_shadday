@@ -1,3 +1,5 @@
+import { isSupabaseConfigured } from '../services/supabaseClient';
+
 export const RESTAURANT_INFO = {
   name: "El Shadday Delivery Esfirraria e Pizzaria",
   shortName: "El Shadday",
@@ -718,7 +720,7 @@ export function getStoredProducts() {
   } catch (e) {
     console.error("Error reading stored products:", e);
   }
-  return PRODUCTS;
+  return isSupabaseConfigured ? [] : PRODUCTS;
 }
 
 export function saveStoredProducts(products) {
@@ -826,7 +828,7 @@ export function getStoredPizzaFlavors() {
   } catch (e) {
     console.error("Error reading stored pizza flavors:", e);
   }
-  return INITIAL_PIZZA_FLAVORS;
+  return isSupabaseConfigured ? [] : INITIAL_PIZZA_FLAVORS;
 }
 
 export function saveStoredPizzaFlavors(flavors) {

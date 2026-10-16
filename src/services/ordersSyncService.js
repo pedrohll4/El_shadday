@@ -168,7 +168,83 @@ export async function dispatchOrderUpdateToKitchen(orderId, updates) {
 }
 
 /**
- * Fetch past cloud orders (last 24 hours)
+ * Permanently delete an order from Supabase database and all synced devices
+ */
+export async function dispatchOrderDelete(orderId) {
+  // 1. Delete from Supabase PostgreSQL Database
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { error } = await supabase.from('orders').delete().eq('id', orderId);
+      if (error) {
+        console.warn('⚠️ Erro ao excluir pedido no Supabase:', error.message);
+      } else {
+        console.log('✅ Pedido excluído definitivamente do Supabase:', orderId);
+      }
+    } catch (err) {
+      console.warn('⚠️ Erro de conexão ao excluir pedido no Supabase:', err);
+    }
+  }
+
+  // 2. Broadcast locally across browser tabs
+  try {
+    if (localChannel) {
+      localChannel.postMessage({ type: 'ORDER_DELETED', orderId });
+    }
+  } catch (e) {}
+
+  // 3. Fallback Cloud Pub/Sub
+  try {
+    await fetch(NTFY_BASE_URL, {
+      method: 'POST',
+      headers: {
+        'Title': `Pedido Excluído #${orderId}`,
+        'Tags': 'wastebasket',
+        'Priority': 'low'
+      },
+      body: JSON.stringify({ type: 'ORDER_DELETED', orderId })
+    });
+  } catch (err) {}
+}
+
+/**
+ * Delete all orders from Supabase database and all synced devices
+ */
+export async function dispatchClearAllOrders() {
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { error } = await supabase.from('orders').delete().neq('id', 'placeholder_none');
+      if (error) {
+        console.warn('⚠️ Erro ao limpar pedidos no Supabase:', error.message);
+      } else {
+        console.log('✅ Todos os pedidos excluídos do Supabase com sucesso');
+      }
+    } catch (err) {
+      console.warn('⚠️ Erro de conexão ao limpar pedidos no Supabase:', err);
+    }
+  }
+
+  try {
+    if (localChannel) {
+      localChannel.postMessage({ type: 'ALL_ORDERS_CLEARED' });
+    }
+  } catch (e) {}
+
+  try {
+    await fetch(NTFY_BASE_URL, {
+      method: 'POST',
+      headers: {
+        'Title': 'Todos os Pedidos Limpos',
+        'Tags': 'wastebasket',
+        'Priority': 'default'
+      },
+      body: JSON.stringify({ type: 'ALL_ORDERS_CLEARED' })
+    });
+  } catch (err) {}
+}
+
+/**
+ * Fetch past cloud orders (last 24 hours).
+ * If Supabase is connected, Supabase is the single source of truth.
  */
 export async function fetchCloudOrdersHistory() {
   // If Supabase is active, query database directly
@@ -181,6 +257,7 @@ export async function fetchCloudOrdersHistory() {
         .limit(100);
 
       if (!error && Array.isArray(data)) {
+        // Return Supabase data directly (even if empty []!)
         return data.map(mapSupabaseRowToOrder).filter(Boolean);
       }
     } catch (err) {
@@ -188,7 +265,7 @@ export async function fetchCloudOrdersHistory() {
     }
   }
 
-  // Fallback to ntfy.sh cloud cache
+  // Fallback to ntfy.sh cloud cache only if Supabase failed or is not configured
   try {
     const res = await fetch(`${NTFY_BASE_URL}/json?poll=1&since=24h`);
     if (!res.ok) return [];
@@ -203,12 +280,16 @@ export async function fetchCloudOrdersHistory() {
         if (entry.event === 'message' && entry.message) {
           const parsed = JSON.parse(entry.message);
           
-          if (parsed.type === 'ORDER_UPDATE' && parsed.orderId) {
+          if (parsed.type === 'ALL_ORDERS_CLEARED') {
+            ordersMap.clear();
+          } else if (parsed.type === 'ORDER_DELETED' && parsed.orderId) {
+            ordersMap.delete(parsed.orderId);
+          } else if (parsed.type === 'ORDER_UPDATE' && parsed.orderId) {
             const existing = ordersMap.get(parsed.orderId);
             if (existing) {
               ordersMap.set(parsed.orderId, { ...existing, ...parsed.updates });
             }
-          } else if (parsed.orderId) {
+          } else if (parsed.orderId && !parsed.isDeleted && parsed.orderStatus !== 'DELETED') {
             ordersMap.set(parsed.orderId, parsed);
           }
         }
@@ -227,10 +308,11 @@ export async function fetchCloudOrdersHistory() {
 /**
  * Subscribe kitchen panel to real-time events
  */
-export function subscribeToKitchenEvents({ onNewOrder, onOrderUpdate }) {
+export function subscribeToKitchenEvents({ onNewOrder, onOrderUpdate, onOrderDelete, onAllOrdersCleared } = {}) {
   let eventSource = null;
   let supabaseChannel = null;
   let isCleanedUp = false;
+
 
   // 1. Supabase Realtime Subscription (WebSockets)
   if (isSupabaseConfigured && supabase) {
@@ -260,6 +342,16 @@ export function subscribeToKitchenEvents({ onNewOrder, onOrderUpdate }) {
             }
           }
         )
+        .on(
+          'postgres_changes',
+          { event: 'DELETE', schema: 'public', table: 'orders' },
+          (payload) => {
+            if (isCleanedUp || !payload.old) return;
+            if (onOrderDelete && payload.old.id) {
+              onOrderDelete(payload.old.id);
+            }
+          }
+        )
         .subscribe((status) => {
           console.log('📡 Supabase Realtime Status:', status);
         });
@@ -281,9 +373,13 @@ export function subscribeToKitchenEvents({ onNewOrder, onOrderUpdate }) {
           if (payload.event === 'message' && payload.message) {
             const data = JSON.parse(payload.message);
 
-            if (data.type === 'ORDER_UPDATE') {
+            if (data.type === 'ALL_ORDERS_CLEARED') {
+              if (onAllOrdersCleared) onAllOrdersCleared();
+            } else if (data.type === 'ORDER_DELETED' && data.orderId) {
+              if (onOrderDelete) onOrderDelete(data.orderId);
+            } else if (data.type === 'ORDER_UPDATE' && data.orderId) {
               if (onOrderUpdate) onOrderUpdate(data.orderId, data.updates);
-            } else if (data.orderId) {
+            } else if (data.orderId && !data.isDeleted) {
               if (onNewOrder) onNewOrder(data);
             }
           }
@@ -312,7 +408,11 @@ export function subscribeToKitchenEvents({ onNewOrder, onOrderUpdate }) {
     const data = event.data;
     if (!data) return;
 
-    if (data.type === 'NEW_ORDER' && data.order && onNewOrder) {
+    if (data.type === 'ALL_ORDERS_CLEARED' && onAllOrdersCleared) {
+      onAllOrdersCleared();
+    } else if (data.type === 'ORDER_DELETED' && data.orderId && onOrderDelete) {
+      onOrderDelete(data.orderId);
+    } else if (data.type === 'NEW_ORDER' && data.order && onNewOrder) {
       onNewOrder(data.order);
     } else if (data.type === 'ORDER_UPDATE' && data.orderId && onOrderUpdate) {
       onOrderUpdate(data.orderId, data.updates);
@@ -322,6 +422,7 @@ export function subscribeToKitchenEvents({ onNewOrder, onOrderUpdate }) {
   if (localChannel) {
     localChannel.addEventListener('message', handleLocalMessage);
   }
+
 
   // Cleanup handler
   return () => {

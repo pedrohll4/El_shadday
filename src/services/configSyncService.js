@@ -79,23 +79,21 @@ export async function dispatchConfigSync(type, data) {
           updated_at: new Date().toISOString()
         });
 
+        // Clean buffet_gallery table and synchronize with new array
+        await supabase.from('buffet_gallery').delete().neq('id', 'placeholder_none');
         if (Array.isArray(data) && data.length > 0) {
-          for (let i = 0; i < data.length; i++) {
-            const item = data[i];
-            if (item && item.url) {
-              await supabase.from('buffet_gallery').upsert({
-                id: item.id || `media_${Date.now()}_${i}`,
-                url: item.url,
-                title: item.title || 'Buffet El Shadday',
-                subtitle: item.subtitle || '',
-                category: item.category || 'churrasco',
-                tag: item.tag || 'Buffet',
-                type: item.type || 'image',
-                thumbnail: item.thumbnail || item.url,
-                position: i
-              });
-            }
-          }
+          const rows = data.map((item, i) => ({
+            id: item.id || `media_${Date.now()}_${i}`,
+            url: item.url,
+            title: item.title || 'Buffet El Shadday',
+            subtitle: item.subtitle || '',
+            category: item.category || 'churrasco',
+            tag: item.tag || 'Buffet',
+            type: item.type || 'image',
+            thumbnail: item.thumbnail || item.url,
+            position: i
+          }));
+          await supabase.from('buffet_gallery').insert(rows);
         }
       }
     } catch (err) {
@@ -128,9 +126,48 @@ export async function dispatchConfigSync(type, data) {
 }
 
 /**
- * Fetch latest config from the cloud (called when client opens app on mobile/pc)
+ * Fetch latest config from the cloud (called when client opens app on mobile/pc).
+ * When Supabase is configured, it is the authoritative source of truth.
  */
 export async function fetchCloudConfigHistory() {
+  // 1. If Supabase is active, query company_settings directly (Single Source of Truth)
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('company_settings')
+        .select('*')
+        .eq('id', 'el_shadday_config')
+        .single();
+
+      if (!error && data) {
+        const products = Array.isArray(data.menu_products) ? data.menu_products : [];
+        const gallery = Array.isArray(data.buffet_gallery) ? data.buffet_gallery : [];
+        const flavors = Array.isArray(data.pizza_flavors) ? data.pizza_flavors : [];
+        const promos = data.promo_settings || null;
+        
+        saveStoredProducts(products);
+        saveStoredBuffetGallery(gallery);
+        saveStoredPizzaFlavors(flavors);
+        if (promos) saveStoredPromoSettings(promos);
+        if (data.name) {
+          const currentStore = getStoredRestaurantInfo();
+          saveStoredRestaurantInfo({ ...currentStore, ...data });
+        }
+
+        return {
+          products,
+          gallery,
+          promos,
+          store: data,
+          flavors
+        };
+      }
+    } catch (err) {
+      console.warn('⚠️ [Cloud Sync] Erro ao buscar config do Supabase:', err);
+    }
+  }
+
+  // 2. Fallback to ntfy.sh cloud cache only if Supabase is offline or not configured
   try {
     const res = await fetch(`${NTFY_CONFIG_URL}/json?poll=1&since=24h`);
     if (!res.ok) return null;
@@ -161,14 +198,12 @@ export async function fetchCloudConfigHistory() {
             } else if (parsed.type === 'PRODUCTS_UPDATE' && Array.isArray(parsed.data)) {
               latestProducts = parsed.data;
             } else if (parsed.type === 'GALLERY_UPDATE' && Array.isArray(parsed.data)) {
-              if (parsed.data.length > 0) {
-                latestGallery = parsed.data;
-              }
+              latestGallery = parsed.data;
             } else if (parsed.type === 'GALLERY_UPDATE_PING' || parsed.type === 'GALLERY_PING') {
               if (isSupabaseConfigured && supabase) {
                 try {
                   const { data: bgData } = await supabase.from('buffet_gallery').select('*').order('position', { ascending: true });
-                  if (Array.isArray(bgData) && bgData.length > 0) {
+                  if (Array.isArray(bgData)) {
                     latestGallery = bgData;
                   }
                 } catch (e) {}
@@ -186,10 +221,10 @@ export async function fetchCloudConfigHistory() {
     }
 
     // Apply latest changes to local storage & dispatch events
-    if (latestProducts && latestProducts.length > 0) {
+    if (Array.isArray(latestProducts)) {
       saveStoredProducts(latestProducts);
     }
-    if (latestGallery && latestGallery.length > 0) {
+    if (Array.isArray(latestGallery)) {
       saveStoredBuffetGallery(latestGallery);
     }
     if (latestPromos) {
@@ -198,13 +233,13 @@ export async function fetchCloudConfigHistory() {
     if (latestStore) {
       saveStoredRestaurantInfo(latestStore);
     }
-    if (latestFlavors && latestFlavors.length > 0) {
+    if (Array.isArray(latestFlavors)) {
       saveStoredPizzaFlavors(latestFlavors);
     }
 
     return {
       products: latestProducts,
-      gallery: (latestGallery && latestGallery.length > 0) ? latestGallery : null,
+      gallery: latestGallery,
       promos: latestPromos,
       store: latestStore,
       flavors: latestFlavors
@@ -246,12 +281,12 @@ export function subscribeToConfigEvents({ onProductsUpdate, onGalleryUpdate, onP
             } else if (data.type === 'GALLERY_UPDATE_PING' || data.type === 'GALLERY_PING') {
               if (isSupabaseConfigured && supabase) {
                 supabase.from('buffet_gallery').select('*').order('position', { ascending: true }).then(({ data: galData }) => {
-                  if (Array.isArray(galData) && galData.length > 0) {
+                  if (Array.isArray(galData)) {
                     saveStoredBuffetGallery(galData);
                     if (onGalleryUpdate) onGalleryUpdate(galData);
                   } else {
                     supabase.from('company_settings').select('buffet_gallery').eq('id', 'el_shadday_config').single().then(({ data: cs }) => {
-                      if (Array.isArray(cs?.buffet_gallery) && cs.buffet_gallery.length > 0) {
+                      if (Array.isArray(cs?.buffet_gallery)) {
                         saveStoredBuffetGallery(cs.buffet_gallery);
                         if (onGalleryUpdate) onGalleryUpdate(cs.buffet_gallery);
                       }
@@ -263,10 +298,8 @@ export function subscribeToConfigEvents({ onProductsUpdate, onGalleryUpdate, onP
               saveStoredProducts(data.data);
               if (onProductsUpdate) onProductsUpdate(data.data);
             } else if (data.type === 'GALLERY_UPDATE' && Array.isArray(data.data)) {
-              if (data.data.length > 0) {
-                saveStoredBuffetGallery(data.data);
-                if (onGalleryUpdate) onGalleryUpdate(data.data);
-              }
+              saveStoredBuffetGallery(data.data);
+              if (onGalleryUpdate) onGalleryUpdate(data.data);
             } else if (data.type === 'PROMOS_UPDATE' && data.data) {
               saveStoredPromoSettings(data.data);
               if (onPromosUpdate) onPromosUpdate(data.data);

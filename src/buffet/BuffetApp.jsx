@@ -129,13 +129,11 @@ export function BuffetApp({ currentAppMode, onToggleAppMode }) {
   // Fetch initial gallery from Supabase if configured & listen to real-time events
   useEffect(() => {
     const handleGallerySync = (e) => {
-      if (e?.detail && Array.isArray(e.detail) && e.detail.length > 0) {
+      if (e?.detail && Array.isArray(e.detail)) {
         setGalleryPhotos(e.detail);
       } else {
         const stored = getStoredBuffetGallery();
-        if (stored && stored.length > 0) {
-          setGalleryPhotos(stored);
-        }
+        setGalleryPhotos(stored);
       }
     };
 
@@ -152,11 +150,9 @@ export function BuffetApp({ currentAppMode, onToggleAppMode }) {
           .then(({ data: csData }) => {
             if (Array.isArray(csData?.buffet_gallery)) {
               const cleanCs = csData.buffet_gallery.filter(p => !isFakeGalleryItem(p));
-              if (cleanCs.length > 0) {
-                console.log('[BuffetApp] Galeria carregada de company_settings:', cleanCs.length, 'itens');
-                setGalleryPhotos(cleanCs);
-                saveStoredBuffetGallery(cleanCs);
-              }
+              console.log('[BuffetApp] Galeria carregada de company_settings:', cleanCs.length, 'itens');
+              setGalleryPhotos(cleanCs);
+              saveStoredBuffetGallery(cleanCs);
             }
           });
       };
@@ -167,18 +163,12 @@ export function BuffetApp({ currentAppMode, onToggleAppMode }) {
         .select('*')
         .order('position', { ascending: true })
         .then(({ data, error }) => {
-          if (!error && Array.isArray(data)) {
+          if (!error && Array.isArray(data) && data.length > 0) {
             const clean = data.filter(p => !isFakeGalleryItem(p));
-            if (clean.length > 0) {
-              console.log('[BuffetApp] Galeria carregada de buffet_gallery:', clean.length, 'itens');
-              setGalleryPhotos(clean);
-              saveStoredBuffetGallery(clean);
-            } else {
-              console.log('[BuffetApp] buffet_gallery vazia, tentando company_settings...');
-              loadFromCompanySettings();
-            }
+            console.log('[BuffetApp] Galeria carregada de buffet_gallery:', clean.length, 'itens');
+            setGalleryPhotos(clean);
+            saveStoredBuffetGallery(clean);
           } else {
-            console.warn('[BuffetApp] Erro ao buscar buffet_gallery:', error?.message);
             loadFromCompanySettings();
           }
         });
@@ -194,10 +184,8 @@ export function BuffetApp({ currentAppMode, onToggleAppMode }) {
             .then(({ data }) => {
               if (Array.isArray(data)) {
                 const clean = data.filter(p => !isFakeGalleryItem(p));
-                if (clean.length > 0) {
-                  setGalleryPhotos(clean);
-                  saveStoredBuffetGallery(clean);
-                }
+                setGalleryPhotos(clean);
+                saveStoredBuffetGallery(clean);
               }
             });
         })

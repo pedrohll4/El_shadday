@@ -62,7 +62,7 @@ export function CategoryNav({
           {CATEGORIES.map((cat) => {
             const Icon = ICONS_MAP[cat.icon] || Flame;
             const isActive = activeCategory === cat.id;
-            const allProds = products || PRODUCTS;
+            const allProds = Array.isArray(products) ? products : [];
             const itemCount = allProds.filter(p => p.categoryId === cat.id && p.isAvailable !== false).length;
 
             return (

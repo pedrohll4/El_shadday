@@ -73,7 +73,7 @@ export const isCarneFlavor = (flavorName) => {
   return str.includes('carne');
 };
 
-export function BoxBuilderModal({ isOpen, onClose, onAddBoxToCart, initialBox = null }) {
+export function BoxBuilderModal({ isOpen, onClose, onAddBoxToCart, initialBox = null, products = [] }) {
   const [selectedBox, setSelectedBox] = useState(BOX_CONFIGS[0]);
   const [activeTab, setActiveTab] = useState('salgadas'); // 'salgadas' | 'doces'
   const [semSuinos, setSemSuinos] = useState(false);
@@ -81,24 +81,29 @@ export function BoxBuilderModal({ isOpen, onClose, onAddBoxToCart, initialBox = 
   const [docesSelections, setDocesSelections] = useState({});
   const [feedbackNotice, setFeedbackNotice] = useState('');
 
+  const activeProducts = useMemo(() => {
+    if (Array.isArray(products) && products.length > 0) return products;
+    return PRODUCTS;
+  }, [products]);
+
   // RULE: Sabores Tradicionais da El Shadday para caixas sortidas
   const salgadasList = useMemo(() => {
-    return PRODUCTS.filter(p => 
+    return activeProducts.filter(p => 
       p.categoryId === 'esfirras-salgadas' && 
       (p.price <= 3.00 || !p.badge?.toLowerCase().includes('gourmet')) &&
       !p.name.toLowerCase().includes('gourmet') &&
       !p.badge?.toLowerCase().includes('gourmet')
     );
-  }, []);
+  }, [activeProducts]);
 
   const docesList = useMemo(() => {
-    return PRODUCTS.filter(p => 
+    return activeProducts.filter(p => 
       p.categoryId === 'esfirras-doces' && 
       (p.price <= 4.00 || !p.badge?.toLowerCase().includes('gourmet')) &&
       !p.name.toLowerCase().includes('gourmet') &&
       !p.badge?.toLowerCase().includes('gourmet')
     );
-  }, []);
+  }, [activeProducts]);
 
   // Sync initial box size and reset state when opening
   useEffect(() => {

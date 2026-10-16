@@ -37,6 +37,8 @@ import { AdminLoginModal } from './components/AdminLoginModal';
 import { 
   dispatchOrderToKitchen, 
   dispatchOrderUpdateToKitchen, 
+  dispatchOrderDelete,
+  dispatchClearAllOrders,
   fetchCloudOrdersHistory, 
   subscribeToKitchenEvents 
 } from './services/ordersSyncService';
@@ -49,13 +51,15 @@ import { ShoppingBag, ArrowRight, Sparkles, ChevronRight, Phone, Search, ChefHat
 const getInitialOrders = () => {
   try {
     const saved = localStorage.getItem('el_shadday_all_orders');
-    if (saved) {
+    if (saved !== null) {
       const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      if (Array.isArray(parsed)) return parsed;
     }
   } catch (e) {}
-  return INITIAL_MULTI_BRANCH_ORDERS;
+  // When Supabase is configured, do not inject mock dummy orders if database is empty
+  return isSupabaseConfigured ? [] : INITIAL_MULTI_BRANCH_ORDERS;
 };
+
 
 // Error Boundary to prevent blank/black screens on any unexpected runtime error
 class ErrorBoundary extends React.Component {
@@ -223,7 +227,7 @@ export default function App() {
   // Real-time synchronization for products, promos and restaurant info
   useEffect(() => {
     const handleProductsSync = (e) => {
-      if (e?.detail && Array.isArray(e.detail) && e.detail.length > 0) {
+      if (e?.detail && Array.isArray(e.detail)) {
         setProducts(e.detail);
       } else {
         setProducts(getStoredProducts());
@@ -257,12 +261,10 @@ export default function App() {
           .select('*')
           .order('position', { ascending: true })
           .then(({ data: bgData, error: bgErr }) => {
-            if (!bgErr && Array.isArray(bgData) && bgData.length > 0) {
+            if (!bgErr && Array.isArray(bgData)) {
               const clean = bgData.filter(p => !isFakeGalleryItem(p));
-              if (clean.length > 0) {
-                saveStoredBuffetGallery(clean);
-                window.dispatchEvent(new CustomEvent("buffet_gallery_updated", { detail: clean }));
-              }
+              saveStoredBuffetGallery(clean);
+              window.dispatchEvent(new CustomEvent("buffet_gallery_updated", { detail: clean }));
             }
           });
       };
@@ -274,23 +276,19 @@ export default function App() {
         .single()
         .then(({ data, error }) => {
           if (!error && data) {
-            if (Array.isArray(data.buffet_gallery) && data.buffet_gallery.length > 0) {
+            if (Array.isArray(data.buffet_gallery)) {
               const cleanGal = data.buffet_gallery.filter(p => !isFakeGalleryItem(p));
-              if (cleanGal.length > 0) {
-                saveStoredBuffetGallery(cleanGal);
-                window.dispatchEvent(new CustomEvent("buffet_gallery_updated", { detail: cleanGal }));
-              } else {
-                syncGalleryFromSupabase();
-              }
+              saveStoredBuffetGallery(cleanGal);
+              window.dispatchEvent(new CustomEvent("buffet_gallery_updated", { detail: cleanGal }));
             } else {
               // company_settings vazio para galeria — busca na tabela buffet_gallery
               syncGalleryFromSupabase();
             }
-            if (Array.isArray(data.menu_products) && data.menu_products.length > 0) {
+            if (Array.isArray(data.menu_products)) {
               setProducts(data.menu_products);
               saveStoredProducts(data.menu_products);
             }
-            if (Array.isArray(data.pizza_flavors) && data.pizza_flavors.length > 0) {
+            if (Array.isArray(data.pizza_flavors)) {
               saveStoredPizzaFlavors(data.pizza_flavors);
               window.dispatchEvent(new CustomEvent("pizza_flavors_updated", { detail: data.pizza_flavors }));
             }
@@ -326,12 +324,10 @@ export default function App() {
         .on('postgres_changes', { event: '*', schema: 'public', table: 'company_settings' }, (payload) => {
           const freshData = payload.new;
           if (freshData) {
-            if (Array.isArray(freshData.buffet_gallery) && freshData.buffet_gallery.length > 0) {
+            if (Array.isArray(freshData.buffet_gallery)) {
               const cleanGal = freshData.buffet_gallery.filter(p => !isFakeGalleryItem(p));
-              if (cleanGal.length > 0) {
-                saveStoredBuffetGallery(cleanGal);
-                window.dispatchEvent(new CustomEvent("buffet_gallery_updated", { detail: cleanGal }));
-              }
+              saveStoredBuffetGallery(cleanGal);
+              window.dispatchEvent(new CustomEvent("buffet_gallery_updated", { detail: cleanGal }));
             }
             if (Array.isArray(freshData.menu_products)) {
               setProducts(freshData.menu_products);
@@ -353,10 +349,10 @@ export default function App() {
     // Hydrate from Global Cloud Pub/Sub (Cross-device instant sync)
     fetchCloudConfigHistory().then((cloudCfg) => {
       if (cloudCfg) {
-        if (cloudCfg.products && cloudCfg.products.length > 0) setProducts(cloudCfg.products);
+        if (Array.isArray(cloudCfg.products)) setProducts(cloudCfg.products);
         if (cloudCfg.promos) setPromoSettings(cloudCfg.promos);
         if (cloudCfg.store) setRestaurantInfo(cloudCfg.store);
-        if (cloudCfg.flavors && cloudCfg.flavors.length > 0) {
+        if (Array.isArray(cloudCfg.flavors)) {
           saveStoredPizzaFlavors(cloudCfg.flavors);
           window.dispatchEvent(new CustomEvent("pizza_flavors_updated", { detail: cloudCfg.flavors }));
         }
@@ -391,39 +387,21 @@ export default function App() {
 
   // Sync orders in real-time across devices (Cloud SSE + BroadcastChannel + API)
   useEffect(() => {
-    // 1. Initial load from Cloud history (orders from last 24h across all phones/tablets)
+    // 1. Initial load from Cloud history (authoritative orders from Supabase)
     const initSync = async () => {
       try {
         const cloudOrders = await fetchCloudOrdersHistory();
-        if (cloudOrders && cloudOrders.length > 0) {
-          setAllOrders(prev => {
-            const map = new Map();
-            // Start with current local orders
-            prev.forEach(o => { if (o?.orderId) map.set(o.orderId, o); });
-            // Merge cloud orders (cloud might have updates or newer orders)
-            cloudOrders.forEach(o => { if (o?.orderId) map.set(o.orderId, { ...(map.get(o.orderId) || {}), ...o }); });
-            const list = Array.from(map.values());
-            list.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+        if (Array.isArray(cloudOrders)) {
+          if (isSupabaseConfigured) {
+            setAllOrders(cloudOrders);
             try {
-              localStorage.setItem('el_shadday_all_orders', JSON.stringify(list));
+              localStorage.setItem('el_shadday_all_orders', JSON.stringify(cloudOrders));
             } catch (e) {}
-            return list;
-          });
-        }
-      } catch (e) {
-        console.warn('Initial cloud history sync failed:', e);
-      }
-
-      // Also try local /api/orders if running on dev server
-      try {
-        const res = await fetch('/api/orders');
-        if (res.ok) {
-          const apiOrders = await res.json();
-          if (Array.isArray(apiOrders) && apiOrders.length > 0) {
+          } else if (cloudOrders.length > 0) {
             setAllOrders(prev => {
               const map = new Map();
               prev.forEach(o => { if (o?.orderId) map.set(o.orderId, o); });
-              apiOrders.forEach(o => { if (o?.orderId) map.set(o.orderId, { ...(map.get(o.orderId) || {}), ...o }); });
+              cloudOrders.forEach(o => { if (o?.orderId) map.set(o.orderId, { ...(map.get(o.orderId) || {}), ...o }); });
               const list = Array.from(map.values());
               list.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
               try {
@@ -433,7 +411,32 @@ export default function App() {
             });
           }
         }
-      } catch (e) {}
+      } catch (e) {
+        console.warn('Initial cloud history sync failed:', e);
+      }
+
+      // Also try local /api/orders ONLY if Supabase is NOT configured
+      if (!isSupabaseConfigured) {
+        try {
+          const res = await fetch('/api/orders');
+          if (res.ok) {
+            const apiOrders = await res.json();
+            if (Array.isArray(apiOrders) && apiOrders.length > 0) {
+              setAllOrders(prev => {
+                const map = new Map();
+                prev.forEach(o => { if (o?.orderId) map.set(o.orderId, o); });
+                apiOrders.forEach(o => { if (o?.orderId) map.set(o.orderId, { ...(map.get(o.orderId) || {}), ...o }); });
+                const list = Array.from(map.values());
+                list.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+                try {
+                  localStorage.setItem('el_shadday_all_orders', JSON.stringify(list));
+                } catch (e) {}
+                return list;
+              });
+            }
+          }
+        } catch (e) {}
+      }
     };
 
     initSync();
@@ -460,44 +463,62 @@ export default function App() {
           } catch (e) {}
           return updated;
         });
+      },
+      onOrderDelete: (orderId) => {
+        setAllOrders(prev => {
+          const updated = prev.filter(o => o.orderId !== orderId);
+          try {
+            localStorage.setItem('el_shadday_all_orders', JSON.stringify(updated));
+          } catch (e) {}
+          return updated;
+        });
+      },
+      onAllOrdersCleared: () => {
+        setAllOrders([]);
+        try {
+          localStorage.setItem('el_shadday_all_orders', JSON.stringify([]));
+        } catch (e) {}
       }
     });
 
-    // 3. Fallback polling every 5 seconds for local API
-    const interval = setInterval(async () => {
-      try {
-        const res = await fetch('/api/orders');
-        if (res.ok) {
-          const apiOrders = await res.json();
-          if (Array.isArray(apiOrders) && apiOrders.length > 0) {
-            setAllOrders(prev => {
-              let hasNew = false;
-              const map = new Map();
-              prev.forEach(o => { if (o?.orderId) map.set(o.orderId, o); });
-              apiOrders.forEach(o => {
-                if (o?.orderId && !map.has(o.orderId)) {
-                  map.set(o.orderId, o);
-                  hasNew = true;
+    // 3. Fallback polling every 5 seconds for local API (only if Supabase is not configured)
+    let interval = null;
+    if (!isSupabaseConfigured) {
+      interval = setInterval(async () => {
+        try {
+          const res = await fetch('/api/orders');
+          if (res.ok) {
+            const apiOrders = await res.json();
+            if (Array.isArray(apiOrders) && apiOrders.length > 0) {
+              setAllOrders(prev => {
+                let hasNew = false;
+                const map = new Map();
+                prev.forEach(o => { if (o?.orderId) map.set(o.orderId, o); });
+                apiOrders.forEach(o => {
+                  if (o?.orderId && !map.has(o.orderId)) {
+                    map.set(o.orderId, o);
+                    hasNew = true;
+                  }
+                });
+                if (hasNew) {
+                  const list = Array.from(map.values());
+                  list.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+                  try {
+                    localStorage.setItem('el_shadday_all_orders', JSON.stringify(list));
+                  } catch (e) {}
+                  return list;
                 }
+                return prev;
               });
-              if (hasNew) {
-                const list = Array.from(map.values());
-                list.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
-                try {
-                  localStorage.setItem('el_shadday_all_orders', JSON.stringify(list));
-                } catch (e) {}
-                return list;
-              }
-              return prev;
-            });
+            }
           }
-        }
-      } catch (e) {}
-    }, 5000);
+        } catch (e) {}
+      }, 5000);
+    }
 
     return () => {
       unsubscribe();
-      clearInterval(interval);
+      if (interval) clearInterval(interval);
     };
   }, []);
 
@@ -736,9 +757,22 @@ export default function App() {
     });
 
     try {
-      await dispatchOrderUpdateToKitchen(orderId, { orderStatus: 'DELETED', isDeleted: true });
+      await dispatchOrderDelete(orderId);
     } catch (err) {
       console.error('Error deleting order:', err);
+    }
+  };
+
+  const handleClearAllOrders = async () => {
+    setAllOrders([]);
+    try {
+      localStorage.setItem('el_shadday_all_orders', JSON.stringify([]));
+    } catch (e) {}
+
+    try {
+      await dispatchClearAllOrders();
+    } catch (err) {
+      console.error('Error clearing all orders:', err);
     }
   };
 
@@ -844,6 +878,7 @@ export default function App() {
           onUpdatePaymentStatus={handleUpdatePaymentStatus}
           onCancelOrder={handleCancelOrder}
           onDeleteOrder={handleDeleteOrder}
+          onClearAllOrders={handleClearAllOrders}
           onCreateKitchenOrder={handleCreateKitchenOrder}
           onLogout={handleAdminLogout}
           onBackToSite={handleBackToSiteFromAdmin}
@@ -1195,6 +1230,7 @@ export default function App() {
         onClose={() => setIsBoxBuilderOpen(false)}
         onAddBoxToCart={handleAddBoxToCart}
         initialBox={selectedBoxForBuilder}
+        products={products}
       />
 
       {/* Pizza Customizer Modal */}

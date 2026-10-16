@@ -76,13 +76,11 @@ export function BuffetSection({ onExploreFullBuffet }) {
   useEffect(() => {
     // Escuta atualizações locais (cross-tab e evento custom)
     const handleGallerySync = (e) => {
-      if (e?.detail && Array.isArray(e.detail) && e.detail.length > 0) {
+      if (e?.detail && Array.isArray(e.detail)) {
         setGalleryPhotos(e.detail);
       } else {
         const stored = getStoredBuffetGallery();
-        if (stored && stored.length > 0) {
-          setGalleryPhotos(stored);
-        }
+        setGalleryPhotos(stored);
       }
     };
     window.addEventListener('storage', handleGallerySync);
@@ -101,12 +99,10 @@ export function BuffetSection({ onExploreFullBuffet }) {
         .then(({ data: csData, error: csError }) => {
           if (!csError && Array.isArray(csData?.buffet_gallery)) {
             const cleanCs = csData.buffet_gallery.filter(p => !isFakeGalleryItem(p));
-            if (cleanCs.length > 0) {
-              console.log('[BuffetSection] ✅ Galeria carregada de company_settings:', cleanCs.length, 'itens');
-              setGalleryPhotos(cleanCs);
-              saveStoredBuffetGallery(cleanCs);
-              return; // Já carregou — não precisa tentar buffet_gallery
-            }
+            console.log('[BuffetSection] ✅ Galeria carregada de company_settings:', cleanCs.length, 'itens');
+            setGalleryPhotos(cleanCs);
+            saveStoredBuffetGallery(cleanCs);
+            return; // Já carregou — não precisa tentar buffet_gallery
           }
           // 2) Fallback: tenta tabela buffet_gallery (pode não existir)
           supabase
@@ -114,13 +110,11 @@ export function BuffetSection({ onExploreFullBuffet }) {
             .select('*')
             .order('position', { ascending: true })
             .then(({ data, error }) => {
-              if (!error && Array.isArray(data)) {
+              if (!error && Array.isArray(data) && data.length > 0) {
                 const clean = data.filter(p => !isFakeGalleryItem(p));
-                if (clean.length > 0) {
-                  console.log('[BuffetSection] ✅ Galeria carregada de buffet_gallery:', clean.length, 'itens');
-                  setGalleryPhotos(clean);
-                  saveStoredBuffetGallery(clean);
-                }
+                console.log('[BuffetSection] ✅ Galeria carregada de buffet_gallery:', clean.length, 'itens');
+                setGalleryPhotos(clean);
+                saveStoredBuffetGallery(clean);
               }
             });
         });
@@ -137,10 +131,8 @@ export function BuffetSection({ onExploreFullBuffet }) {
             .then(({ data: csData }) => {
               if (Array.isArray(csData?.buffet_gallery)) {
                 const clean = csData.buffet_gallery.filter(p => !isFakeGalleryItem(p));
-                if (clean.length > 0) {
-                  setGalleryPhotos(clean);
-                  saveStoredBuffetGallery(clean);
-                }
+                setGalleryPhotos(clean);
+                saveStoredBuffetGallery(clean);
               }
             });
         })
@@ -157,10 +149,8 @@ export function BuffetSection({ onExploreFullBuffet }) {
             .then(({ data }) => {
               if (Array.isArray(data)) {
                 const clean = data.filter(p => !isFakeGalleryItem(p));
-                if (clean.length > 0) {
-                  setGalleryPhotos(clean);
-                  saveStoredBuffetGallery(clean);
-                }
+                setGalleryPhotos(clean);
+                saveStoredBuffetGallery(clean);
               }
             });
         })
