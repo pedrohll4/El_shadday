@@ -183,14 +183,13 @@ export function RestaurantStoreHeader({
               {/* Floating 3D Food Element */}
               <div className="relative z-10 w-full h-full flex items-center justify-center animate-esfiha-float group">
                 <img
-                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuCps29u36scMp4kzW3LI4p34XVnEzY1PXd8lpmjqRzxc5fFIaPwA5QsVbFlV-DJkSeommjupc2kagjXTpnIOT3CT0p32SuSk4eh_ZP36ggWtS6UDZphMPB_z2WfnWyKzF4N0bPi5f4cPsNC1c8GTPpFNZrx8u9Tj24bmSy9ZlCj81kWtTBPWSyiskA5oLkWNL2kJJi-BJNmE0raPWCHisz01a6AnH8VgVximqmcw73hbv3WcJyj2w"
-                  alt="Esfiha Dourada e Fatia de Pizza Artesanal El Shadday"
-                  className="w-full max-h-[260px] sm:max-h-[290px] object-contain drop-shadow-[0_20px_35px_rgba(0,0,0,0.85)] transition-transform duration-500 group-hover:scale-105"
+                  src="https://yzeemqzxlgudynydvpof.supabase.co/storage/v1/object/public/gallery/hero_pizza_esfiha_round.webp"
+                  alt="Esfirra Aberta Redonda Dourada e Fatia de Pizza Artesanal El Shadday"
+                  className="w-full max-h-[260px] sm:max-h-[300px] object-contain transition-transform duration-500 group-hover:scale-105"
                   style={{
                     mixBlendMode: 'screen',
-                    maskImage: 'radial-gradient(ellipse 96% 94% at 50% 50%, black 72%, transparent 100%)',
-                    WebkitMaskImage: 'radial-gradient(ellipse 96% 94% at 50% 50%, black 72%, transparent 100%)',
-                    filter: 'contrast(1.08) brightness(1.02)'
+                    maskImage: 'radial-gradient(ellipse 92% 90% at 50% 50%, black 72%, transparent 100%)',
+                    WebkitMaskImage: 'radial-gradient(ellipse 92% 90% at 50% 50%, black 72%, transparent 100%)'
                   }}
                 />
               </div>
