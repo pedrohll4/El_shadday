@@ -22,7 +22,8 @@ import {
   Send, 
   RotateCcw,
   Sparkle,
-  Info
+  Info,
+  X
 } from 'lucide-react';
 import { 
   saveQuoteToHistory,
@@ -133,8 +134,19 @@ export function BuffetBuilder({
   const [validationErrors, setValidationErrors] = useState({});
   const [copiedSuccess, setCopiedSuccess] = useState(false);
 
-  // Toggle item selection
+  // Toggle item selection (guards against unavailable items)
   const handleToggleItem = (itemId) => {
+    // Check if item is inactive across categories
+    let isItemInactive = false;
+    for (const cat of categories) {
+      const match = (cat.items || []).find(i => i.id === itemId);
+      if (match && match.active === false) {
+        isItemInactive = true;
+        break;
+      }
+    }
+    if (isItemInactive) return;
+
     setSelectedItemIds(prev => {
       const isRemoving = prev.includes(itemId);
       const updated = isRemoving
@@ -548,54 +560,80 @@ export function BuffetBuilder({
 
                 {/* Items Grid */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
-                  {activeCategoryObj.items
-                    .filter(item => item.active !== false)
-                    .map(item => {
-                      const isSelected = selectedItemIds.includes(item.id);
-                      const isChurrasco = item.id === 'pp_churrasco_assados';
+                  {activeCategoryObj.items.map(item => {
+                    const isUnavailable = item.active === false;
+                    const isSelected = !isUnavailable && selectedItemIds.includes(item.id);
+                    const isChurrasco = item.id === 'pp_churrasco_assados';
 
+                    if (isUnavailable) {
                       return (
                         <div
                           key={item.id}
-                          onClick={() => handleToggleItem(item.id)}
-                          className={`relative rounded-xl p-4 sm:p-5 transition-all duration-300 cursor-pointer select-none group ${
-                            isSelected && isChurrasco
-                              ? 'sm:col-span-2 lg:col-span-3 bg-gradient-to-b from-[#202630] to-[#1C232E] border-2 border-[#D8B85A] shadow-[0_0_25px_rgba(216,184,90,0.3)]'
-                              : isSelected
-                                ? 'bg-gradient-to-b from-[#202630] to-[#1C232E] border-2 border-[#D8B85A] shadow-[0_0_20px_rgba(216,184,90,0.25)] -translate-y-1'
-                                : 'bg-[#15191F] border border-[#2E3744] hover:border-[#D8B85A]/50 hover:bg-[#1A202A]'
-                          }`}
+                          className="relative rounded-2xl p-4 sm:p-5 border border-rose-900/30 bg-dark-950/60 opacity-60 cursor-not-allowed select-none"
+                          title="Item temporariamente esgotado na cozinha."
                         >
                           <div className="flex items-start justify-between gap-3">
                             <div className="flex-1">
-                              <div className="flex items-center gap-2">
-                                <h4 className={`font-serif text-base sm:text-lg font-bold transition-colors ${
-                                  isSelected ? 'text-[#E8D58A]' : 'text-slate-100 group-hover:text-[#E8D58A]'
-                                }`}>
-                                  {item.name}
-                                </h4>
-                                {item.badge && (
-                                  <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
-                                    {item.badge}
-                                  </span>
-                                )}
-                              </div>
-                              <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                                {isChurrasco && isSelected
-                                  ? selectedChurrascoMeats.length > 0
-                                    ? `Carnes incluídas: ${formatMeatList(selectedChurrascoMeats)}`
-                                    : 'Escolha abaixo quais opções deseja incluir:'
-                                  : item.desc
-                                }
+                              <h4 className="font-serif text-base sm:text-lg font-bold text-slate-400 line-through">
+                                {item.name}
+                              </h4>
+                              <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                                {item.desc}
                               </p>
+                              <span className="inline-flex items-center gap-1 mt-2 text-[10px] font-black text-rose-300 bg-rose-500/15 px-2 py-0.5 rounded-md border border-rose-500/30">
+                                ⛔ Indisponível (Acabou na Cozinha)
+                              </span>
                             </div>
+                            <div className="w-7 h-7 rounded-xl flex items-center justify-center flex-shrink-0 bg-dark-900 border border-dark-800 text-slate-600">
+                              <X className="w-4 h-4" />
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }
 
-                            {/* Checkbox Indicator */}
-                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 transition-all duration-200 ${
-                              isSelected
-                                ? 'bg-gradient-to-br from-[#D8B85A] to-[#B3913A] text-[#15191F] shadow-[0_2px_10px_rgba(216,184,90,0.4)] scale-105'
-                                : 'border border-[#2E3744] group-hover:border-[#D8B85A]/60 bg-[#202630] text-transparent'
-                            }`}>
+                    return (
+                      <div
+                        key={item.id}
+                        onClick={() => handleToggleItem(item.id)}
+                        className={`relative rounded-2xl p-4 sm:p-5 transition-all duration-300 cursor-pointer select-none group ${
+                          isSelected && isChurrasco
+                            ? 'sm:col-span-2 lg:col-span-3 bg-gradient-to-br from-dark-850 to-dark-900 border-2 border-brand-gold shadow-[0_0_25px_rgba(216,184,90,0.25)]'
+                            : isSelected
+                              ? 'bg-dark-850 border-2 border-brand-gold shadow-[0_0_20px_rgba(216,184,90,0.22)] -translate-y-1'
+                              : 'bg-dark-900 border border-dark-750 hover:border-brand-gold/50 hover:bg-dark-850'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <h4 className={`font-serif text-base sm:text-lg font-bold transition-colors ${
+                                isSelected ? 'text-amber-200' : 'text-slate-100 group-hover:text-amber-200'
+                              }`}>
+                                {item.name}
+                              </h4>
+                              {item.badge && (
+                                <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
+                                  {item.badge}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                              {isChurrasco && isSelected
+                                ? selectedChurrascoMeats.length > 0
+                                  ? `Carnes incluídas: ${formatMeatList(selectedChurrascoMeats)}`
+                                  : 'Escolha abaixo quais opções deseja incluir:'
+                                : item.desc
+                              }
+                            </p>
+                          </div>
+
+                          {/* Checkbox Indicator */}
+                          <div className={`w-7 h-7 rounded-xl flex items-center justify-center flex-shrink-0 transition-all duration-200 ${
+                            isSelected
+                              ? 'bg-gradient-to-br from-brand-gold to-amber-500 text-dark-950 font-black shadow-glow-gold scale-105'
+                              : 'border border-dark-700 group-hover:border-brand-gold/60 bg-dark-950 text-transparent'
+                          }`}>
                               <Check className={`w-4 h-4 stroke-[3] ${isSelected ? 'text-[#15191F]' : 'opacity-0'}`} />
                             </div>
                           </div>

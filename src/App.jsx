@@ -14,7 +14,7 @@ import {
   saveStoredRestaurantInfo,
   saveStoredPizzaFlavors
 } from './data/menuData';
-import { saveStoredBuffetGallery, isFakeGalleryItem } from './buffet/buffetData';
+import { saveStoredBuffetGallery, isFakeGalleryItem, saveUnavailableBuffetItemIds } from './buffet/buffetData';
 import { supabase, isSupabaseConfigured } from './services/supabaseClient';
 import { Header } from './components/Header';
 import { RestaurantStoreHeader } from './components/RestaurantStoreHeader';
@@ -295,6 +295,9 @@ export default function App() {
             if (data.promo_settings && typeof data.promo_settings === 'object' && Object.keys(data.promo_settings).length > 0) {
               setPromoSettings(data.promo_settings);
               saveStoredPromoSettings(data.promo_settings);
+              if (Array.isArray(data.promo_settings.buffet_unavailable_items)) {
+                saveUnavailableBuffetItemIds(data.promo_settings.buffet_unavailable_items);
+              }
             }
             if (data.card_machine_notice !== undefined || data.name) {
               const currentStore = getStoredRestaurantInfo();
@@ -340,6 +343,9 @@ export default function App() {
             if (freshData.promo_settings) {
               setPromoSettings(freshData.promo_settings);
               saveStoredPromoSettings(freshData.promo_settings);
+              if (Array.isArray(freshData.promo_settings.buffet_unavailable_items)) {
+                saveUnavailableBuffetItemIds(freshData.promo_settings.buffet_unavailable_items);
+              }
             }
           }
         })
@@ -895,18 +901,27 @@ export default function App() {
   // VIEW 2: FULL BUFFET SHOWCASE
   if (appView === 'full-buffet') {
     return (
-      <div className="relative min-h-screen bg-dark-950">
-        <div className="bg-[#B3913A] text-[#15191F] font-bold text-xs py-2 px-4 text-center sticky top-0 z-50 flex items-center justify-center gap-3 shadow-md">
-          <span>👑 Você está visualizando a Apresentação Completa de Buffet.</span>
+      <div className="relative min-h-screen bg-dark-950 text-slate-100">
+        <div className="bg-dark-950/90 backdrop-blur-md border-b border-dark-750/80 shadow-2xl py-2.5 px-4 sm:px-6 sticky top-0 z-50 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-brand-gold/15 border border-brand-gold/30 text-brand-gold text-[11px] font-black uppercase tracking-wider shadow-sm">
+              <Sparkles className="w-3.5 h-3.5 text-brand-gold" />
+              Buffet El Shadday
+            </span>
+            <span className="text-xs text-slate-300 font-medium hidden sm:inline">
+              Apresentação Completa para Casamentos, Formaturas e Eventos
+            </span>
+          </div>
+
           <button 
             onClick={() => {
               window.location.hash = '';
               window.scrollTo({ top: 0, behavior: 'instant' });
               setAppView('delivery');
             }} 
-            className="bg-[#15191F] text-[#E8D58A] px-3 py-1 rounded-md text-[11px] font-extrabold uppercase hover:bg-slate-900 transition-colors cursor-pointer"
+            className="px-4 py-1.5 rounded-xl bg-gradient-to-r from-brand-gold via-amber-400 to-brand-gold hover:brightness-110 active:scale-95 text-dark-950 text-xs font-black uppercase tracking-wider shadow-glow-gold transition-all cursor-pointer flex items-center gap-2 ml-auto sm:ml-0"
           >
-            Voltar para o Delivery El Shadday 🍕
+            <span>🍕 Voltar para o Delivery</span>
           </button>
         </div>
         <BuffetApp 

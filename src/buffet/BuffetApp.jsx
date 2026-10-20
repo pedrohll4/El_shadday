@@ -62,6 +62,22 @@ export function BuffetApp({ currentAppMode, onToggleAppMode }) {
     return () => clearInterval(interval);
   }, []);
 
+  // Listen to category and unavailability updates in real time
+  useEffect(() => {
+    const handleCategoriesSync = () => {
+      setCategories(getStoredBuffetCategories());
+    };
+    window.addEventListener('buffet_categories_updated', handleCategoriesSync);
+    window.addEventListener('buffet_unavailable_updated', handleCategoriesSync);
+    window.addEventListener('storage', handleCategoriesSync);
+
+    return () => {
+      window.removeEventListener('buffet_categories_updated', handleCategoriesSync);
+      window.removeEventListener('buffet_unavailable_updated', handleCategoriesSync);
+      window.removeEventListener('storage', handleCategoriesSync);
+    };
+  }, []);
+
   // Handle URL hash changes (e.g. #/admin)
   useEffect(() => {
     const handleHash = () => {

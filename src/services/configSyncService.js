@@ -8,7 +8,7 @@
 
 import { supabase, isSupabaseConfigured } from './supabaseClient';
 import { saveStoredProducts, saveStoredPromoSettings, saveStoredRestaurantInfo, saveStoredPizzaFlavors } from '../data/menuData';
-import { saveStoredBuffetGallery } from '../buffet/buffetData';
+import { saveStoredBuffetGallery, saveUnavailableBuffetItemIds, getUnavailableBuffetItemIds } from '../buffet/buffetData';
 
 const CONFIG_TOPIC = 'el-shadday-config-sync-ariquemes-v2';
 const NTFY_CONFIG_URL = `https://ntfy.sh/${CONFIG_TOPIC}`;
@@ -70,6 +70,18 @@ export async function dispatchConfigSync(type, data) {
         await supabase.from('company_settings').upsert({
           id: 'el_shadday_config',
           pizza_flavors: data,
+          updated_at: new Date().toISOString()
+        });
+      } else if (type === 'BUFFET_AVAILABILITY_UPDATE') {
+        let currentPromos = {};
+        try {
+          const raw = localStorage.getItem('el_shadday_promo_settings');
+          if (raw) currentPromos = JSON.parse(raw);
+        } catch (e) {}
+        currentPromos.buffet_unavailable_items = Array.isArray(data) ? data : [];
+        await supabase.from('company_settings').upsert({
+          id: 'el_shadday_config',
+          promo_settings: currentPromos,
           updated_at: new Date().toISOString()
         });
       } else if (type === 'GALLERY_UPDATE') {
@@ -148,7 +160,12 @@ export async function fetchCloudConfigHistory() {
         saveStoredProducts(products);
         saveStoredBuffetGallery(gallery);
         saveStoredPizzaFlavors(flavors);
-        if (promos) saveStoredPromoSettings(promos);
+        if (promos) {
+          saveStoredPromoSettings(promos);
+          if (Array.isArray(promos.buffet_unavailable_items)) {
+            saveUnavailableBuffetItemIds(promos.buffet_unavailable_items);
+          }
+        }
         if (data.name) {
           const currentStore = getStoredRestaurantInfo();
           saveStoredRestaurantInfo({ ...currentStore, ...data });
@@ -253,7 +270,7 @@ export async function fetchCloudConfigHistory() {
 /**
  * Subscribe to real-time configuration events (changes made on PC push to phone live)
  */
-export function subscribeToConfigEvents({ onProductsUpdate, onGalleryUpdate, onPromosUpdate, onStoreUpdate, onPizzaFlavorsUpdate } = {}) {
+export function subscribeToConfigEvents({ onProductsUpdate, onGalleryUpdate, onPromosUpdate, onStoreUpdate, onPizzaFlavorsUpdate, onBuffetAvailabilityUpdate } = {}) {
   let eventSource = null;
   let isCleanedUp = false;
 
@@ -300,8 +317,15 @@ export function subscribeToConfigEvents({ onProductsUpdate, onGalleryUpdate, onP
             } else if (data.type === 'GALLERY_UPDATE' && Array.isArray(data.data)) {
               saveStoredBuffetGallery(data.data);
               if (onGalleryUpdate) onGalleryUpdate(data.data);
+            } else if (data.type === 'BUFFET_AVAILABILITY_UPDATE' && Array.isArray(data.data)) {
+              saveUnavailableBuffetItemIds(data.data);
+              if (onBuffetAvailabilityUpdate) onBuffetAvailabilityUpdate(data.data);
             } else if (data.type === 'PROMOS_UPDATE' && data.data) {
               saveStoredPromoSettings(data.data);
+              if (Array.isArray(data.data.buffet_unavailable_items)) {
+                saveUnavailableBuffetItemIds(data.data.buffet_unavailable_items);
+                if (onBuffetAvailabilityUpdate) onBuffetAvailabilityUpdate(data.data.buffet_unavailable_items);
+              }
               if (onPromosUpdate) onPromosUpdate(data.data);
             } else if (data.type === 'STORE_UPDATE' && data.data) {
               saveStoredRestaurantInfo(data.data);
@@ -336,6 +360,9 @@ export function subscribeToConfigEvents({ onProductsUpdate, onGalleryUpdate, onP
       if (onProductsUpdate) onProductsUpdate(data.data);
     } else if (data.type === 'GALLERY_UPDATE' && Array.isArray(data.data)) {
       if (onGalleryUpdate) onGalleryUpdate(data.data);
+    } else if (data.type === 'BUFFET_AVAILABILITY_UPDATE' && Array.isArray(data.data)) {
+      saveUnavailableBuffetItemIds(data.data);
+      if (onBuffetAvailabilityUpdate) onBuffetAvailabilityUpdate(data.data);
     } else if (data.type === 'PROMOS_UPDATE' && data.data) {
       if (onPromosUpdate) onPromosUpdate(data.data);
     } else if (data.type === 'STORE_UPDATE' && data.data) {

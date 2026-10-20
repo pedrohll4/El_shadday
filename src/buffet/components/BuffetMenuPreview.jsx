@@ -71,26 +71,39 @@ export function BuffetMenuPreview({ categories = [], onScrollToBuilder }) {
 
               {/* Items Cards Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {cat.items
-                  .filter(item => item.active !== false)
-                  .map(item => (
+                {cat.items.map(item => {
+                  const isUnavailable = item.active === false;
+                  return (
                     <div 
                       key={item.id}
-                      className="rounded-xl bg-[#15191F] border border-[#2E3744] hover:border-[#D8B85A]/50 p-4 transition-all duration-200 hover:-translate-y-0.5 group"
+                      className={`rounded-2xl p-4 transition-all duration-200 border ${
+                        isUnavailable
+                          ? 'bg-dark-950/60 border-rose-900/30 opacity-60'
+                          : 'bg-dark-900 border-dark-750 hover:border-brand-gold/50 hover:-translate-y-0.5 group'
+                      }`}
                     >
                       <div className="flex items-start justify-between gap-2">
-                        <h4 className="font-serif text-base font-bold text-slate-100 group-hover:text-[#E8D58A] transition-colors">
+                        <h4 className={`font-serif text-base font-bold transition-colors ${
+                          isUnavailable ? 'text-slate-400 line-through' : 'text-slate-100 group-hover:text-amber-200'
+                        }`}>
                           {item.name}
                         </h4>
-                        <div className="w-5 h-5 rounded-full bg-[#D8B85A]/10 flex items-center justify-center flex-shrink-0 text-[#D8B85A]">
-                          <Check className="w-3 h-3" />
-                        </div>
+                        {isUnavailable ? (
+                          <span className="text-[9px] font-black uppercase text-rose-300 bg-rose-500/15 px-1.5 py-0.5 rounded border border-rose-500/30">
+                            Esgotado
+                          </span>
+                        ) : (
+                          <div className="w-5 h-5 rounded-full bg-brand-gold/15 flex items-center justify-center flex-shrink-0 text-brand-gold">
+                            <Check className="w-3 h-3 stroke-[3]" />
+                          </div>
+                        )}
                       </div>
                       <p className="text-xs text-slate-400 mt-1 leading-relaxed">
                         {item.desc}
                       </p>
                     </div>
-                  ))}
+                  );
+                })}
               </div>
 
             </div>

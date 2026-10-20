@@ -190,14 +190,45 @@ export function saveStoredBuffetCompany(company) {
   }
 }
 
+// Helper to get unavailable buffet items list
+export function getUnavailableBuffetItemIds() {
+  try {
+    const saved = localStorage.getItem("el_shadday_buffet_unavailable_items");
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch (e) {}
+  return [];
+}
+
+export function saveUnavailableBuffetItemIds(itemIds) {
+  try {
+    const valid = Array.isArray(itemIds) ? itemIds : [];
+    localStorage.setItem("el_shadday_buffet_unavailable_items", JSON.stringify(valid));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent("buffet_unavailable_updated", { detail: valid }));
+    }
+  } catch (e) {
+    console.error("Error saving unavailable buffet item IDs:", e);
+  }
+}
+
 // Helper to get buffet categories & items with localStorage persistence
 export function getStoredBuffetCategories() {
+  const unavailIds = getUnavailableBuffetItemIds();
   try {
     const saved = localStorage.getItem("el_shadday_buffet_categories_v6");
     if (saved) {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
+        return parsed.map(cat => ({
+          ...cat,
+          items: (cat.items || []).map(item => ({
+            ...item,
+            active: unavailIds.includes(item.id) ? false : (item.active !== false)
+          }))
+        }));
       }
     }
     // Migration from v5 if present
@@ -208,15 +239,17 @@ export function getStoredBuffetCategories() {
         const upgraded = parsed.map(cat => ({
           ...cat,
           items: (cat.items || []).map(item => {
+            const isUnavail = unavailIds.includes(item.id);
             if (item.id === 'pp_churrasco_assados') {
               return {
                 ...item,
                 name: "Churrasco",
                 desc: "Assados na brasa (escolha: Carne, Frango, Toscana e Porco Assado)",
-                churrascoOptions: ["Carne", "Frango", "Toscana", "Porco Assado"]
+                churrascoOptions: ["Carne", "Frango", "Toscana", "Porco Assado"],
+                active: isUnavail ? false : (item.active !== false)
               };
             }
-            return item;
+            return { ...item, active: isUnavail ? false : (item.active !== false) };
           })
         }));
         saveStoredBuffetCategories(upgraded);
@@ -226,12 +259,36 @@ export function getStoredBuffetCategories() {
   } catch (e) {
     console.error("Error reading stored buffet categories:", e);
   }
-  return INITIAL_BUFFET_CATEGORIES;
+  return INITIAL_BUFFET_CATEGORIES.map(cat => ({
+    ...cat,
+    items: (cat.items || []).map(item => ({
+      ...item,
+      active: unavailIds.includes(item.id) ? false : (item.active !== false)
+    }))
+  }));
 }
 
 export function saveStoredBuffetCategories(categories) {
   try {
     localStorage.setItem("el_shadday_buffet_categories_v6", JSON.stringify(categories));
+    
+    // Also derive and sync unavailable item IDs
+    const unavail = [];
+    if (Array.isArray(categories)) {
+      categories.forEach(cat => {
+        (cat.items || []).forEach(item => {
+          if (item.active === false || item.isAvailable === false) {
+            unavail.push(item.id);
+          }
+        });
+      });
+      localStorage.setItem("el_shadday_buffet_unavailable_items", JSON.stringify(unavail));
+    }
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent("buffet_categories_updated", { detail: categories }));
+      window.dispatchEvent(new CustomEvent("buffet_unavailable_updated", { detail: unavail }));
+    }
   } catch (e) {
     console.error("Error saving buffet categories:", e);
   }

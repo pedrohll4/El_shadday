@@ -36,7 +36,11 @@ import {
   INITIAL_BUFFET_GALLERY, 
   getStoredBuffetGallery, 
   saveStoredBuffetGallery,
-  isFakeGalleryItem
+  isFakeGalleryItem,
+  getStoredBuffetCategories,
+  saveStoredBuffetCategories,
+  getUnavailableBuffetItemIds,
+  saveUnavailableBuffetItemIds
 } from '../buffet/buffetData';
 import { 
   supabase, 
@@ -1106,6 +1110,80 @@ export function AdminDashboard({
     triggerMenuToast('Todos os sabores de pizza foram removidos!');
   };
 
+  // Buffet Items Availability Management State
+  const [buffetCategories, setBuffetCategories] = useState(() => getStoredBuffetCategories());
+  const [unavailableBuffetIds, setUnavailableBuffetIds] = useState(() => getUnavailableBuffetItemIds());
+  const [buffetSearchQuery, setBuffetSearchQuery] = useState('');
+  const [buffetCategoryFilter, setBuffetCategoryFilter] = useState('all');
+
+  useEffect(() => {
+    const handleBuffetSync = () => {
+      setBuffetCategories(getStoredBuffetCategories());
+      setUnavailableBuffetIds(getUnavailableBuffetItemIds());
+    };
+    window.addEventListener('buffet_categories_updated', handleBuffetSync);
+    window.addEventListener('buffet_unavailable_updated', handleBuffetSync);
+    window.addEventListener('storage', handleBuffetSync);
+
+    return () => {
+      window.removeEventListener('buffet_categories_updated', handleBuffetSync);
+      window.removeEventListener('buffet_unavailable_updated', handleBuffetSync);
+      window.removeEventListener('storage', handleBuffetSync);
+    };
+  }, []);
+
+  const handleToggleBuffetItemAvailability = async (itemId) => {
+    const current = getUnavailableBuffetItemIds();
+    let next;
+    const targetItem = buffetCategories.flatMap(c => c.items || []).find(i => i.id === itemId);
+    const itemName = targetItem ? targetItem.name : 'Item';
+    
+    if (current.includes(itemId)) {
+      next = current.filter(id => id !== itemId);
+      triggerMenuToast(`"${itemName}" reativado no Buffet (Disponível)!`);
+    } else {
+      next = [...current, itemId];
+      triggerMenuToast(`"${itemName}" pausado no Buffet (Indisponível / Acabou)!`);
+    }
+    
+    saveUnavailableBuffetItemIds(next);
+    setUnavailableBuffetIds(next);
+    const updated = getStoredBuffetCategories();
+    setBuffetCategories(updated);
+
+    // Sync to Supabase & Cloud
+    await dispatchConfigSync('BUFFET_AVAILABILITY_UPDATE', next);
+  };
+
+  const handleResetAllBuffetItemsAvailable = async () => {
+    if (!window.confirm('Deseja marcar TODOS os itens do buffet como disponíveis?')) return;
+    saveUnavailableBuffetItemIds([]);
+    setUnavailableBuffetIds([]);
+    const updated = getStoredBuffetCategories();
+    setBuffetCategories(updated);
+    await dispatchConfigSync('BUFFET_AVAILABILITY_UPDATE', []);
+    triggerMenuToast('Todos os itens do Buffet foram reativados!');
+  };
+
+  // Filtered Buffet items
+  const filteredBuffetItems = useMemo(() => {
+    let cats = buffetCategories;
+    if (buffetCategoryFilter !== 'all') {
+      cats = cats.filter(c => c.id === buffetCategoryFilter);
+    }
+    return cats.map(cat => {
+      let items = cat.items || [];
+      if (buffetSearchQuery.trim()) {
+        const q = buffetSearchQuery.toLowerCase().trim();
+        items = items.filter(i => (i.name || '').toLowerCase().includes(q) || (i.desc || '').toLowerCase().includes(q));
+      }
+      return {
+        ...cat,
+        items
+      };
+    }).filter(cat => cat.items.length > 0);
+  }, [buffetCategories, buffetCategoryFilter, buffetSearchQuery]);
+
   // Filtered Pizza Flavors in Admin
   const filteredAdminFlavors = useMemo(() => {
     let list = pizzaFlavors;
@@ -1923,6 +2001,34 @@ export function AdminDashboard({
               </button>
             )}
 
+            {/* BUFFET DISPONIBILIDADE (APENAS ARIQUEMES) */}
+            {currentBranch?.id === 'ariquemes' && (currentUser?.role === ROLES.SUPER_ADMIN || currentUser?.branchId === 'ariquemes') && (
+              <button
+                type="button"
+                onClick={() => setActiveAdminTab('buffet')}
+                className={`px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+                  activeAdminTab === 'buffet'
+                    ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
+                    : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
+                }`}
+                title="Controlar disponibilidade dos pratos do Buffet (pausar se acabar na cozinha)"
+              >
+                <Utensils className="w-4 h-4" />
+                <span>Buffet (Pratos)</span>
+                {unavailableBuffetIds.length > 0 ? (
+                  <span className="text-[10px] px-1.5 py-0.2 rounded-full font-black bg-rose-500 text-white animate-pulse">
+                    ⛔ {unavailableBuffetIds.length} pausados
+                  </span>
+                ) : (
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                    activeAdminTab === 'buffet' ? 'bg-dark-950 text-brand-gold' : 'bg-dark-900 text-slate-400'
+                  }`}>
+                    Ativo
+                  </span>
+                )}
+              </button>
+            )}
+
             {/* GALERIA BUFFET (APENAS ARIQUEMES) */}
             {currentBranch?.id === 'ariquemes' && (currentUser?.role === ROLES.SUPER_ADMIN || currentUser?.branchId === 'ariquemes') && (
               <button
@@ -2049,8 +2155,24 @@ export function AdminDashboard({
                 )}
               </div>
 
-              {/* WhatsApp Quick Status & Auto-Notify */}
+              {/* WhatsApp Quick Status & Auto-Notify & Buffet Pause Shortcut */}
               <div className="flex items-center gap-2">
+                {currentBranch?.id === 'ariquemes' && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveAdminTab('buffet')}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-brand-gold text-xs font-bold transition-colors cursor-pointer"
+                    title="Acessar controle de pratos que acabaram no Buffet"
+                  >
+                    <Utensils className="w-3.5 h-3.5" />
+                    <span>Buffet: Pausar Pratos</span>
+                    {unavailableBuffetIds.length > 0 && (
+                      <span className="px-1.5 py-0.2 rounded-full bg-rose-500 text-white font-black text-[10px]">
+                        {unavailableBuffetIds.length} pausados
+                      </span>
+                    )}
+                  </button>
+                )}
                 {currentUser?.role !== ROLES.KITCHEN ? (
                   <button
                     type="button"
@@ -4444,6 +4566,254 @@ export function AdminDashboard({
 
             </div>
 
+          </div>
+        )}
+
+        {/* ============================================================== */}
+        {/* VIEW: BUFFET ITEM AVAILABILITY MANAGEMENT (DISPONIBILIDADE)    */}
+        {/* ============================================================== */}
+        {activeAdminTab === 'buffet' && currentUser?.role !== ROLES.KITCHEN && (currentBranch?.id === 'ariquemes' || currentUser?.role === ROLES.SUPER_ADMIN) && (
+          <div className="space-y-6 animate-fade-in">
+            <div className="bg-dark-900 border border-dark-800 rounded-3xl p-5 sm:p-7 shadow-xl">
+              
+              {/* Top Title & Quick Actions */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-5 border-b border-dark-800">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-2xl bg-brand-gold/20 flex items-center justify-center text-brand-gold border border-brand-gold/30">
+                    <Utensils className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h2 className="font-display font-extrabold text-base sm:text-lg text-white flex items-center gap-2">
+                      <span>Cardápio do Buffet: Pausar e Reativar Pratos</span>
+                      {unavailableBuffetIds.length > 0 && (
+                        <span className="text-xs px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 font-bold">
+                          {unavailableBuffetIds.length} pausado(s)
+                        </span>
+                      )}
+                    </h2>
+                    <p className="text-xs text-slate-400">
+                      Acabou algum prato ou assado na cozinha? Clique para deixá-lo indisponível no site com 1 toque.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  {unavailableBuffetIds.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleResetAllBuffetItemsAvailable}
+                      className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 text-xs font-bold transition-all cursor-pointer shadow-sm active:scale-95"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      <span>Reativar Todos os Pratos</span>
+                    </button>
+                  )}
+                  {onSwitchToBuffet && (
+                    <button
+                      type="button"
+                      onClick={onSwitchToBuffet}
+                      className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-dark-800 hover:bg-dark-750 text-slate-200 border border-dark-700 text-xs font-bold transition-all cursor-pointer"
+                    >
+                      <Eye className="w-3.5 h-3.5 text-brand-gold" />
+                      <span>Ver Buffet no Site</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Toast Feedback */}
+              {menuFeedback && (
+                <div className="mb-4 p-3 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-bold flex items-center gap-2 animate-fadeIn">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                  <span>{menuFeedback}</span>
+                </div>
+              )}
+
+              {/* Status summary cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+                <div className="p-3.5 rounded-2xl bg-dark-950 border border-dark-800 flex items-center justify-between">
+                  <div>
+                    <span className="text-[11px] text-slate-400 font-medium">Total de Pratos Cadastrados</span>
+                    <p className="text-lg font-black text-white">
+                      {buffetCategories.reduce((acc, c) => acc + (c.items || []).length, 0)} itens
+                    </p>
+                  </div>
+                  <div className="w-8 h-8 rounded-xl bg-dark-900 border border-dark-750 flex items-center justify-center text-slate-300">
+                    <Utensils className="w-4 h-4" />
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-dark-950 border border-dark-800 flex items-center justify-between">
+                  <div>
+                    <span className="text-[11px] text-slate-400 font-medium">Disponíveis no Cardápio</span>
+                    <p className="text-lg font-black text-emerald-400">
+                      {buffetCategories.reduce((acc, c) => acc + (c.items || []).filter(i => !unavailableBuffetIds.includes(i.id)).length, 0)} disponíveis
+                    </p>
+                  </div>
+                  <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                    <CheckCircle2 className="w-4 h-4" />
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-dark-950 border border-dark-800 flex items-center justify-between">
+                  <div>
+                    <span className="text-[11px] text-slate-400 font-medium">Pausados (Acabou na Cozinha)</span>
+                    <p className="text-lg font-black text-rose-400">
+                      {unavailableBuffetIds.length} pausados
+                    </p>
+                  </div>
+                  <div className="w-8 h-8 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400">
+                    <AlertTriangle className="w-4 h-4" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Filters & Search */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 mb-6">
+                {/* Search */}
+                <div className="relative flex-1 max-w-md">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={buffetSearchQuery}
+                    onChange={(e) => setBuffetSearchQuery(e.target.value)}
+                    placeholder="Buscar prato... ex: Strogonoff, Peito, Salgadinho..."
+                    className="w-full pl-9 pr-8 py-2.5 rounded-xl bg-dark-950 border border-dark-800 focus:border-brand-gold text-xs text-white placeholder-slate-500 focus:outline-none transition-colors"
+                  />
+                  {buffetSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setBuffetSearchQuery('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-xs"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Category tabs */}
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setBuffetCategoryFilter('all')}
+                    className={`px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition-colors cursor-pointer ${
+                      buffetCategoryFilter === 'all'
+                        ? 'bg-brand-gold text-dark-950 font-black'
+                        : 'bg-dark-950 text-slate-400 hover:text-white border border-dark-800'
+                    }`}
+                  >
+                    Todas ({buffetCategories.reduce((acc, c) => acc + (c.items || []).length, 0)})
+                  </button>
+                  {buffetCategories.map(cat => {
+                    const isCatActive = buffetCategoryFilter === cat.id;
+                    const catCount = (cat.items || []).length;
+                    const unavailInCat = (cat.items || []).filter(i => unavailableBuffetIds.includes(i.id)).length;
+                    return (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => setBuffetCategoryFilter(cat.id)}
+                        className={`px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition-colors cursor-pointer flex items-center gap-1.5 ${
+                          isCatActive
+                            ? 'bg-brand-gold text-dark-950 font-black'
+                            : 'bg-dark-950 text-slate-400 hover:text-white border border-dark-800'
+                        }`}
+                      >
+                        <span>{cat.name}</span>
+                        {unavailInCat > 0 && (
+                          <span className="w-2 h-2 rounded-full bg-rose-500" title={`${unavailInCat} pausado(s)`} />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Items List grouped by category */}
+              <div className="space-y-6">
+                {filteredBuffetItems.map(category => (
+                  <div key={category.id} className="p-4 sm:p-5 rounded-2xl bg-dark-950 border border-dark-800/90 shadow-sm">
+                    <div className="flex items-center justify-between pb-3 mb-4 border-b border-dark-800">
+                      <div>
+                        <h3 className="font-serif text-sm sm:text-base font-bold text-white flex items-center gap-2">
+                          <span className="text-brand-gold">👑</span>
+                          <span>{category.name}</span>
+                          <span className="text-xs text-slate-400 font-sans font-normal">
+                            ({category.items.length} {category.items.length === 1 ? 'item' : 'itens'})
+                          </span>
+                        </h3>
+                        {category.description && (
+                          <p className="text-xs text-slate-400 mt-0.5">{category.description}</p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {category.items.map(item => {
+                        const isUnavailable = unavailableBuffetIds.includes(item.id) || item.active === false;
+                        return (
+                          <div
+                            key={item.id}
+                            className={`p-3.5 rounded-xl border transition-all flex flex-col justify-between gap-3 ${
+                              isUnavailable
+                                ? 'bg-dark-900/40 border-rose-900/40 opacity-80'
+                                : 'bg-dark-900 border-dark-800 hover:border-brand-gold/40'
+                            }`}
+                          >
+                            <div>
+                              <div className="flex items-start justify-between gap-2">
+                                <h4 className={`text-xs sm:text-sm font-bold ${
+                                  isUnavailable ? 'text-slate-400 line-through' : 'text-white'
+                                }`}>
+                                  {item.name}
+                                </h4>
+                                {isUnavailable ? (
+                                  <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-rose-500/20 text-rose-300 border border-rose-500/30 whitespace-nowrap">
+                                    ⛔ Acabou
+                                  </span>
+                                ) : (
+                                  <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 whitespace-nowrap">
+                                    🟢 Ativo
+                                  </span>
+                                )}
+                              </div>
+                              {item.desc && (
+                                <p className="text-[11px] text-slate-400 mt-1 line-clamp-2">
+                                  {item.desc}
+                                </p>
+                              )}
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => handleToggleBuffetItemAvailability(item.id)}
+                              className={`w-full py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-95 ${
+                                isUnavailable
+                                  ? 'bg-emerald-500 hover:bg-emerald-400 text-dark-950 font-black shadow-sm'
+                                  : 'bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 hover:border-rose-500/50'
+                              }`}
+                            >
+                              {isUnavailable ? (
+                                <>
+                                  <Check className="w-3.5 h-3.5 stroke-[3]" />
+                                  <span>Reativar no Buffet (Disponível)</span>
+                                </>
+                              ) : (
+                                <>
+                                  <X className="w-3.5 h-3.5" />
+                                  <span>Pausar Prato (Acabou na Cozinha)</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+            </div>
           </div>
         )}
 

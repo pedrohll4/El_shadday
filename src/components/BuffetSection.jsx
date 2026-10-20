@@ -10,7 +10,8 @@ import {
   Flame,
   Sparkles,
   Play,
-  Film
+  Film,
+  X
 } from 'lucide-react';
 import { ElShaddayLogo } from '../buffet/components/ElShaddayLogo';
 import { 
@@ -21,17 +22,53 @@ import {
   INITIAL_BUFFET_GALLERY,
   getStoredBuffetGallery,
   saveStoredBuffetGallery,
-  isFakeGalleryItem
+  isFakeGalleryItem,
+  getStoredBuffetCategories,
+  getUnavailableBuffetItemIds
 } from '../buffet/buffetData';
 import { supabase, isSupabaseConfigured } from '../services/supabaseClient';
 import { isVideoUrl, getVideoPosterUrl } from '../utils/imageCompressor';
 
 export function BuffetSection({ onExploreFullBuffet }) {
+  // Dynamic categories state (allows admin to manage & disable items)
+  const [categories, setCategories] = useState(() => getStoredBuffetCategories());
+  const [unavailableItemIds, setUnavailableItemIds] = useState(() => getUnavailableBuffetItemIds());
+
+  // Listen to live category & unavailability updates across devices
+  useEffect(() => {
+    const handleBuffetSync = () => {
+      const freshCats = getStoredBuffetCategories();
+      const freshUnavail = getUnavailableBuffetItemIds();
+      setCategories(freshCats);
+      setUnavailableItemIds(freshUnavail);
+
+      // Auto-prune any unavailable items from the client's current selection
+      setSelectedItemIds(prev => prev.filter(id => !freshUnavail.includes(id)));
+    };
+
+    window.addEventListener('buffet_categories_updated', handleBuffetSync);
+    window.addEventListener('buffet_unavailable_updated', handleBuffetSync);
+    window.addEventListener('storage', handleBuffetSync);
+
+    return () => {
+      window.removeEventListener('buffet_categories_updated', handleBuffetSync);
+      window.removeEventListener('buffet_unavailable_updated', handleBuffetSync);
+      window.removeEventListener('storage', handleBuffetSync);
+    };
+  }, []);
+
   // Selected item IDs array
   const [selectedItemIds, setSelectedItemIds] = useState(() => {
     try {
       const saved = localStorage.getItem('el_shadday_selected_items');
-      return saved ? JSON.parse(saved) : [];
+      const unavail = getUnavailableBuffetItemIds();
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.filter(id => !unavail.includes(id));
+        }
+      }
+      return [];
     } catch (e) {
       return [];
     }
@@ -186,8 +223,13 @@ export function BuffetSection({ onExploreFullBuffet }) {
 
   const [formError, setFormError] = useState('');
 
-  // Toggle item selection
+  // Toggle item selection (respects item availability)
   const handleToggleItem = (itemId) => {
+    // Prevent selecting unavailable items
+    if (unavailableItemIds.includes(itemId)) {
+      return;
+    }
+
     setSelectedItemIds(prev => {
       const isRemoving = prev.includes(itemId);
       const updated = isRemoving
@@ -207,22 +249,25 @@ export function BuffetSection({ onExploreFullBuffet }) {
     });
   };
 
-  // Select all or clear items in a category
+  // Select all or clear items in a category (only affects available items)
   const handleToggleCategory = (categoryId) => {
-    const cat = INITIAL_BUFFET_CATEGORIES.find(c => c.id === categoryId);
+    const cat = categories.find(c => c.id === categoryId);
     if (!cat) return;
-    const catItemIds = cat.items.map(i => i.id);
-    const isAllSelected = catItemIds.every(id => selectedItemIds.includes(id));
+    const availableItems = cat.items.filter(i => i.active !== false && !unavailableItemIds.includes(i.id));
+    const availableIds = availableItems.map(i => i.id);
+    if (availableIds.length === 0) return;
+
+    const isAllSelected = availableIds.every(id => selectedItemIds.includes(id));
 
     setSelectedItemIds(prev => {
       let updated;
       if (isAllSelected) {
-        // Unselect all in this category
-        const setIds = new Set(catItemIds);
+        // Unselect all available items in this category
+        const setIds = new Set(availableIds);
         updated = prev.filter(id => !setIds.has(id));
       } else {
-        // Select all in this category
-        updated = Array.from(new Set([...prev, ...catItemIds]));
+        // Select all available items in this category
+        updated = Array.from(new Set([...prev, ...availableIds]));
       }
 
       try {
@@ -236,8 +281,8 @@ export function BuffetSection({ onExploreFullBuffet }) {
   // Group selected items by category in correct gastronomic order
   const selectedGrouped = useMemo(() => {
     const groups = [];
-    INITIAL_BUFFET_CATEGORIES.forEach(cat => {
-      const matched = cat.items.filter(item => selectedItemIds.includes(item.id));
+    categories.forEach(cat => {
+      const matched = cat.items.filter(item => selectedItemIds.includes(item.id) && item.active !== false && !unavailableItemIds.includes(item.id));
       if (matched.length > 0) {
         groups.push({
           categoryName: cat.name,
@@ -247,7 +292,7 @@ export function BuffetSection({ onExploreFullBuffet }) {
       }
     });
     return groups;
-  }, [selectedItemIds]);
+  }, [categories, selectedItemIds, unavailableItemIds]);
 
   // Submit quote request directly via WhatsApp
   const handleSubmitQuote = (e) => {
@@ -303,7 +348,7 @@ export function BuffetSection({ onExploreFullBuffet }) {
   };
 
   return (
-    <section id="buffet-section" className="relative py-12 sm:py-20 bg-[#0E1218] border-t border-[#262F3D] text-slate-100">
+    <section id="buffet-section" className="relative py-12 sm:py-20 bg-dark-950 border-t border-dark-800 text-slate-100">
       
       <div className="max-w-4xl mx-auto px-3 sm:px-6 relative">
         
@@ -313,7 +358,7 @@ export function BuffetSection({ onExploreFullBuffet }) {
             <ElShaddayLogo size="md" variant="horizontal" />
           </div>
 
-          <span className="text-[11px] font-bold uppercase tracking-[0.25em] text-[#D8B85A] block mb-1">
+          <span className="text-[11px] font-bold uppercase tracking-[0.25em] text-brand-gold block mb-1">
             Serviços de Buffet
           </span>
 
@@ -326,9 +371,9 @@ export function BuffetSection({ onExploreFullBuffet }) {
           </p>
         </div>
 
-        {/* 2. Banner de Itens Inclusos (Clean, sem poluição) */}
-        <div className="mb-8 rounded-2xl bg-[#151B24] border border-[#D8B85A]/40 p-4 sm:p-5 text-center shadow-lg">
-          <span className="text-[10px] sm:text-[11px] uppercase font-bold tracking-[0.2em] text-[#D8B85A] block mb-1">
+        {/* 2. Banner de Itens Inclusos (Padronizado com o Design Token do Site) */}
+        <div className="mb-8 rounded-3xl bg-dark-900 border border-brand-gold/30 p-4 sm:p-5 text-center shadow-xl">
+          <span className="text-[10px] sm:text-[11px] uppercase font-bold tracking-[0.2em] text-brand-gold block mb-1">
             Estrutura Completa de Alto Padrão
           </span>
           <h3 className="font-serif text-sm sm:text-base font-bold text-white">
@@ -339,9 +384,9 @@ export function BuffetSection({ onExploreFullBuffet }) {
           </p>
 
           {onExploreFullBuffet && (
-            <div className="mt-4 pt-3 border-t border-[#D8B85A]/20 flex flex-col sm:flex-row items-center justify-between gap-3 text-left">
+            <div className="mt-4 pt-3 border-t border-dark-750 flex flex-col sm:flex-row items-center justify-between gap-3 text-left">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-[#D8B85A]/15 text-[#D8B85A] flex items-center justify-center flex-shrink-0 border border-[#D8B85A]/30">
+                <div className="w-8 h-8 rounded-xl bg-brand-gold/15 text-brand-gold flex items-center justify-center flex-shrink-0 border border-brand-gold/30">
                   <Camera className="w-4 h-4" />
                 </div>
                 <div>
@@ -353,10 +398,10 @@ export function BuffetSection({ onExploreFullBuffet }) {
               <button
                 type="button"
                 onClick={onExploreFullBuffet}
-                className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#D8B85A] to-[#E8D58A] hover:opacity-95 text-[#15191F] font-black text-xs flex items-center justify-center gap-2 transition-all shadow-md hover:scale-[1.02] active:scale-[0.98] cursor-pointer whitespace-nowrap"
+                className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-gradient-to-r from-brand-gold via-amber-400 to-brand-gold hover:brightness-110 active:scale-95 text-dark-950 font-black text-xs flex items-center justify-center gap-2 transition-all shadow-glow-gold cursor-pointer whitespace-nowrap"
               >
                 <span>Ver Apresentação Completa</span>
-                <ArrowRight className="w-3.5 h-3.5" />
+                <ArrowRight className="w-3.5 h-3.5 stroke-[2.5]" />
               </button>
             </div>
           )}
@@ -370,21 +415,22 @@ export function BuffetSection({ onExploreFullBuffet }) {
             5. Bebidas
         */}
         <div className="space-y-6">
-          {INITIAL_BUFFET_CATEGORIES.map((category, index) => {
-            const countInCat = category.items.filter(i => selectedItemIds.includes(i.id)).length;
-            const isAllSelected = countInCat === category.items.length;
+          {categories.map((category, index) => {
+            const availableItems = category.items.filter(i => i.active !== false && !unavailableItemIds.includes(i.id));
+            const countInCat = availableItems.filter(i => selectedItemIds.includes(i.id)).length;
+            const isAllSelected = availableItems.length > 0 && availableItems.every(i => selectedItemIds.includes(i.id));
 
             return (
               <div 
                 key={category.id}
-                className="rounded-2xl bg-[#151B24] border border-[#232B36] p-4 sm:p-5 shadow-sm"
+                className="rounded-3xl bg-dark-900 border border-dark-750/90 p-4 sm:p-5 shadow-lg"
               >
                 
                 {/* Header da Categoria */}
-                <div className="flex items-center justify-between pb-3 mb-3 border-b border-[#232B36]">
+                <div className="flex items-center justify-between pb-3 mb-3 border-b border-dark-800">
                   <div>
                     <h3 className="font-serif text-base sm:text-lg font-bold text-white flex items-center gap-2">
-                      <span className="text-[#D8B85A] text-xs sm:text-sm font-sans font-bold">
+                      <span className="text-brand-gold text-xs sm:text-sm font-sans font-bold">
                         0{index + 1}.
                       </span>
                       <span>{category.name}</span>
@@ -395,34 +441,61 @@ export function BuffetSection({ onExploreFullBuffet }) {
                     </span>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => handleToggleCategory(category.id)}
-                    className="text-[11px] font-bold text-[#D8B85A] hover:text-[#E8D58A] px-2.5 py-1 rounded-lg bg-[#0E1218] border border-[#262F3D] hover:border-[#D8B85A]/50 transition-colors cursor-pointer"
-                  >
-                    {isAllSelected ? 'Desmarcar todos' : 'Marcar todos'}
-                  </button>
+                  {availableItems.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => handleToggleCategory(category.id)}
+                      className="text-[11px] font-bold text-brand-gold hover:text-amber-300 px-3 py-1.5 rounded-xl bg-dark-950 border border-dark-750 hover:border-brand-gold/40 transition-all cursor-pointer"
+                    >
+                      {isAllSelected ? 'Desmarcar todos' : 'Marcar todos'}
+                    </button>
+                  )}
                 </div>
 
                 {/* Grid de Itens: Compacto, limpo e bem dimensionado no celular */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   {category.items.map(item => {
-                    const isSelected = selectedItemIds.includes(item.id);
+                    const isUnavailable = item.active === false || item.isAvailable === false || unavailableItemIds.includes(item.id);
+                    const isSelected = !isUnavailable && selectedItemIds.includes(item.id);
                     const isChurrasco = item.id === 'pp_churrasco_assados';
+
+                    // Item Indisponível / Esgotado Temporariamente
+                    if (isUnavailable) {
+                      return (
+                        <div
+                          key={item.id}
+                          className="w-full min-h-[48px] px-3.5 py-2.5 rounded-xl text-left flex items-center gap-3 select-none border bg-dark-950/60 border-rose-900/30 opacity-60 cursor-not-allowed"
+                          title="Item temporariamente esgotado na cozinha."
+                        >
+                          <div className="w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 bg-dark-900 border border-dark-800 text-slate-600">
+                            <X className="w-3.5 h-3.5" />
+                          </div>
+
+                          <div className="flex-1 min-w-0 flex items-center justify-between gap-2">
+                            <span className="text-xs sm:text-sm font-medium text-slate-400 line-through truncate">
+                              {item.name}
+                            </span>
+                            <span className="flex-shrink-0 text-[10px] font-extrabold text-rose-300 bg-rose-500/15 px-2 py-0.5 rounded-md border border-rose-500/30 flex items-center gap-1">
+                              ⛔ Indisponível (Acabou)
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    }
 
                     if (isChurrasco && isSelected) {
                       return (
                         <div
                           key={item.id}
-                          className="col-span-1 sm:col-span-2 rounded-xl bg-gradient-to-br from-[#1E2530] to-[#151B24] border-2 border-[#D8B85A] p-3.5 sm:p-4 shadow-lg transition-all animate-fadeIn"
+                          className="col-span-1 sm:col-span-2 rounded-2xl bg-gradient-to-br from-dark-850 to-dark-900 border-2 border-brand-gold p-3.5 sm:p-4 shadow-[0_0_20px_rgba(216,184,90,0.22)] transition-all animate-fadeIn"
                         >
                           {/* Topo do card de churrasco selecionado */}
                           <div 
                             onClick={() => handleToggleItem(item.id)}
-                            className="flex items-center justify-between gap-3 cursor-pointer select-none pb-2.5 border-b border-[#2E3744]"
+                            className="flex items-center justify-between gap-3 cursor-pointer select-none pb-2.5 border-b border-dark-750"
                           >
                             <div className="flex items-center gap-3">
-                              <div className="w-5 h-5 rounded-md bg-[#D8B85A] text-[#0E1218] flex items-center justify-center flex-shrink-0">
+                              <div className="w-5 h-5 rounded-md bg-brand-gold text-dark-950 flex items-center justify-center flex-shrink-0 font-black shadow-sm">
                                 <Check className="w-3.5 h-3.5 stroke-[3]" />
                               </div>
                               <div>
@@ -434,7 +507,7 @@ export function BuffetSection({ onExploreFullBuffet }) {
                                     Assados na Brasa
                                   </span>
                                 </div>
-                                <p className="text-[11px] text-[#E8D58A] mt-0.5 font-medium">
+                                <p className="text-[11px] text-amber-200 mt-0.5 font-medium">
                                   {selectedChurrascoMeats.length > 0 
                                     ? `Opções selecionadas: ${formatMeatList(selectedChurrascoMeats)}`
                                     : 'Escolha abaixo quais opções deseja incluir:'
@@ -458,8 +531,8 @@ export function BuffetSection({ onExploreFullBuffet }) {
                           {/* Seleção das carnes: Carne, Frango, Toscana e Porco Assado */}
                           <div className="mt-3">
                             <div className="flex items-center justify-between mb-2">
-                              <span className="text-[11px] sm:text-xs uppercase tracking-wider font-bold text-[#E8D58A] flex items-center gap-1.5">
-                                <Flame className="w-3.5 h-3.5 text-[#D8B85A]" />
+                              <span className="text-[11px] sm:text-xs uppercase tracking-wider font-bold text-amber-200 flex items-center gap-1.5">
+                                <Flame className="w-3.5 h-3.5 text-brand-gold" />
                                 <span>Escolha se vai querer:</span>
                               </span>
                               <span className="text-[10px] text-slate-400">
@@ -478,21 +551,21 @@ export function BuffetSection({ onExploreFullBuffet }) {
                                       e.stopPropagation();
                                       handleToggleChurrascoMeat(opt.label);
                                     }}
-                                    className={`py-2 px-2.5 sm:px-3 rounded-lg text-left transition-all flex items-center gap-2 cursor-pointer border ${
+                                    className={`py-2 px-2.5 sm:px-3 rounded-xl text-left transition-all flex items-center gap-2 cursor-pointer border ${
                                       isMeatSelected
-                                        ? 'bg-[#D8B85A]/15 border-[#D8B85A] text-white shadow-sm'
-                                        : 'bg-[#0E1218]/90 hover:bg-[#0E1218] border-[#2A3442] text-slate-400'
+                                        ? 'bg-brand-gold/15 border-brand-gold text-white font-bold shadow-sm'
+                                        : 'bg-dark-950 hover:bg-dark-900 border-dark-750 text-slate-400'
                                     }`}
                                   >
                                     <div className={`w-4 h-4 rounded flex items-center justify-center flex-shrink-0 transition-colors ${
                                       isMeatSelected
-                                        ? 'bg-[#D8B85A] text-[#0E1218]'
-                                        : 'border border-slate-600 bg-transparent text-transparent'
+                                        ? 'bg-brand-gold text-dark-950 font-black'
+                                        : 'border border-dark-700 bg-transparent text-transparent'
                                     }`}>
                                       <Check className="w-3 h-3 stroke-[3]" />
                                     </div>
                                     <span className="text-sm">{opt.icon}</span>
-                                    <span className={`text-xs font-semibold truncate ${
+                                    <span className={`text-xs truncate ${
                                       isMeatSelected ? 'text-white font-bold' : 'text-slate-300'
                                     }`}>
                                       {opt.label}
@@ -517,17 +590,17 @@ export function BuffetSection({ onExploreFullBuffet }) {
                         key={item.id}
                         type="button"
                         onClick={() => handleToggleItem(item.id)}
-                        className={`w-full min-h-[46px] px-3.5 py-2.5 rounded-xl text-left transition-all flex items-center gap-3 cursor-pointer select-none border ${
+                        className={`w-full min-h-[48px] px-3.5 py-2.5 rounded-xl text-left transition-all duration-200 flex items-center gap-3 cursor-pointer select-none border active:scale-[0.99] ${
                           isSelected
-                            ? 'bg-[#1E2530] border-[#D8B85A] text-white shadow-sm'
-                            : 'bg-[#0E1218]/80 hover:bg-[#0E1218] border-[#202732] hover:border-slate-600 text-slate-300'
+                            ? 'bg-dark-850 border-2 border-brand-gold text-white shadow-[0_0_15px_rgba(216,184,90,0.2)]'
+                            : 'bg-dark-950/70 hover:bg-dark-900 border-dark-750 hover:border-brand-gold/40 text-slate-300'
                         }`}
                       >
                         {/* Checkbox limpo */}
-                        <div className={`w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 transition-colors ${
+                        <div className={`w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 transition-all ${
                           isSelected
-                            ? 'bg-[#D8B85A] text-[#0E1218]'
-                            : 'border border-slate-600 bg-transparent text-transparent'
+                            ? 'bg-gradient-to-br from-brand-gold to-amber-500 text-dark-950 shadow-sm font-black'
+                            : 'border border-dark-700 bg-dark-900 text-transparent'
                         }`}>
                           <Check className="w-3.5 h-3.5 stroke-[3]" />
                         </div>
@@ -564,9 +637,9 @@ export function BuffetSection({ onExploreFullBuffet }) {
         </div>
 
         {/* 4. Fotos do Buffet em Destaque Rotativo (Muda Sozinho sem Virar Testão) */}
-        <div className="mt-10 rounded-2xl bg-[#151B24] border border-[#232B36] p-4 sm:p-6 text-center">
+        <div className="mt-10 rounded-3xl bg-dark-900 border border-dark-750 p-4 sm:p-6 text-center shadow-lg">
           <div className="flex items-center justify-between gap-2 mb-3">
-            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#D8B85A]">
+            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-brand-gold">
               <Camera className="w-4 h-4" />
               <span>Fotos do Buffet em Ação</span>
             </div>
@@ -575,7 +648,7 @@ export function BuffetSection({ onExploreFullBuffet }) {
               <button
                 type="button"
                 onClick={onExploreFullBuffet}
-                className="text-xs text-[#D8B85A] hover:text-[#E8D58A] font-semibold inline-flex items-center gap-1 cursor-pointer hover:underline"
+                className="text-xs text-brand-gold hover:text-amber-200 font-semibold inline-flex items-center gap-1 cursor-pointer hover:underline"
               >
                 <span>Ver todas no carrossel</span>
                 <ChevronRight className="w-3.5 h-3.5" />
@@ -604,7 +677,7 @@ export function BuffetSection({ onExploreFullBuffet }) {
                   <div 
                     key={photo.id || offset}
                     onClick={onExploreFullBuffet}
-                    className="group relative h-40 sm:h-44 rounded-xl overflow-hidden bg-[#0E1218] border border-[#2E3744] hover:border-[#D8B85A] transition-all cursor-pointer shadow-md"
+                    className="group relative h-40 sm:h-44 rounded-2xl overflow-hidden bg-dark-950 border border-dark-750 hover:border-brand-gold transition-all cursor-pointer shadow-md"
                   >
                     {isVid ? (
                       <div className="w-full h-full relative bg-black flex items-center justify-center">
@@ -641,16 +714,16 @@ export function BuffetSection({ onExploreFullBuffet }) {
                         loading="lazy"
                       />
                     )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#0E1218] via-transparent to-transparent pointer-events-none" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-dark-950 via-transparent to-transparent pointer-events-none" />
                     
-                    <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-[#0E1218]/85 text-[#E8D58A] border border-[#D8B85A]/30 text-[9px] font-bold uppercase">
+                    <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-dark-950/85 text-brand-gold-light border border-brand-gold/30 text-[9px] font-bold uppercase">
                       {photo.tag || 'Buffet'}
                     </span>
 
                     <div className="absolute bottom-2 left-2 right-2 text-left pointer-events-none">
                       <div className="flex items-center gap-1">
                         {isVid && <Film className="w-3 h-3 text-amber-400 flex-shrink-0" />}
-                        <h5 className="font-serif text-xs font-bold text-white truncate group-hover:text-[#E8D58A]">
+                        <h5 className="font-serif text-xs font-bold text-white truncate group-hover:text-amber-200">
                           {photo.title}
                         </h5>
                       </div>
@@ -663,7 +736,7 @@ export function BuffetSection({ onExploreFullBuffet }) {
               })}
             </div>
           ) : (
-            <div className="mt-4 p-6 rounded-2xl bg-[#0E1218] border border-[#2E3744] text-center text-xs text-slate-400">
+            <div className="mt-4 p-6 rounded-2xl bg-dark-950 border border-dark-750 text-center text-xs text-slate-400">
               Galeria em atualização • Fotos e vídeos reais dos nossos eventos disponíveis no WhatsApp!
             </div>
           )}
@@ -671,10 +744,10 @@ export function BuffetSection({ onExploreFullBuffet }) {
           {galleryPhotos && galleryPhotos.length > 0 && (
             <div className="mt-3.5 flex items-center justify-between text-[11px] text-slate-400">
               <span className="flex items-center gap-1.5 text-slate-300">
-                <Sparkles className="w-3.5 h-3.5 text-[#D8B85A]" />
+                <Sparkles className="w-3.5 h-3.5 text-brand-gold" />
                 <span>Fotos e vídeos reais que mudam automaticamente a cada 3,5s</span>
               </span>
-              <span className="font-mono text-[#D8B85A] text-[10px] font-semibold">
+              <span className="font-mono text-brand-gold text-[10px] font-semibold">
                 Foto {((galleryIndex % galleryPhotos.length) + 1)} de {galleryPhotos.length}
               </span>
             </div>
@@ -682,10 +755,10 @@ export function BuffetSection({ onExploreFullBuffet }) {
         </div>
 
         {/* 5. Formulário de Orçamento Direto no WhatsApp */}
-        <div id="buffet-orcamento-form" className="mt-8 rounded-2xl bg-[#151B24] border border-[#D8B85A]/40 p-4 sm:p-7 shadow-xl">
+        <div id="buffet-orcamento-form" className="mt-8 rounded-3xl bg-dark-900 border border-brand-gold/40 p-4 sm:p-7 shadow-xl">
           
           <div className="text-center mb-6">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-[#D8B85A] block mb-1">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-brand-gold block mb-1">
               Solicitar Proposta
             </span>
             <h3 className="font-serif text-xl sm:text-2xl font-bold text-white">
@@ -715,7 +788,7 @@ export function BuffetSection({ onExploreFullBuffet }) {
                   placeholder="Nome completo"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full h-11 px-3.5 rounded-xl bg-[#0E1218] border border-[#232B36] focus:border-[#D8B85A] text-white text-xs sm:text-sm placeholder-slate-400 focus:outline-none transition-colors"
+                  className="w-full h-11 px-3.5 rounded-xl bg-dark-950 border border-dark-750 focus:border-brand-gold text-white text-xs sm:text-sm placeholder-slate-500 focus:outline-none transition-colors"
                   required
                 />
               </div>
@@ -729,7 +802,7 @@ export function BuffetSection({ onExploreFullBuffet }) {
                   placeholder="(69) 99999-9999"
                   value={formData.phone}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  className="w-full h-11 px-3.5 rounded-xl bg-[#0E1218] border border-[#232B36] focus:border-[#D8B85A] text-white text-xs sm:text-sm placeholder-slate-400 focus:outline-none transition-colors"
+                  className="w-full h-11 px-3.5 rounded-xl bg-dark-950 border border-dark-750 focus:border-brand-gold text-white text-xs sm:text-sm placeholder-slate-500 focus:outline-none transition-colors"
                   required
                 />
               </div>
@@ -743,10 +816,10 @@ export function BuffetSection({ onExploreFullBuffet }) {
                 <select
                   value={formData.eventType}
                   onChange={(e) => setFormData({ ...formData, eventType: e.target.value })}
-                  className="w-full h-11 px-3.5 rounded-xl bg-[#0E1218] border border-[#232B36] focus:border-[#D8B85A] text-white text-xs sm:text-sm focus:outline-none transition-colors"
+                  className="w-full h-11 px-3.5 rounded-xl bg-dark-950 border border-dark-750 focus:border-brand-gold text-white text-xs sm:text-sm focus:outline-none transition-colors"
                 >
                   {INITIAL_EVENT_TYPES.map((type) => (
-                    <option key={type} value={type} className="bg-[#0E1218] text-white">
+                    <option key={type} value={type} className="bg-dark-950 text-white">
                       {type}
                     </option>
                   ))}
@@ -762,7 +835,7 @@ export function BuffetSection({ onExploreFullBuffet }) {
                   placeholder="Ex: 100 convidados"
                   value={formData.guestCount}
                   onChange={(e) => setFormData({ ...formData, guestCount: e.target.value })}
-                  className="w-full h-11 px-3.5 rounded-xl bg-[#0E1218] border border-[#232B36] focus:border-[#D8B85A] text-white text-xs sm:text-sm placeholder-slate-400 focus:outline-none transition-colors"
+                  className="w-full h-11 px-3.5 rounded-xl bg-dark-950 border border-dark-750 focus:border-brand-gold text-white text-xs sm:text-sm placeholder-slate-500 focus:outline-none transition-colors"
                 />
               </div>
 
@@ -774,7 +847,7 @@ export function BuffetSection({ onExploreFullBuffet }) {
                   type="date"
                   value={formData.eventDate}
                   onChange={(e) => setFormData({ ...formData, eventDate: e.target.value })}
-                  className="w-full h-11 px-3.5 rounded-xl bg-[#0E1218] border border-[#232B36] focus:border-[#D8B85A] text-white text-xs sm:text-sm focus:outline-none transition-colors"
+                  className="w-full h-11 px-3.5 rounded-xl bg-dark-950 border border-dark-750 focus:border-brand-gold text-white text-xs sm:text-sm focus:outline-none transition-colors"
                 />
               </div>
             </div>
@@ -788,14 +861,14 @@ export function BuffetSection({ onExploreFullBuffet }) {
                 placeholder="Local do evento ou alguma preferência específica..."
                 value={formData.notes}
                 onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                className="w-full p-3 rounded-xl bg-[#0E1218] border border-[#232B36] focus:border-[#D8B85A] text-white text-xs sm:text-sm placeholder-slate-400 focus:outline-none transition-colors resize-none"
+                className="w-full p-3 rounded-xl bg-dark-950 border border-dark-750 focus:border-brand-gold text-white text-xs sm:text-sm placeholder-slate-500 focus:outline-none transition-colors resize-none"
               ></textarea>
             </div>
 
             {/* Botão de Envio WhatsApp */}
             <button
               type="submit"
-              className="w-full h-13 py-3.5 px-5 rounded-xl bg-[#25D366] hover:bg-[#20BD5A] active:bg-[#1DA850] text-[#0E1218] font-bold text-sm sm:text-base flex items-center justify-center gap-2.5 transition-colors cursor-pointer shadow-md"
+              className="w-full h-13 py-3.5 px-5 rounded-xl bg-[#25D366] hover:bg-[#20BD5A] active:bg-[#1DA850] text-dark-950 font-black text-sm sm:text-base flex items-center justify-center gap-2.5 transition-colors cursor-pointer shadow-md"
             >
               <MessageCircle className="w-5 h-5 fill-current" />
               <span>
@@ -811,13 +884,13 @@ export function BuffetSection({ onExploreFullBuffet }) {
                 <button
                   type="button"
                   onClick={onExploreFullBuffet}
-                  className="w-full py-3.5 px-5 rounded-xl bg-gradient-to-r from-[#D8B85A] via-[#E8D58A] to-[#D8B85A] hover:from-[#E8D58A] hover:to-[#D8B85A] text-[#15191F] font-black text-sm sm:text-base flex items-center justify-center gap-2.5 transition-all shadow-[0_4px_20px_rgba(216,184,90,0.35)] hover:shadow-[0_6px_28px_rgba(216,184,90,0.5)] hover:scale-[1.01] active:scale-[0.99] cursor-pointer group"
+                  className="w-full py-3.5 px-5 rounded-2xl bg-gradient-to-r from-brand-gold via-amber-400 to-brand-gold hover:brightness-110 text-dark-950 font-black text-sm sm:text-base flex items-center justify-center gap-2.5 transition-all shadow-glow-gold hover:scale-[1.01] active:scale-[0.99] cursor-pointer group"
                 >
-                  <Sparkles className="w-5 h-5 text-[#15191F] group-hover:rotate-12 transition-transform" />
+                  <Sparkles className="w-5 h-5 text-dark-950 group-hover:rotate-12 transition-transform" />
                   <span className="uppercase tracking-wide">👑 Ver Apresentação Completa do Buffet</span>
-                  <ArrowRight className="w-5 h-5 text-[#15191F] group-hover:translate-x-1.5 transition-transform" />
+                  <ArrowRight className="w-5 h-5 text-dark-950 group-hover:translate-x-1.5 transition-transform" />
                 </button>
-                <p className="text-center text-[11px] sm:text-xs text-[#E8D58A] mt-2 font-medium">
+                <p className="text-center text-[11px] sm:text-xs text-amber-200 mt-2 font-medium">
                   ✨ Conheça fotos em alta resolução, vídeos de eventos reais e toda nossa estrutura!
                 </p>
               </div>
@@ -836,9 +909,9 @@ export function BuffetSection({ onExploreFullBuffet }) {
       {/* 6. Barra Flutuante Mobile Discreta (quando há itens selecionados) */}
       {selectedItemIds.length > 0 && (
         <div className="sm:hidden fixed bottom-4 left-3 right-3 z-40 animate-fadeIn">
-          <div className="bg-[#151B24]/95 backdrop-blur-md border border-[#D8B85A]/50 rounded-2xl p-3 shadow-2xl flex items-center justify-between gap-2">
+          <div className="bg-dark-900/95 backdrop-blur-md border border-brand-gold/50 rounded-2xl p-3 shadow-2xl flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <span className="w-7 h-7 rounded-lg bg-[#D8B85A] text-[#0E1218] font-bold text-xs flex items-center justify-center">
+              <span className="w-7 h-7 rounded-lg bg-brand-gold text-dark-950 font-black text-xs flex items-center justify-center shadow-sm">
                 {selectedItemIds.length}
               </span>
               <span className="text-xs font-semibold text-white">
@@ -848,10 +921,10 @@ export function BuffetSection({ onExploreFullBuffet }) {
 
             <a
               href="#buffet-orcamento-form"
-              className="px-3.5 py-2 rounded-xl bg-[#25D366] text-[#0E1218] text-xs font-bold flex items-center gap-1 cursor-pointer"
+              className="px-3.5 py-2 rounded-xl bg-[#25D366] text-dark-950 text-xs font-black flex items-center gap-1 cursor-pointer shadow-sm active:scale-95"
             >
               <span>Orçamento</span>
-              <ChevronRight className="w-4 h-4" />
+              <ChevronRight className="w-4 h-4 stroke-[3]" />
             </a>
           </div>
         </div>
