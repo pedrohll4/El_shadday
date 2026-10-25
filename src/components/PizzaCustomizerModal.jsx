@@ -46,10 +46,19 @@ export function PizzaCustomizerModal({ isOpen, onClose, pizzaProduct, onAddPizza
     return flavorsList.filter(f => f.isAvailable !== false);
   }, [flavorsList]);
 
-  // Categorias disponíveis dinamicamente
+  // Categorias disponíveis dinamicamente ordenadas
   const availableCategories = useMemo(() => {
     const set = new Set(availableFlavors.map(f => f.category || 'salgadas'));
-    return Array.from(set);
+    const order = ['salgadas', 'especiais', 'doces'];
+    const arr = Array.from(set);
+    return arr.sort((a, b) => {
+      const idxA = order.indexOf(a);
+      const idxB = order.indexOf(b);
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      return a.localeCompare(b);
+    });
   }, [availableFlavors]);
 
   // Filtragem de sabores
@@ -69,15 +78,20 @@ export function PizzaCustomizerModal({ isOpen, onClose, pizzaProduct, onAddPizza
     return calculatePizzaPrice(basePrice, selectedFlavors);
   }, [basePrice, selectedFlavors]);
 
-  // Identifica o sabor de maior valor selecionado
+  // Identifica o sabor de maior valor selecionado que causa acréscimo
   const highestPricedFlavor = useMemo(() => {
     if (!selectedFlavors || selectedFlavors.length === 0) return null;
-    return selectedFlavors.reduce((max, f) => (!max || f.price > max.price) ? f : max, null);
-  }, [selectedFlavors]);
+    return selectedFlavors.reduce((max, f) => {
+      const isStandard = Number(f.price) <= 40 && f.category !== 'especiais';
+      const effPrice = isStandard ? basePrice : (Number(f.price) || 0);
+      const maxEffPrice = max ? ((Number(max.price) <= 40 && max.category !== 'especiais') ? basePrice : (Number(max.price) || 0)) : 0;
+      return effPrice > maxEffPrice ? f : max;
+    }, null);
+  }, [selectedFlavors, basePrice]);
 
   // Verifica se o preço final subiu acima da base da pizza
   const isPriceUpgraded = Boolean(
-    highestPricedFlavor && Number(highestPricedFlavor.price) > basePrice
+    calculatedPrice > basePrice
   );
 
   if (!isOpen || !pizzaProduct) return null;
@@ -112,9 +126,9 @@ export function PizzaCustomizerModal({ isOpen, onClose, pizzaProduct, onAddPizza
       flavorDetails: selectedFlavors,
       highestFlavor: highestPricedFlavor,
       notes: notes.trim(),
-      bordaGratis: true,
+      bordaGratis: Boolean(pizzaProduct.bordaGratis),
       image: pizzaProduct.image,
-      description: `Sabores: ${flavorNames.join(' e ')}. Acompanha borda de Catupiry grátis.${upgradeText}${notes ? ` Obs: ${notes}` : ''}`
+      description: `Sabores: ${flavorNames.join(' e ')}.${pizzaProduct.bordaGratis ? ' Acompanha borda de Catupiry grátis.' : ''}${upgradeText}${notes ? ` Obs: ${notes}` : ''}`
     };
 
     onAddPizzaToCart(customPizza);
@@ -155,10 +169,12 @@ export function PizzaCustomizerModal({ isOpen, onClose, pizzaProduct, onAddPizza
         </div>
 
         {/* Borda Grátis Banner */}
-        <div className="bg-gradient-to-r from-amber-500/20 via-brand-gold/25 to-amber-500/20 border-b border-brand-gold/30 px-4 py-2 flex items-center justify-center gap-2 text-xs font-bold text-brand-goldLight">
-          <Sparkles className="w-4 h-4 text-brand-gold animate-pulse" />
-          <span>Borda Recheada de Catupiry 100% GRÁTIS Inclusa!</span>
-        </div>
+        {pizzaProduct.bordaGratis && (
+          <div className="bg-gradient-to-r from-amber-500/20 via-brand-gold/25 to-amber-500/20 border-b border-brand-gold/30 px-4 py-2 flex items-center justify-center gap-2 text-xs font-bold text-brand-goldLight">
+            <Sparkles className="w-4 h-4 text-brand-gold animate-pulse" />
+            <span>Borda Recheada de Catupiry 100% GRÁTIS Inclusa!</span>
+          </div>
+        )}
 
         {/* Pricing Notice */}
         <div className="bg-dark-950/80 px-4 py-2 border-b border-dark-800 flex items-center gap-2 text-[11px] text-slate-300">
@@ -195,7 +211,7 @@ export function PizzaCustomizerModal({ isOpen, onClose, pizzaProduct, onAddPizza
               Todos ({availableFlavors.length})
             </button>
             {availableCategories.map(cat => {
-              const label = cat === 'salgadas' ? 'Salgadas' : cat === 'especiais' ? 'Especiais / Nobres' : cat === 'doces' ? 'Doces' : cat;
+              const label = cat === 'salgadas' ? 'Salgadas 🧀' : cat === 'especiais' ? 'Especiais ⭐' : cat === 'doces' ? 'Doces 🍫' : cat;
               return (
                 <button
                   key={cat}
@@ -224,8 +240,10 @@ export function PizzaCustomizerModal({ isOpen, onClose, pizzaProduct, onAddPizza
             filteredFlavors.map((flavor) => {
               const isSelected = selectedFlavors.some(f => f.id === flavor.id || f.name === flavor.name);
               const isDisabled = !isSelected && selectedFlavors.length >= maxFlavors;
-              const flavorPrice = Number(flavor.price) || 0;
-              const isFlavorMoreExpensive = flavorPrice > basePrice;
+              const rawFlavorPrice = Number(flavor.price) || 0;
+              const isStandard = rawFlavorPrice <= 40 && flavor.category !== 'especiais';
+              const effectivePrice = isStandard ? basePrice : rawFlavorPrice;
+              const isFlavorMoreExpensive = effectivePrice > basePrice;
 
               return (
                 <button
@@ -267,18 +285,26 @@ export function PizzaCustomizerModal({ isOpen, onClose, pizzaProduct, onAddPizza
 
                     {/* Preço do Sabor */}
                     <div className="mt-1 flex items-center gap-2">
-                      <span className="text-xs font-black text-brand-gold">
-                        R$ {flavorPrice.toFixed(2).replace('.', ',')}
-                      </span>
-                      {isFlavorMoreExpensive ? (
-                        <span className="inline-flex items-center gap-0.5 text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold">
-                          <ArrowUpRight className="w-3 h-3 text-amber-400" />
-                          <span>Puxa p/ R$ {flavorPrice.toFixed(2).replace('.', ',')}</span>
+                      {isStandard ? (
+                        <span className="text-[10px] text-emerald-400 font-semibold">
+                          Incluso no tamanho (Sem acréscimo)
                         </span>
                       ) : (
-                        <span className="text-[10px] text-emerald-400 font-semibold">
-                          (Sem acréscimo)
-                        </span>
+                        <>
+                          <span className="text-xs font-black text-brand-gold">
+                            R$ {rawFlavorPrice.toFixed(2).replace('.', ',')}
+                          </span>
+                          {isFlavorMoreExpensive ? (
+                            <span className="inline-flex items-center gap-0.5 text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold">
+                              <ArrowUpRight className="w-3 h-3 text-amber-400" />
+                              <span>Puxa p/ R$ {rawFlavorPrice.toFixed(2).replace('.', ',')}</span>
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-emerald-400 font-semibold">
+                              (Sem acréscimo)
+                            </span>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>

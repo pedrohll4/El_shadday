@@ -532,13 +532,39 @@ export const PRODUCTS = [
   },
 
   // ==========================================
-  // PIZZAS (4 ITENS)
+  // PIZZAS ESPECIAIS (POR TAMANHO: P, M, FAMÍLIA, GIGANTE)
   // ==========================================
+  {
+    id: "pizza-p",
+    categoryId: "pizzas",
+    name: "Pizza Pequena P (4 Fatias - até 2 Sabores)",
+    description: "Pizza tamanho P com 4 fatias. Escolha até 2 sabores à sua escolha (salgados, especiais ou doces). Acompanha BORDA DE CATUPIRY GRÁTIS!",
+    price: 20.00,
+    badge: "Borda Grátis 🧀",
+    bordaGratis: true,
+    isPizzaCustomizer: true,
+    tamanho: "Pequena (4 fatias)",
+    maxSabores: 2,
+    image: "https://assets.olaclick.app/companies/products/images/800/c89d7ac9-5a31-4384-8b87-9a08d78edf71.png"
+  },
+  {
+    id: "pizza-m",
+    categoryId: "pizzas",
+    name: "Pizza Média M (6 Fatias - até 2 Sabores)",
+    description: "Pizza tamanho M com 6 fatias. Escolha até 2 sabores à sua escolha (salgados, especiais ou doces). Acompanha BORDA DE CATUPIRY GRÁTIS!",
+    price: 30.00,
+    badge: "Borda Grátis 🧀",
+    bordaGratis: true,
+    isPizzaCustomizer: true,
+    tamanho: "Média (6 fatias)",
+    maxSabores: 2,
+    image: "https://assets.olaclick.app/companies/products/images/800/dadb6a0e-498b-4d67-8b61-dc4759f1a9fc.jpeg"
+  },
   {
     id: "pizza-familia-salgada",
     categoryId: "pizzas",
     name: "Pizza Família (8 Fatias - até 2 Sabores)",
-    description: "Menu de Pizzas, selecione dois sabores que desejar. Valor base de R$ 40,00 (pode variar com sabores especiais). Vai com BORDA DE CATUPIRY GRÁTIS!",
+    description: "Pizza grande tamanho família com 8 fatias. Selecione até 2 sabores à sua escolha (salgados, especiais ou doces). Acompanha BORDA DE CATUPIRY GRÁTIS!",
     price: 40.00,
     badge: "Borda Grátis 🧀",
     bordaGratis: true,
@@ -551,7 +577,7 @@ export const PRODUCTS = [
     id: "pizza-gigante-salgada",
     categoryId: "pizzas",
     name: "Pizza Gigante (12 Fatias - até 3 Sabores)",
-    description: "Menu de Pizzas, selecione três sabores que desejar. Valor base de R$ 50,00 (pode variar com sabores especiais). Vai com BORDA DE CATUPIRY GRÁTIS!",
+    description: "Nossa maior pizza com 12 fatias fartas! Selecione até 3 sabores à sua escolha (salgados, especiais ou doces). Acompanha BORDA DE CATUPIRY GRÁTIS!",
     price: 50.00,
     badge: "Borda Grátis 🧀",
     bordaGratis: true,
@@ -559,30 +585,6 @@ export const PRODUCTS = [
     tamanho: "Gigante (12 fatias)",
     maxSabores: 3,
     image: "https://assets.olaclick.app/companies/products/images/800/1ecaf28b-a823-4aeb-8dff-a779c79204a9.png"
-  },
-  {
-    id: "pizza-doce-1sabor",
-    categoryId: "pizzas",
-    name: "Pizzas Doces (1 Sabor)",
-    description: "Cardápio de pizzas doces com massa crocante e recheio generoso. Escolha a opção desejada (1 sabor).",
-    price: 13.00,
-    variants: [
-      { name: "Família (8 fatias)", price: 13.00 },
-      { name: "Gigante (12 fatias)", price: 23.00 }
-    ],
-    image: "https://assets.olaclick.app/companies/products/images/800/b04b0953-8414-4284-aa40-0b323143fc97.png"
-  },
-  {
-    id: "pizza-doce-2-3-sabores",
-    categoryId: "pizzas",
-    name: "Pizzas Doces (2 ou 3 Sabores)",
-    description: "Cardápio de pizzas doces, monte com 2 ou 3 sabores à sua escolha para saborear o melhor da El Shadday.",
-    price: 23.00,
-    variants: [
-      { name: "Família (8 fatias)", price: 23.00 },
-      { name: "Gigante (12 fatias)", price: 33.00 }
-    ],
-    image: "https://assets.olaclick.app/companies/products/images/800/92c9d90d-851c-4044-8ba3-e460c12b5c36.png"
   },
 
   // ==========================================
@@ -898,6 +900,78 @@ export const INITIAL_PIZZA_FLAVORS = [
     category: "especiais",
     description: "Lombo especial com cebola, ovos, azeitonas selecionadas e muçarela.",
     isAvailable: true
+  },
+  {
+    id: "brigadeiro-gourmet",
+    name: "Brigadeiro com Granulado Nobre",
+    price: 40.00,
+    category: "doces",
+    description: "Chocolate ao leite cremoso nobre, granulado de puro cacau e leve toque suave de queijo.",
+    isAvailable: true
+  },
+  {
+    id: "banana-canela",
+    name: "Banana com Canela e Leite Condensado",
+    price: 40.00,
+    category: "doces",
+    description: "Fatias de banana fresca, leite condensado cremoso artesanal, muçarela derretida e canela em pó perfumada.",
+    isAvailable: true
+  },
+  {
+    id: "romeu-julieta",
+    name: "Romeu e Julieta Nobre",
+    price: 40.00,
+    category: "doces",
+    description: "Goiabada cascão cremosa derretida harmonizada com bastante queijo muçarela especial.",
+    isAvailable: true
+  },
+  {
+    id: "prestigio-gourmet",
+    name: "Prestígio com Coco Ralado",
+    price: 40.00,
+    category: "doces",
+    description: "Chocolate ao leite nobre cremoso com flocos úmidos de coco ralado selecionado e queijo muçarela.",
+    isAvailable: true
+  },
+  {
+    id: "chocolate-morango",
+    name: "Sensação (Chocolate com Morango)",
+    price: 40.00,
+    category: "doces",
+    description: "Generoso chocolate nobre ao leite com pedaços frescos e suculentos de morango.",
+    isAvailable: true
+  },
+  {
+    id: "chocolate-branco",
+    name: "Chocolate Branco Cremoso",
+    price: 40.00,
+    category: "doces",
+    description: "Puro chocolate branco nobre derretido, amanteigado, aveludado e irresistível.",
+    isAvailable: true
+  },
+  {
+    id: "banana-nevada",
+    name: "Banana Nevada com Chocolate Branco",
+    price: 40.00,
+    category: "doces",
+    description: "Fatias de banana fresca, chocolate branco nobre derretido, queijo e canela suave.",
+    isAvailable: true
+  },
+  {
+    id: "confete-mm",
+    name: "Confete M&M Colorido",
+    price: 40.00,
+    category: "doces",
+    description: "Chocolate ao leite nobre cremoso com confeitos crocantes e coloridos de chocolate.",
+    isAvailable: true
+  },
+  {
+    id: "doce-leite-pacoca",
+    name: "Doce de Leite com Paçoca",
+    price: 40.00,
+    category: "doces",
+    description: "Doce de leite artesanal aveludado e farofa generosa de paçoca de amendoim torrado.",
+    isAvailable: true
   }
 ];
 
@@ -913,13 +987,68 @@ export const DEFAULT_PROMO_SETTINGS = {
   minOrderValueForCoupon: 50.00
 };
 
+export function normalizeProductsList(prods) {
+  if (!Array.isArray(prods) || prods.length === 0) return PRODUCTS;
+  // Se contiver os itens legados de pizzas doces separadas ou faltar pizza-p, migra a fatia de pizzas
+  const hasLegacyDoces = prods.some(p => p.id === 'pizza-doce-1sabor' || p.id === 'pizza-doce-2-3-sabores');
+  const lacksPizzaP = !prods.some(p => p.id === 'pizza-p');
+  if (hasLegacyDoces || lacksPizzaP) {
+    const nonPizza = prods.filter(p => p.categoryId !== 'pizzas' && p.id !== 'pizza-doce-1sabor' && p.id !== 'pizza-doce-2-3-sabores' && p.id !== 'pizza-familia-salgada' && p.id !== 'pizza-gigante-salgada');
+    const defaultPizzas = PRODUCTS.filter(p => p.categoryId === 'pizzas');
+    return [...nonPizza, ...defaultPizzas];
+  }
+  return prods;
+}
+
+export function normalizePizzaFlavors(flavors) {
+  if (!Array.isArray(flavors) || flavors.length === 0) return INITIAL_PIZZA_FLAVORS;
+  const hasDoces = flavors.some(f => f.category === 'doces');
+  let normalized = flavors.map((item, idx) => {
+    if (typeof item === 'string') {
+      return {
+        id: `flavor-${item.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
+        name: item,
+        price: 40.00,
+        category: 'salgadas',
+        description: '',
+        isAvailable: true
+      };
+    }
+    return {
+      id: item.id || `flavor-${Date.now()}-${idx}`,
+      name: item.name || '',
+      price: typeof item.price === 'number' ? item.price : (parseFloat(item.price) || 40.00),
+      category: item.category || 'salgadas',
+      description: item.description || '',
+      isAvailable: item.isAvailable !== false
+    };
+  });
+
+  if (!hasDoces) {
+    const docesFlavors = INITIAL_PIZZA_FLAVORS.filter(f => f.category === 'doces');
+    normalized = [...normalized, ...docesFlavors];
+  }
+  return normalized;
+}
+
 export function getStoredProducts() {
   try {
-    const saved = localStorage.getItem("el_shadday_delivery_products_v2");
+    const saved = localStorage.getItem("el_shadday_delivery_products_v3");
     if (saved !== null) {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
+        return normalizeProductsList(parsed);
+      }
+    }
+
+    const savedV2 = localStorage.getItem("el_shadday_delivery_products_v2");
+    if (savedV2 !== null) {
+      const parsedV2 = JSON.parse(savedV2);
+      if (Array.isArray(parsedV2) && parsedV2.length > 0) {
+        const migrated = normalizeProductsList(parsedV2);
+        localStorage.setItem("el_shadday_delivery_products_v3", JSON.stringify(migrated));
+        localStorage.setItem("el_shadday_delivery_products_v2", JSON.stringify(migrated));
+        return migrated;
       }
     }
   } catch (e) {
@@ -930,6 +1059,7 @@ export function getStoredProducts() {
 
 export function saveStoredProducts(products) {
   try {
+    localStorage.setItem("el_shadday_delivery_products_v3", JSON.stringify(products));
     localStorage.setItem("el_shadday_delivery_products_v2", JSON.stringify(products));
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent("delivery_products_updated", { detail: products }));
@@ -1003,30 +1133,22 @@ export function saveStoredRestaurantInfo(info) {
 
 export function getStoredPizzaFlavors() {
   try {
-    const saved = localStorage.getItem("el_shadday_pizza_flavors_v2");
+    const saved = localStorage.getItem("el_shadday_pizza_flavors_v3");
     if (saved !== null) {
       const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0 && parsed.some(f => f.category === 'doces')) {
+        return normalizePizzaFlavors(parsed);
+      }
+    }
+
+    const savedV2 = localStorage.getItem("el_shadday_pizza_flavors_v2");
+    if (savedV2 !== null) {
+      const parsed = JSON.parse(savedV2);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed.map((item, idx) => {
-          if (typeof item === 'string') {
-            return {
-              id: `flavor-${item.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
-              name: item,
-              price: 40.00,
-              category: 'salgadas',
-              description: '',
-              isAvailable: true
-            };
-          }
-          return {
-            id: item.id || `flavor-${Date.now()}-${idx}`,
-            name: item.name || '',
-            price: typeof item.price === 'number' ? item.price : (parseFloat(item.price) || 40.00),
-            category: item.category || 'salgadas',
-            description: item.description || '',
-            isAvailable: item.isAvailable !== false
-          };
-        });
+        const normalized = normalizePizzaFlavors(parsed);
+        localStorage.setItem("el_shadday_pizza_flavors_v3", JSON.stringify(normalized));
+        localStorage.setItem("el_shadday_pizza_flavors_v2", JSON.stringify(normalized));
+        return normalized;
       }
     }
   } catch (e) {
@@ -1037,6 +1159,7 @@ export function getStoredPizzaFlavors() {
 
 export function saveStoredPizzaFlavors(flavors) {
   try {
+    localStorage.setItem("el_shadday_pizza_flavors_v3", JSON.stringify(flavors));
     localStorage.setItem("el_shadday_pizza_flavors_v2", JSON.stringify(flavors));
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent("pizza_flavors_updated", { detail: flavors }));
@@ -1048,8 +1171,8 @@ export function saveStoredPizzaFlavors(flavors) {
 
 /**
  * Regra de cálculo de Pizza por Sabor (Regra do Estabelecimento):
- * - Se os sabores tiverem preço igual ou inferior ao preço base da pizza, mantém o preço base.
- * - Se algum sabor escolhido for maior que o preço base, puxa para o MAIOR valor entre os sabores escolhidos.
+ * - Sabores tradicionais (salgadas ou doces padrão até R$ 40) são inclusos no valor base do tamanho escolhido (P, M, Família ou Gigante).
+ * - Se algum sabor escolhido for especial/gourmet ou tiver valor superior ao preço base da pizza, puxa para o MAIOR valor entre os sabores escolhidos.
  */
 export function calculatePizzaPrice(basePrice, selectedFlavors) {
   const base = Number(basePrice) || 0;
@@ -1059,12 +1182,15 @@ export function calculatePizzaPrice(basePrice, selectedFlavors) {
   
   const flavorPrices = selectedFlavors.map(f => {
     if (!f) return 0;
-    if (typeof f === 'object') {
-      return Number(f.price) || 0;
+    const flavorObj = typeof f === 'object' ? f : getStoredPizzaFlavors().find(s => s.name === f);
+    if (!flavorObj) return 0;
+    
+    const price = Number(flavorObj.price) || 0;
+    // Sabores tradicionais (salgados e doces padrão com valor base) são inclusos no valor base de qualquer tamanho
+    if (price <= 40 && flavorObj.category !== 'especiais') {
+      return base;
     }
-    const stored = getStoredPizzaFlavors();
-    const found = stored.find(s => s.name === f);
-    return found ? (Number(found.price) || 0) : 0;
+    return price;
   });
 
   const maxFlavorPrice = Math.max(0, ...flavorPrices);

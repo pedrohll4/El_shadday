@@ -12,7 +12,9 @@ import {
   saveStoredPromoSettings,
   getStoredRestaurantInfo,
   saveStoredRestaurantInfo,
-  saveStoredPizzaFlavors
+  saveStoredPizzaFlavors,
+  normalizeProductsList,
+  normalizePizzaFlavors
 } from './data/menuData';
 import { saveStoredBuffetGallery, isFakeGalleryItem, saveUnavailableBuffetItemIds } from './buffet/buffetData';
 import { supabase, isSupabaseConfigured } from './services/supabaseClient';
@@ -285,12 +287,14 @@ export default function App() {
               syncGalleryFromSupabase();
             }
             if (Array.isArray(data.menu_products) && data.menu_products.length > 0) {
-              setProducts(data.menu_products);
-              saveStoredProducts(data.menu_products);
+              const normProds = normalizeProductsList(data.menu_products);
+              setProducts(normProds);
+              saveStoredProducts(normProds);
             }
             if (Array.isArray(data.pizza_flavors)) {
-              saveStoredPizzaFlavors(data.pizza_flavors);
-              window.dispatchEvent(new CustomEvent("pizza_flavors_updated", { detail: data.pizza_flavors }));
+              const normFlavors = normalizePizzaFlavors(data.pizza_flavors);
+              saveStoredPizzaFlavors(normFlavors);
+              window.dispatchEvent(new CustomEvent("pizza_flavors_updated", { detail: normFlavors }));
             }
             if (data.promo_settings && typeof data.promo_settings === 'object' && Object.keys(data.promo_settings).length > 0) {
               setPromoSettings(data.promo_settings);
@@ -333,12 +337,14 @@ export default function App() {
               window.dispatchEvent(new CustomEvent("buffet_gallery_updated", { detail: cleanGal }));
             }
             if (Array.isArray(freshData.menu_products) && freshData.menu_products.length > 0) {
-              setProducts(freshData.menu_products);
-              saveStoredProducts(freshData.menu_products);
+              const normProds = normalizeProductsList(freshData.menu_products);
+              setProducts(normProds);
+              saveStoredProducts(normProds);
             }
             if (Array.isArray(freshData.pizza_flavors)) {
-              saveStoredPizzaFlavors(freshData.pizza_flavors);
-              window.dispatchEvent(new CustomEvent("pizza_flavors_updated", { detail: freshData.pizza_flavors }));
+              const normFlavors = normalizePizzaFlavors(freshData.pizza_flavors);
+              saveStoredPizzaFlavors(normFlavors);
+              window.dispatchEvent(new CustomEvent("pizza_flavors_updated", { detail: normFlavors }));
             }
             if (freshData.promo_settings) {
               setPromoSettings(freshData.promo_settings);
@@ -355,23 +361,25 @@ export default function App() {
     // Hydrate from Global Cloud Pub/Sub (Cross-device instant sync)
     fetchCloudConfigHistory().then((cloudCfg) => {
       if (cloudCfg) {
-        if (Array.isArray(cloudCfg.products)) setProducts(cloudCfg.products);
+        if (Array.isArray(cloudCfg.products)) setProducts(normalizeProductsList(cloudCfg.products));
         if (cloudCfg.promos) setPromoSettings(cloudCfg.promos);
         if (cloudCfg.store) setRestaurantInfo(cloudCfg.store);
         if (Array.isArray(cloudCfg.flavors)) {
-          saveStoredPizzaFlavors(cloudCfg.flavors);
-          window.dispatchEvent(new CustomEvent("pizza_flavors_updated", { detail: cloudCfg.flavors }));
+          const normFlavors = normalizePizzaFlavors(cloudCfg.flavors);
+          saveStoredPizzaFlavors(normFlavors);
+          window.dispatchEvent(new CustomEvent("pizza_flavors_updated", { detail: normFlavors }));
         }
       }
     });
 
     // Real-time live subscription across devices
     const unsubscribeConfig = subscribeToConfigEvents({
-      onProductsUpdate: (prods) => setProducts(prods),
+      onProductsUpdate: (prods) => setProducts(normalizeProductsList(prods)),
       onPromosUpdate: (promos) => setPromoSettings(promos),
       onStoreUpdate: (store) => setRestaurantInfo(store),
       onPizzaFlavorsUpdate: (flavors) => {
-        window.dispatchEvent(new CustomEvent("pizza_flavors_updated", { detail: flavors }));
+        const normFlavors = normalizePizzaFlavors(flavors);
+        window.dispatchEvent(new CustomEvent("pizza_flavors_updated", { detail: normFlavors }));
       }
     });
 
@@ -1094,11 +1102,16 @@ export default function App() {
                           <h3 className="text-lg sm:text-xl font-display font-extrabold text-white tracking-tight">
                             {cat.name}
                           </h3>
-                          {cat.tag && (
-                            <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-brand-gold/15 text-brand-goldLight border border-brand-gold/30">
-                              {cat.tag}
-                            </span>
-                          )}
+                          {(() => {
+                            const displayTag = cat.id === 'pizzas'
+                              ? (categoryProducts.some(p => p.bordaGratis) ? 'Borda de Catupiry Grátis!' : null)
+                              : cat.tag;
+                            return displayTag ? (
+                              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-brand-gold/15 text-brand-goldLight border border-brand-gold/30">
+                                {displayTag}
+                              </span>
+                            ) : null;
+                          })()}
                         </div>
                         <p className="text-xs text-slate-400 mt-0.5">
                           {categoryProducts.length} {categoryProducts.length === 1 ? 'delícia disponível' : 'delícias disponíveis'}

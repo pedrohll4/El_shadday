@@ -28,7 +28,9 @@ import {
   saveStoredPizzaFlavors,
   calculatePizzaPrice,
   calculateCardMachineFee,
-  getCardMachineNoticeText
+  getCardMachineNoticeText,
+  normalizeProductsList,
+  normalizePizzaFlavors
 } from '../data/menuData';
 import { PizzaCustomizerModal } from './PizzaCustomizerModal';
 import { 
@@ -645,16 +647,18 @@ export function AdminDashboard({
         .then(({ data, error }) => {
           if (!error && data) {
             if (Array.isArray(data.menu_products)) {
-              setProductsList(data.menu_products);
-              saveStoredProducts(data.menu_products);
+              const normProds = normalizeProductsList(data.menu_products);
+              setProductsList(normProds);
+              saveStoredProducts(normProds);
             }
             if (data.promo_settings && typeof data.promo_settings === 'object' && Object.keys(data.promo_settings).length > 0) {
               setPromoSettings(data.promo_settings);
               saveStoredPromoSettings(data.promo_settings);
             }
             if (Array.isArray(data.pizza_flavors)) {
-              setPizzaFlavors(data.pizza_flavors);
-              saveStoredPizzaFlavors(data.pizza_flavors);
+              const normFlavors = normalizePizzaFlavors(data.pizza_flavors);
+              setPizzaFlavors(normFlavors);
+              saveStoredPizzaFlavors(normFlavors);
             }
             if (data.card_machine_notice !== undefined || data.name || data.card_machine_settings) {
               const currentStore = getStoredRestaurantInfo();
@@ -695,12 +699,14 @@ export function AdminDashboard({
           const fresh = payload.new;
           if (fresh) {
             if (Array.isArray(fresh.menu_products)) {
-              setProductsList(fresh.menu_products);
-              saveStoredProducts(fresh.menu_products);
+              const normProds = normalizeProductsList(fresh.menu_products);
+              setProductsList(normProds);
+              saveStoredProducts(normProds);
             }
             if (Array.isArray(fresh.pizza_flavors)) {
-              setPizzaFlavors(fresh.pizza_flavors);
-              saveStoredPizzaFlavors(fresh.pizza_flavors);
+              const normFlavors = normalizePizzaFlavors(fresh.pizza_flavors);
+              setPizzaFlavors(normFlavors);
+              saveStoredPizzaFlavors(normFlavors);
             }
             if (fresh.promo_settings) {
               setPromoSettings(fresh.promo_settings);
@@ -896,6 +902,41 @@ export function AdminDashboard({
     saveStoredProducts(updated);
     syncProductsToCloud(updated);
     dispatchConfigSync('PRODUCTS_UPDATE', updated);
+  };
+
+  const handleToggleProductBordaGratis = (prodId) => {
+    const updated = productsList.map(p => {
+      if (p.id === prodId) {
+        const nextState = !p.bordaGratis;
+        triggerMenuToast(nextState ? `Borda Grátis ATIVADA em "${p.name}"! 🧀` : `Borda Grátis DESATIVADA de "${p.name}".`);
+        return {
+          ...p,
+          bordaGratis: nextState
+        };
+      }
+      return p;
+    });
+    setProductsList(updated);
+    saveStoredProducts(updated);
+    syncProductsToCloud(updated);
+    dispatchConfigSync('PRODUCTS_UPDATE', updated);
+  };
+
+  const handleSetAllPizzasBordaGratis = (enabled) => {
+    const updated = productsList.map(p => {
+      if (p.categoryId === 'pizzas' || p.isPizzaCustomizer) {
+        return {
+          ...p,
+          bordaGratis: enabled
+        };
+      }
+      return p;
+    });
+    setProductsList(updated);
+    saveStoredProducts(updated);
+    syncProductsToCloud(updated);
+    dispatchConfigSync('PRODUCTS_UPDATE', updated);
+    triggerMenuToast(enabled ? '🧀 Borda de Catupiry Grátis ATIVADA em todas as pizzas!' : '🧀 Borda Grátis DESATIVADA de todas as pizzas.');
   };
 
   const handleDuplicateProduct = (prod) => {
@@ -3452,6 +3493,52 @@ export function AdminDashboard({
                     ))}
                   </div>
 
+                  {/* Banner de Controle Rápido de Borda Grátis para Pizzas */}
+                  {menuCategoryFilter === 'pizzas' && (
+                    <div className="p-3.5 sm:p-4 rounded-2xl bg-amber-500/10 border border-brand-gold/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 my-2 shadow-sm">
+                      <div className="flex items-center gap-2.5">
+                        <span className="text-xl">🧀</span>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-xs sm:text-sm font-extrabold text-white">Promoção de Borda Grátis nas Pizzas</h4>
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                              scopedProductsList.filter(p => p.categoryId === 'pizzas').every(p => p.bordaGratis)
+                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                                : scopedProductsList.filter(p => p.categoryId === 'pizzas').some(p => p.bordaGratis)
+                                ? 'bg-amber-400/20 text-amber-300 border border-amber-400/30'
+                                : 'bg-dark-900 text-slate-400 border border-dark-700'
+                            }`}>
+                              {scopedProductsList.filter(p => p.categoryId === 'pizzas').every(p => p.bordaGratis)
+                                ? 'Ativa em Todas'
+                                : scopedProductsList.filter(p => p.categoryId === 'pizzas').some(p => p.bordaGratis)
+                                ? 'Ativa em Algumas'
+                                : 'Desativada'}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-300 mt-0.5">
+                            Ative ou desative o Catupiry Grátis em todas as pizzas do delivery instantaneamente:
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                        <button
+                          type="button"
+                          onClick={() => handleSetAllPizzasBordaGratis(true)}
+                          className="px-3 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-dark-950 font-black text-xs transition-transform active:scale-95 cursor-pointer shadow-sm"
+                        >
+                          🧀 Ativar em Todas
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleSetAllPizzasBordaGratis(false)}
+                          className="px-3 py-1.5 rounded-xl bg-dark-900 hover:bg-dark-750 text-slate-300 hover:text-white border border-dark-700 text-xs font-bold transition-transform active:scale-95 cursor-pointer"
+                        >
+                          Desativar de Todas
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Products Grid */}
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 pt-2">
                     {filteredAdminProducts.map(product => {
@@ -3578,6 +3665,23 @@ export function AdminDashboard({
                                 <Sparkles className="w-3 h-3" />
                                 <span>{hasPromo ? 'Promoção' : '+ Promo'}</span>
                               </button>
+
+                              {/* Toggle Borda Grátis para Pizzas e Combos */}
+                              {(product.categoryId === 'pizzas' || product.isPizzaCustomizer || product.categoryId === 'combos') && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleProductBordaGratis(product.id)}
+                                  className={`px-2 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-colors cursor-pointer ${
+                                    product.bordaGratis
+                                      ? 'bg-amber-400 text-dark-950 font-black shadow-sm hover:bg-amber-300'
+                                      : 'bg-dark-900 text-slate-400 hover:text-amber-300 hover:bg-dark-750 border border-dark-700'
+                                  }`}
+                                  title={product.bordaGratis ? 'Borda de Catupiry Grátis ativa! Clique para desativar' : 'Sem borda grátis. Clique para ativar'}
+                                >
+                                  <span>🧀</span>
+                                  <span>{product.bordaGratis ? 'Borda Grátis' : 'Sem Borda'}</span>
+                                </button>
+                              )}
                             </div>
 
                             <div className="flex items-center gap-1">
@@ -4234,6 +4338,59 @@ export function AdminDashboard({
                       </button>
                     </div>
                   </form>
+
+                  {/* Card Promoção Borda de Catupiry Grátis */}
+                  <div className="p-5 rounded-2xl bg-dark-800/60 border border-dark-700 space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-dark-700">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-2xl bg-amber-400/20 text-amber-300 flex items-center justify-center border border-amber-400/30 text-lg flex-shrink-0">
+                          🧀
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h3 className="text-sm font-bold text-white">Promoção Borda de Catupiry Grátis</h3>
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                              productsList.filter(p => p.categoryId === 'pizzas').every(p => p.bordaGratis)
+                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                                : productsList.filter(p => p.categoryId === 'pizzas').some(p => p.bordaGratis)
+                                ? 'bg-amber-400/20 text-amber-300 border border-amber-400/30'
+                                : 'bg-dark-900 text-slate-400 border border-dark-700'
+                            }`}>
+                              {productsList.filter(p => p.categoryId === 'pizzas').every(p => p.bordaGratis)
+                                ? 'Ativa em Todas as Pizzas'
+                                : productsList.filter(p => p.categoryId === 'pizzas').some(p => p.bordaGratis)
+                                ? 'Ativa em Algumas Pizzas'
+                                : 'Desativada'}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-400 mt-0.5">
+                            Controle com 1 clique se os clientes ganham Borda de Catupiry 100% grátis nas pizzas do delivery.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                        <button
+                          type="button"
+                          onClick={() => handleSetAllPizzasBordaGratis(true)}
+                          className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-brand-gold hover:from-amber-300 hover:to-brand-gold text-dark-950 font-black text-xs transition-transform active:scale-95 cursor-pointer shadow-sm flex items-center gap-1.5"
+                        >
+                          <span>🧀 Ativar Borda Grátis em Todas</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleSetAllPizzasBordaGratis(false)}
+                          className="px-3.5 py-2 rounded-xl bg-dark-900 hover:bg-dark-750 text-slate-300 hover:text-white border border-dark-700 text-xs font-bold transition-transform active:scale-95 cursor-pointer"
+                        >
+                          Desativar de Todas
+                        </button>
+                      </div>
+                    </div>
+
+                    <p className="text-[11px] text-slate-400">
+                      💡 <strong>Dica:</strong> Você também pode ligar ou desligar a borda grátis individualmente em cada pizza na aba <strong>Cardápio</strong>, clicando no botão <strong>🧀 Borda Grátis / Sem Borda</strong> do card da pizza ou editando o produto.
+                    </p>
+                  </div>
                 </div>
               )}
 
