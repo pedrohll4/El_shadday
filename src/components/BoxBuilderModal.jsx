@@ -59,6 +59,32 @@ export const BOX_CONFIGS = [
     maxCarne: 5, // Limite explícito de 5 unidades de carne
     ruleText: 'Máx. 10 de cada salgada (Carne máx. 5) • 2 de cada doce'
   },
+  { 
+    id: 'combo-20esf-dydyo', 
+    name: 'Caixa com 20 Esfirras + Dydyo 2L', 
+    total: 20, 
+    salgadas: 15, 
+    doces: 5, 
+    price: 44.99,
+    creditPrice: 44.99,
+    maxPerSalgada: 3, 
+    maxPerDoce: 1, 
+    maxCarne: 3,
+    ruleText: '15 salgadas • 5 doces + Dydyo 2L'
+  },
+  { 
+    id: 'combo-30esf-dydyo', 
+    name: 'Caixa com 30 Esfirras + Dydyo 2L', 
+    total: 30, 
+    salgadas: 25, 
+    doces: 5, 
+    price: 55.00,
+    creditPrice: 55.00,
+    maxPerSalgada: 4, 
+    maxPerDoce: 1, 
+    maxCarne: 4,
+    ruleText: '25 salgadas • 5 doces + Dydyo 2L'
+  },
 ];
 
 // Helper: Check if a flavor contains pork
@@ -99,7 +125,7 @@ export function BoxBuilderModal({ isOpen, onClose, onAddBoxToCart, initialBox = 
   const docesList = useMemo(() => {
     return activeProducts.filter(p => 
       p.categoryId === 'esfirras-doces' && 
-      (p.price <= 4.00 || !p.badge?.toLowerCase().includes('gourmet')) &&
+      (p.price <= 5.00 || !p.badge?.toLowerCase().includes('gourmet')) &&
       !p.name.toLowerCase().includes('gourmet') &&
       !p.badge?.toLowerCase().includes('gourmet')
     );

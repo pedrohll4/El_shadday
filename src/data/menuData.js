@@ -5,10 +5,10 @@ export const RESTAURANT_INFO = {
   shortName: "El Shadday",
   phone: "5569992228682",
   phoneFormatted: "(69) 99222-8682",
-  address: "Rua Maceió, 2333 - Setor 03, Ariquemes - RO",
-  mapsUrl: "https://www.google.com/maps/search/?api=1&query=-9.9106854,-63.0403527",
+  address: "Av Canaã, 4065 - Ariquemes - RO, 76875-818",
+  mapsUrl: "https://www.google.com/maps/search/?api=1&query=-9.9130722,-63.0289001",
   deliveryTime: "45 - 75 min",
-  openingHours: "Terça a Domingo: 09:00 às 23:00 (Segunda fechado)",
+  openingHours: "Terça a Sexta: 09:00 às 11:30 e 16:00 às 23:00 | Sábado: 18:00 às 23:00 | Domingo: 16:00 às 23:00 (Segunda fechado)",
   pixKey: "69992228682",
   pixType: "Telefone / Celular",
   pixName: "El Shadday Esfirraria",
@@ -105,18 +105,20 @@ export const CATEGORIES = [
 ];
 
 export const PRODUCTS = [
-  // COMBOS
+  // ==========================================
+  // COMBOS PROMOCIONAIS (11 ITENS)
+  // ==========================================
   {
     id: "combo-1-fm-10esf",
     categoryId: "combos",
     name: "1 Pizza Família + 10 Esfirras Sortidas",
     description: "O combo mais pedido! 1 Pizza Família de 8 fatias (até 2 sabores à sua escolha com borda de Catupiry GRÁTIS) acompanhada de 10 esfirras sortidas artesanais quentinhas.",
     price: 65.00,
-    originalPrice: 75.00,
+    originalPrice: 70.00,
     badge: "Mais Vendido 🔥",
     bordaGratis: true,
     image: "https://assets.olaclick.app/companies/products/images/800/28f65695-a7b3-411c-abc7-e3a01aed7031.jpeg",
-    details: "Serve 3 a 4 pessoas com muito sabor."
+    details: "Pizza Família 8 fatias + 10 esfirras sortidas."
   },
   {
     id: "combo-2-pizzas-fm",
@@ -124,74 +126,130 @@ export const PRODUCTS = [
     name: "2 Pizzas Família com Borda Grátis",
     description: "Combo da galera! 2 Pizzas Família (cada uma com 8 fatias e até 2 sabores cada). Ambas com borda recheada de Catupiry grátis.",
     price: 80.00,
-    originalPrice: 90.00,
+    originalPrice: 80.00,
     badge: "Economia Real ⭐",
     bordaGratis: true,
     image: "https://assets.olaclick.app/companies/products/images/800/dadb6a0e-498b-4d67-8b61-dc4759f1a9fc.jpeg",
     details: "16 fatias deliciosas para reunir os amigos e família."
   },
   {
-    id: "combo-2-pizzas-gg",
+    id: "combo-pizza-gg-dydyo",
     categoryId: "combos",
-    name: "2 Pizzas Gigantes com Borda Grátis",
-    description: "Mega Combo de Gigantes! 2 Pizzas Gigantes de 12 fatias cada (total 24 fatias, escolha até 3 sabores para cada pizza). Ambas com borda recheada de Catupiry grátis.",
-    price: 98.00,
-    originalPrice: 110.00,
-    badge: "Mais Pedido da Galera 🔥",
+    name: "Pizza Gigante + Dydyo 2L",
+    description: "1 Pizza Gigante de 12 fatias (até 3 sabores à sua escolha com borda de Catupiry grátis) + 1 Refrigerante Dydyo 2L geladíssimo.",
+    price: 60.00,
+    originalPrice: 60.00,
+    badge: "Clássico da Galera 🥤",
     bordaGratis: true,
-    image: "https://assets.olaclick.app/companies/products/images/800/dadb6a0e-498b-4d67-8b61-dc4759f1a9fc.jpeg",
-    details: "24 fatias generosas para toda a família e amigos."
+    image: "https://assets.olaclick.app/companies/products/images/800/ddf08b24-e1d6-4370-b57d-2e329f042910.png",
+    details: "12 fatias generosas + Dydyo 2L."
   },
   {
-    id: "combo-1gg-1fm-10esf",
+    id: "combo-20esf-dydyo",
     categoryId: "combos",
-    name: "1 Pizza Gigante + 1 Pizza Família + 10 Esfirras",
-    description: "Banquete completo: 1 Pizza Gigante (12 fatias, até 3 sabores), 1 Pizza Família (8 fatias, até 2 sabores) e 10 esfirras sortidas quentinhas. Ambas as pizzas com borda de Catupiry grátis!",
-    price: 115.00,
-    originalPrice: 130.00,
-    badge: "Mega Festa 🎉",
-    bordaGratis: true,
-    image: "https://assets.olaclick.app/companies/products/images/800/6bd00d63-068f-4d2d-b6db-87d6223856d6.jpeg",
-    details: "Serve até 6 a 8 pessoas."
+    name: "Caixa com 20 Esfirras + Dydyo 2L",
+    description: "Caixa de 20 unidades de esfirras (15 salgadas + 5 doces todas sortidas quentinhas) + 1 Refrigerante Dydyo 2L geladíssimo.",
+    price: 44.99,
+    originalPrice: 44.99,
+    badge: "Combo Sucesso 🔥",
+    isBox: true,
+    totalCount: 20,
+    salgadasCount: 15,
+    docesCount: 5,
+    image: "https://assets.olaclick.app/companies/products/images/800/c6f824f0-f546-40c2-a2ad-9963807729d4.png",
+    details: "20 esfirras sortidas + Dydyo 2L."
   },
   {
-    id: "combo-3-pizzas-gg",
+    id: "combo-30esf-dydyo",
     categoryId: "combos",
-    name: "3 Pizzas Gigantes com Borda Grátis",
-    description: "O maior combo da El Shadday! 3 Pizzas Gigantes de 12 fatias cada (total de 36 fatias), escolha até 3 sabores para cada pizza. Todas com borda de Catupiry grátis.",
-    price: 150.00,
-    originalPrice: 170.00,
-    badge: "Super Combo 👑",
+    name: "Caixa com 30 Esfirras + Dydyo 2L",
+    description: "Caixa com 30 esfirras (25 salgadas + 5 doces sabores sortidos) + 1 Refrigerante Dydyo 2L geladíssimo.",
+    price: 55.00,
+    originalPrice: 55.00,
+    badge: "Mais Pedido 👥",
+    isBox: true,
+    totalCount: 30,
+    salgadasCount: 25,
+    docesCount: 5,
+    image: "https://assets.olaclick.app/companies/products/images/800/9e895022-6c27-4cef-8f9e-2a9dfc988a8b.png",
+    details: "30 esfirras sortidas + Dydyo 2L."
+  },
+  {
+    id: "combo-pizza-fm-p-dydyo",
+    categoryId: "combos",
+    name: "Pizza Família + Pizza P + Dydyo 2L",
+    description: "Pizza família 8 fatias (até 2 sabores com borda de Catupiry grátis) + Pizza P de brigadeiro + 1 Refrigerante Dydyo 2L.",
+    price: 59.99,
+    originalPrice: 59.99,
+    badge: "Especial Família 🌟",
     bordaGratis: true,
-    image: "https://assets.olaclick.app/companies/products/images/800/48bff297-6ae2-4a76-b574-91f7a2f94710.jpeg",
-    details: "Ideal para comemorações, aniversários e reuniões grandes."
+    image: "https://assets.olaclick.app/companies/products/images/800/c89d7ac9-5a31-4384-8b87-9a08d78edf71.png",
+    details: "Pizza FM salgada + Pizza P doce + Dydyo 2L."
+  },
+  {
+    id: "combo-pizza-gg-p-dydyo",
+    categoryId: "combos",
+    name: "Pizza Gigante + Pizza P + Dydyo 2L",
+    description: "Pizza gigante 12 fatias (até 3 sabores à escolha com borda de Catupiry grátis) + Pizza P Doce de brigadeiro + 1 Refrigerante Dydyo 2L.",
+    price: 69.99,
+    originalPrice: 69.99,
+    badge: "Sal + Doce Completo 🍕",
+    bordaGratis: true,
+    image: "https://assets.olaclick.app/companies/products/images/800/f5d4c6fd-7166-4a91-b351-f25250d69a76.png",
+    details: "Pizza GG salgada + Pizza P doce + Dydyo 2L."
   },
   {
     id: "combo-fm-acai",
     categoryId: "combos",
     name: "1 Pizza Família + 1 Barca de Açaí",
-    description: "Sal e doce na medida certa! 1 Pizza Família 8 fatias com borda grátis + 1 Barca de Açaí trufada com até 5 adicionais generosos.",
+    description: "Sal e doce na medida certa! 1 Pizza Família 8 fatias (até 2 sabores com borda grátis) + 1 Barca de Açaí trufada com até 5 adicionais generosos.",
     price: 65.00,
-    originalPrice: 75.00,
+    originalPrice: 65.00,
     badge: "Sal + Doce 🍧",
     bordaGratis: true,
     image: "https://assets.olaclick.app/companies/products/images/800/6d01a4bb-7da7-414b-8ae1-45fd1fbbc33e.jpeg",
-    details: "Pizza quentinha + sobremesa refrescante."
+    details: "Pizza Família + Barca de Açaí completa."
   },
   {
     id: "combo-gg-acai",
     categoryId: "combos",
     name: "1 Pizza Gigante + 1 Barca de Açaí",
-    description: "1 Pizza Gigante 12 fatias (até 3 sabores) com borda de Catupiry grátis + 1 Barca de Açaí com até 5 adicionais à escolha.",
+    description: "1 Pizza Gigante 12 fatias (até 3 sabores com borda de Catupiry grátis) + 1 Barca de Açaí com até 5 adicionais generosos à escolha.",
     price: 75.00,
-    originalPrice: 85.00,
+    originalPrice: 80.00,
     badge: "Sucesso Absoluto 🏆",
     bordaGratis: true,
     image: "https://assets.olaclick.app/companies/products/images/800/b8ac4f80-f52f-4cea-87ba-863ad904669f.jpeg",
-    details: "A combinação favorita do final de semana."
+    details: "Pizza Gigante + Barca de Açaí com 5 adicionais."
+  },
+  {
+    id: "combo-1gg-1fm-10esf",
+    categoryId: "combos",
+    name: "1 Pizza GG + 1 Pizza FM + 10 Esfirras",
+    description: "Banquete completo: 1 Pizza Gigante (12 fatias, até 3 sabores), 1 Pizza Família (8 fatias, até 2 sabores) e 10 esfirras sortidas quentinhas. Ambas as pizzas com borda de Catupiry grátis!",
+    price: 115.00,
+    originalPrice: 115.00,
+    badge: "Mega Festa 🎉",
+    bordaGratis: true,
+    image: "https://assets.olaclick.app/companies/products/images/800/3d22b221-5cf2-48fb-874d-8537c5a8d176.png",
+    details: "24 fatias + 10 esfirras. Serve 6 a 8 pessoas."
+  },
+  {
+    id: "combo-3-pizzas-gg",
+    categoryId: "combos",
+    name: "3 Pizzas Gigantes com Borda Grátis",
+    description: "O maior combo da El Shadday! 3 Pizzas Gigantes de 12 fatias cada (total de 36 fatias, escolha até 3 sabores para cada pizza). Todas com borda de Catupiry grátis.",
+    price: 150.00,
+    originalPrice: 150.00,
+    badge: "Super Combo 👑",
+    bordaGratis: true,
+    image: "https://assets.olaclick.app/companies/products/images/800/48bff297-6ae2-4a76-b574-91f7a2f94710.jpeg",
+    details: "36 fatias ideais para comemorações e aniversários."
   },
 
-  // CAIXAS DE ESFIRRAS
+  // ==========================================
+  // CAIXAS DE ESFIRRAS (4 ITENS)
+  // ==========================================
   {
     id: "caixa-20-esfirras",
     categoryId: "caixas",
@@ -204,7 +262,7 @@ export const PRODUCTS = [
     totalCount: 20,
     salgadasCount: 15,
     docesCount: 5,
-    image: "https://assets.olaclick.app/companies/products/images/800/4cfa4549-ad5f-4b4e-b539-468584a0eeba.png",
+    image: "https://assets.olaclick.app/companies/products/images/800/4cfa4549-ad5f-4b4e-b539-468584a0eeba.png"
   },
   {
     id: "caixa-30-esfirras",
@@ -218,7 +276,7 @@ export const PRODUCTS = [
     totalCount: 30,
     salgadasCount: 22,
     docesCount: 8,
-    image: "https://assets.olaclick.app/companies/products/images/800/d22ae090-8054-428b-8ba3-6f147ad985c8.png",
+    image: "https://assets.olaclick.app/companies/products/images/800/d22ae090-8054-428b-8ba3-6f147ad985c8.png"
   },
   {
     id: "caixa-40-esfirras",
@@ -232,7 +290,7 @@ export const PRODUCTS = [
     totalCount: 40,
     salgadasCount: 33,
     docesCount: 7,
-    image: "https://assets.olaclick.app/companies/products/images/800/365a2072-4954-4c6a-a734-69a6cef0130a.png",
+    image: "https://assets.olaclick.app/companies/products/images/800/365a2072-4954-4c6a-a734-69a6cef0130a.png"
   },
   {
     id: "caixa-50-esfirras",
@@ -246,15 +304,17 @@ export const PRODUCTS = [
     totalCount: 50,
     salgadasCount: 40,
     docesCount: 10,
-    image: "https://assets.olaclick.app/companies/products/images/800/ad6d93be-acae-46e7-b062-9e796f376b8f.png",
+    image: "https://assets.olaclick.app/companies/products/images/800/ad6d93be-acae-46e7-b062-9e796f376b8f.png"
   },
 
-  // ESFIRRAS SALGADAS
+  // ==========================================
+  // ESFIRRAS SALGADAS UNIDADE (13 ITENS)
+  // ==========================================
   {
     id: "esf-calabresa",
     categoryId: "esfirras-salgadas",
-    name: "Calabresa Tradicional",
-    description: "Molho de tomate artesanal da casa, queijo muçarela derretido, calabresa especial fatiada, cebola e toque de orégano.",
+    name: "Calabresa",
+    description: "Esfirra de calabresa, molho artesanal, queijo, calabresa em fatias, cebola e orégano.",
     price: 3.00,
     badge: "Clássica",
     image: "https://assets.olaclick.app/companies/products/images/800/b9859011-b627-4250-90de-a92a3a3d6177.jpeg"
@@ -262,8 +322,8 @@ export const PRODUCTS = [
   {
     id: "esf-carne",
     categoryId: "esfirras-salgadas",
-    name: "Carne Moída Temperada",
-    description: "Molho artesanal, queijo muçarela, carne moída de primeira muito bem temperada com especiarias e orégano.",
+    name: "Carne",
+    description: "Esfirra de carne, molho artesanal, queijo, carne moída temperada e orégano.",
     price: 3.00,
     badge: "Sucesso",
     image: "https://assets.olaclick.app/companies/products/images/800/34932ad4-8ab9-4f03-b2b8-94b83324232b.jpeg"
@@ -271,8 +331,8 @@ export const PRODUCTS = [
   {
     id: "esf-bacon",
     categoryId: "esfirras-salgadas",
-    name: "Bacon Crocante",
-    description: "Cubos de bacon crocantes e dourados, muçarela derretida, molho artesanal e orégano.",
+    name: "Bacon",
+    description: "Esfirra de bacon, bacon crocante, queijo derretido, molho artesanal e orégano.",
     price: 3.00,
     badge: "Crocante",
     image: "https://assets.olaclick.app/companies/products/images/800/d4a84c53-79c6-47dd-a0ef-4bb7f8316a87.jpeg"
@@ -281,7 +341,7 @@ export const PRODUCTS = [
     id: "esf-frango-milho",
     categoryId: "esfirras-salgadas",
     name: "Frango com Milho",
-    description: "Frango desfiado suculento, milho verde selecionado, muçarela, molho artesanal e orégano.",
+    description: "Esfirra de frango com milho, molho artesanal, milho doce, frango desfiado suculento, queijo e orégano.",
     price: 3.00,
     badge: "Saboroso",
     image: "https://assets.olaclick.app/companies/products/images/800/af8569cc-1a77-4fe1-a837-f134533522ec.jpeg"
@@ -289,8 +349,8 @@ export const PRODUCTS = [
   {
     id: "esf-queijo",
     categoryId: "esfirras-salgadas",
-    name: "Queijo Muçarela Puro",
-    description: "Muçarela de primeira qualidade bem derretida, molho artesanal e orégano perfumado.",
+    name: "Queijo",
+    description: "Esfirra de queijo muçarela puro derretido, molho artesanal e orégano.",
     price: 3.00,
     image: "https://assets.olaclick.app/companies/products/images/800/7fb03255-1d3f-4380-ba54-30742703bb5d.jpeg"
   },
@@ -298,7 +358,7 @@ export const PRODUCTS = [
     id: "esf-calabresa-picada",
     categoryId: "esfirras-salgadas",
     name: "Calabresa Picadinha",
-    description: "Molho artesanal, queijo muçarela, calabresa picadinha especial, ervilhas frescas e orégano.",
+    description: "Esfirra de calabresa picadinha, com molho artesanal, queijo, calabresa picadinha especial, ervilha e orégano.",
     price: 3.00,
     image: "https://assets.olaclick.app/companies/products/images/800/90c1a95b-0544-4c87-bc28-457a7d50d999.jpeg"
   },
@@ -306,7 +366,7 @@ export const PRODUCTS = [
     id: "esf-queijo-cheddar",
     categoryId: "esfirras-salgadas",
     name: "Queijo com Cheddar",
-    description: "A cremosidade do queijo muçarela combinada com cheddar cremoso legítimo, molho artesanal e orégano.",
+    description: "Esfirra de queijo com cheddar cremoso, molho artesanal, queijo muçarela e orégano.",
     price: 3.00,
     badge: "Cremosa",
     image: "https://assets.olaclick.app/companies/products/images/800/f94c32f0-ca2f-4e20-b276-d512eae188db.jpeg"
@@ -314,8 +374,8 @@ export const PRODUCTS = [
   {
     id: "esf-vegetariana",
     categoryId: "esfirras-salgadas",
-    name: "Vegetariana Especial",
-    description: "Milho verde, ervilha fresca, azeitonas fatiadas, queijo muçarela, cebola crocante, molho artesanal e orégano.",
+    name: "Vegetariana",
+    description: "Esfirra vegetariana, molho artesanal, milho verde, ervilha fresca, azeitona, queijo muçarela, cebola e orégano.",
     price: 3.00,
     badge: "Leve 🍃",
     image: "https://assets.olaclick.app/companies/products/images/800/14995c2c-18e7-4330-9ce8-b0f6ef75d6ff.jpeg"
@@ -324,126 +384,120 @@ export const PRODUCTS = [
     id: "esf-calabresa-catupiry",
     categoryId: "esfirras-salgadas",
     name: "Calabresa com Catupiry (Gourmet)",
-    description: "Linha Gourmet: Fatias de calabresa artesanal combinadas com o legítimo Catupiry cremoso, muçarela e molho especial.",
+    description: "Esfirra gourmet, com calabresa especial, legítimo Catupiry cremoso, molho artesanal, queijo e orégano.",
     price: 4.50,
     badge: "Gourmet ⭐",
     image: "https://assets.olaclick.app/companies/products/images/800/9a4dc97a-a4ce-4279-82d4-7a51325d1648.jpeg"
   },
   {
-    id: "esf-bacon-catupiry",
-    categoryId: "esfirras-salgadas",
-    name: "Bacon com Catupiry (Gourmet)",
-    description: "Linha Gourmet: Cubos de bacon crocantes envolvidos em generoso Catupiry cremoso, muçarela e molho artesanal.",
-    price: 4.50,
-    badge: "Gourmet ⭐",
-    image: "https://assets.olaclick.app/companies/products/images/800/6a4086d3-7033-4a4f-bd92-d94c81b70126.jpeg"
-  },
-  {
     id: "esf-milho",
     categoryId: "esfirras-salgadas",
-    name: "Milho Verde com Queijo",
-    description: "Milho verde doce e suculento, muçarela derretida, molho artesanal e orégano.",
+    name: "Milho",
+    description: "Esfirra de milho, milho verde doce, molho artesanal, queijo muçarela e orégano.",
     price: 3.00,
     image: "https://assets.olaclick.app/companies/products/images/800/ef45a3ef-d4ee-4dc0-a243-c7770c8d909f.jpeg"
   },
   {
     id: "esf-ervilha",
     categoryId: "esfirras-salgadas",
-    name: "Ervilha com Queijo",
-    description: "Molho artesanal, ervilhas frescas, muçarela derretida e orégano.",
+    name: "Ervilha",
+    description: "Esfirra de ervilha, molho artesanal, ervilhas frescas, queijo muçarela e orégano.",
     price: 3.00,
     image: "https://assets.olaclick.app/companies/products/images/800/4142df92-6a5d-4c45-94e4-21d9342f562c.jpeg"
   },
   {
+    id: "esf-bacon-catupiry",
+    categoryId: "esfirras-salgadas",
+    name: "Bacon com Catupiry (Gourmet)",
+    description: "Esfirra gourmet, cubos de bacon crocantes, Catupiry cremoso, molho artesanal, queijo e orégano.",
+    price: 4.50,
+    badge: "Gourmet ⭐",
+    image: "https://assets.olaclick.app/companies/products/images/800/6a4086d3-7033-4a4f-bd92-d94c81b70126.jpeg"
+  },
+  {
     id: "esf-brocolis",
     categoryId: "esfirras-salgadas",
-    name: "Brócolis Temperado",
-    description: "Brócolis fresquinho refogado no azeite com alho, muçarela derretida e molho artesanal.",
+    name: "Brócolis",
+    description: "Esfirra de brócolis fresco refogado, molho artesanal, queijo muçarela e orégano.",
     price: 3.00,
     image: "https://assets.olaclick.app/companies/products/images/800/b3bafa8d-03b8-4a62-ad91-7cee59503dc9.jpeg"
   },
 
-  // ESFIRRAS DOCES
+  // ==========================================
+  // ESFIRRAS DOCES UNIDADE (12 ITENS)
+  // ==========================================
   {
     id: "esf-brigadeiro",
     categoryId: "esfirras-doces",
-    name: "Brigadeiro com Granulado",
-    description: "Chocolate ao leite nobre cremoso, toque suave de queijo e muito granulado crocante de chocolate.",
-    price: 4.00,
+    name: "Brigadeiro",
+    description: "Esfirra de brigadeiro, chocolate ao leite cremoso, leve toque de queijo e granulado de puro chocolate.",
+    price: 5.00,
     badge: "Favorito Doce 🍫",
     image: "https://assets.olaclick.app/companies/products/images/800/d03d6a99-9d23-455c-b1da-7cb643d6a34b.jpeg"
+  },
+  {
+    id: "esf-amendoim",
+    categoryId: "esfirras-doces",
+    name: "Amendoim",
+    description: "Esfirra de amendoim, doce de leite artesanal aveludado e amendoim torrado crocante.",
+    price: 5.00,
+    image: "https://assets.olaclick.app/companies/products/images/800/5e7a1169-0566-4273-a361-a51db28e4193.jpeg"
   },
   {
     id: "esf-banana-canela",
     categoryId: "esfirras-doces",
     name: "Banana com Canela",
-    description: "Fatias de banana fresca, leite condensado cremoso, leve toque de queijo e canela em pó polvilhada.",
-    price: 4.00,
+    description: "Esfirra de banana fresca, leite condensado cremoso, queijo muçarela e canela em pó perfumada.",
+    price: 5.00,
     badge: "Tradicional 🍌",
     image: "https://assets.olaclick.app/companies/products/images/800/06fd1e23-74ce-4a87-a31b-6867664e718b.jpeg"
   },
   {
+    id: "esf-pacoca",
+    categoryId: "esfirras-doces",
+    name: "Paçoca",
+    description: "Esfirra de paçoca, doce de leite cremoso e farofa generosa de paçoca de amendoim.",
+    price: 5.00,
+    image: "https://assets.olaclick.app/companies/products/images/800/a2499912-d1b7-457d-b65a-1105d69d214a.jpeg"
+  },
+  {
     id: "esf-mm",
     categoryId: "esfirras-doces",
-    name: "Chocolate com M&M",
-    description: "Chocolate ao leite aveludado coberto com confeitos coloridos crocantes de M&M.",
-    price: 4.00,
+    name: "M&M",
+    description: "Esfirra de M&M, chocolate ao leite cremoso e confeitos coloridos crocantes de M&M.",
+    price: 5.00,
     badge: "Colorida 🌈",
     image: "https://assets.olaclick.app/companies/products/images/800/06b09d11-16fd-4524-a73d-58472a052bb5.jpeg"
   },
   {
     id: "esf-chocoball",
     categoryId: "esfirras-doces",
-    name: "Chocoball Crocante",
-    description: "Creme de chocolate ao leite coberto com bolinhas crocantes de chocoball.",
-    price: 4.00,
+    name: "Chocoball",
+    description: "Esfirra de chocoball crocante e delicioso chocolate ao leite cremoso.",
+    price: 5.00,
     image: "https://assets.olaclick.app/companies/products/images/800/1d321eed-85bd-448e-8b88-054935dcdb6d.jpeg"
-  },
-  {
-    id: "esf-pacoca",
-    categoryId: "esfirras-doces",
-    name: "Doce de Leite com Paçoca",
-    description: "Doce de leite artesanal cremoso com farofa generosa de paçoca de amendoim.",
-    price: 4.00,
-    image: "https://assets.olaclick.app/companies/products/images/800/a2499912-d1b7-457d-b65a-1105d69d214a.jpeg"
-  },
-  {
-    id: "esf-amendoim",
-    categoryId: "esfirras-doces",
-    name: "Doce de Leite com Amendoim",
-    description: "Doce de leite aveludado salpicado com amendoim torrado e crocante.",
-    price: 4.00,
-    image: "https://assets.olaclick.app/companies/products/images/800/5e7a1169-0566-4273-a361-a51db28e4193.jpeg"
   },
   {
     id: "esf-beijinho",
     categoryId: "esfirras-doces",
-    name: "Beijinho de Coco",
-    description: "Coco ralado úmido, leite condensado cremoso e leve toque de queijo derretido.",
-    price: 4.00,
+    name: "Beijinho",
+    description: "Esfirra de beijinho, coco ralado úmido, leve toque de queijo e leite condensado.",
+    price: 5.00,
     image: "https://assets.olaclick.app/companies/products/images/800/80ff3462-9731-40e5-b83e-cf167cfe4b81.jpeg"
   },
   {
     id: "esf-chocolate-branco",
     categoryId: "esfirras-doces",
-    name: "Chocolate Branco Nobre",
-    description: "Chocolate branco derretido puro, sabor amanteigado e aveludado inconfundível.",
-    price: 4.00,
+    name: "Chocolate Branco",
+    description: "Esfirra de chocolate branco derretido puro, sabor amanteigado e aveludado irresistível.",
+    price: 5.00,
     image: "https://assets.olaclick.app/companies/products/images/800/2243d4f5-19ae-4e4a-905f-a73d5fd09840.jpeg"
-  },
-  {
-    id: "esf-romeu-julieta",
-    categoryId: "esfirras-doces",
-    name: "Romeu e Julieta",
-    description: "Goiabada cascão cremosa derretida harmonizada perfeitamente com queijo muçarela.",
-    price: 4.00,
-    image: "https://assets.olaclick.app/companies/products/images/800/3d9bce96-b41f-4b69-92da-d8614427dfd4.jpeg"
   },
   {
     id: "esf-banana-nevada",
     categoryId: "esfirras-doces",
     name: "Banana Nevada (Gourmet)",
-    description: "Linha Gourmet: Fatias de banana, chocolate branco nobre, queijo muçarela e toque perfumado de canela.",
+    description: "Esfirra gourmet, fatias de banana, chocolate branco nobre derretido, queijo e canela.",
     price: 6.50,
     badge: "Gourmet ⭐",
     image: "https://assets.olaclick.app/companies/products/images/800/5517e7e7-9d37-4653-a654-e15e54faeaf1.jpeg"
@@ -451,8 +505,8 @@ export const PRODUCTS = [
   {
     id: "esf-prestigio",
     categoryId: "esfirras-doces",
-    name: "Prestígio Gourmet",
-    description: "Linha Gourmet: Chocolate ao leite nobre, coco ralado úmido selecionado e toque de queijo especial.",
+    name: "Prestígio (Gourmet)",
+    description: "Esfirra gourmet, chocolate ao leite cremoso, coco ralado selecionado e toque suave de queijo.",
     price: 6.50,
     badge: "Gourmet ⭐",
     image: "https://assets.olaclick.app/companies/products/images/800/cb651694-adab-468b-8404-2be34d3c4b76.jpeg"
@@ -461,65 +515,77 @@ export const PRODUCTS = [
     id: "esf-chocolate-morango",
     categoryId: "esfirras-doces",
     name: "Chocolate com Morango (Gourmet)",
-    description: "Linha Gourmet: Cobertura rica de chocolate ao leite com pedaços suculentos de morango fresco.",
+    description: "Esfirra gourmet, generoso chocolate ao leite nobre com pedaços frescos e suculentos de morango.",
     price: 6.50,
     badge: "Mais Desejada 🍓",
     image: "https://assets.olaclick.app/companies/products/images/800/aac6df81-fb06-4e5a-ac4b-31d0abd31534.jpeg"
   },
+  {
+    id: "esf-romeu-julieta",
+    categoryId: "esfirras-doces",
+    name: "Romeu e Julieta",
+    description: "Esfirra de goiabada cascão cremosa derretida perfeitamente combinada com queijo muçarela.",
+    price: 5.00,
+    image: "https://assets.olaclick.app/companies/products/images/800/3d9bce96-b41f-4b69-92da-d8614427dfd4.jpeg"
+  },
 
-  // PIZZAS
+  // ==========================================
+  // PIZZAS (4 ITENS)
+  // ==========================================
   {
     id: "pizza-familia-salgada",
     categoryId: "pizzas",
     name: "Pizza Família (8 Fatias - até 2 Sabores)",
-    description: "Pizza grande 8 fatias, escolha até 2 sabores entre nossas opções salgadas especiais. ACOMPANHA BORDA DE CATUPIRY GRÁTIS!",
+    description: "Menu de Pizzas, selecione dois sabores que desejar. Valor base de R$ 40,00 (pode variar com sabores especiais). Vai com BORDA DE CATUPIRY GRÁTIS!",
     price: 40.00,
     badge: "Borda Grátis 🧀",
     bordaGratis: true,
     isPizzaCustomizer: true,
     tamanho: "Família (8 fatias)",
     maxSabores: 2,
-    image: "https://assets.olaclick.app/companies/products/images/800/80ee539a-0a44-44f7-abf5-5e02b4c2f34b.png",
+    image: "https://assets.olaclick.app/companies/products/images/800/80ee539a-0a44-44f7-abf5-5e02b4c2f34b.png"
   },
   {
     id: "pizza-gigante-salgada",
     categoryId: "pizzas",
     name: "Pizza Gigante (12 Fatias - até 3 Sabores)",
-    description: "Nossa maior pizza! 12 fatias bem servidas, escolha até 3 sabores diferentes. ACOMPANHA BORDA DE CATUPIRY GRÁTIS!",
+    description: "Menu de Pizzas, selecione três sabores que desejar. Valor base de R$ 50,00 (pode variar com sabores especiais). Vai com BORDA DE CATUPIRY GRÁTIS!",
     price: 50.00,
     badge: "Borda Grátis 🧀",
     bordaGratis: true,
     isPizzaCustomizer: true,
     tamanho: "Gigante (12 fatias)",
     maxSabores: 3,
-    image: "https://assets.olaclick.app/companies/products/images/800/1ecaf28b-a823-4aeb-8dff-a779c79204a9.png",
+    image: "https://assets.olaclick.app/companies/products/images/800/1ecaf28b-a823-4aeb-8dff-a779c79204a9.png"
   },
   {
     id: "pizza-doce-1sabor",
     categoryId: "pizzas",
-    name: "Pizza Doce (1 Sabor)",
-    description: "Pizza doce especial com massa crocante e cobertura generosa. Escolha entre Brigadeiro, Banana com Canela, Prestígio ou Romeu & Julieta.",
+    name: "Pizzas Doces (1 Sabor)",
+    description: "Cardápio de pizzas doces com massa crocante e recheio generoso. Escolha a opção desejada (1 sabor).",
     price: 13.00,
     variants: [
-      { name: "Tamanho Família (8 fatias)", price: 13.00 },
-      { name: "Tamanho Gigante (12 fatias)", price: 23.00 }
+      { name: "Família (8 fatias)", price: 13.00 },
+      { name: "Gigante (12 fatias)", price: 23.00 }
     ],
-    image: "https://assets.olaclick.app/companies/products/images/800/b04b0953-8414-4284-aa40-0b323143fc97.png",
+    image: "https://assets.olaclick.app/companies/products/images/800/b04b0953-8414-4284-aa40-0b323143fc97.png"
   },
   {
     id: "pizza-doce-2-3-sabores",
     categoryId: "pizzas",
-    name: "Pizza Doce (2 ou 3 Sabores)",
-    description: "Para quem quer experimentar mais de uma delícia! Monte sua pizza doce com 2 ou 3 sabores.",
+    name: "Pizzas Doces (2 ou 3 Sabores)",
+    description: "Cardápio de pizzas doces, monte com 2 ou 3 sabores à sua escolha para saborear o melhor da El Shadday.",
     price: 23.00,
     variants: [
-      { name: "Tamanho Família (8 fatias)", price: 23.00 },
-      { name: "Tamanho Gigante (12 fatias)", price: 33.00 }
+      { name: "Família (8 fatias)", price: 23.00 },
+      { name: "Gigante (12 fatias)", price: 33.00 }
     ],
-    image: "https://assets.olaclick.app/companies/products/images/800/92c9d90d-851c-4044-8ba3-e460c12b5c36.png",
+    image: "https://assets.olaclick.app/companies/products/images/800/92c9d90d-851c-4044-8ba3-e460c12b5c36.png"
   },
 
-  // BEBIDAS
+  // ==========================================
+  // BEBIDAS (8 ITENS)
+  // ==========================================
   {
     id: "dydyo-cola-2l",
     categoryId: "bebidas",
@@ -528,15 +594,6 @@ export const PRODUCTS = [
     price: 10.00,
     badge: "Regional 🥤",
     image: "https://assets.olaclick.app/companies/products/images/800/5c0b2454-6874-4f56-850c-2126b597191f.png"
-  },
-  {
-    id: "dydyo-guarana-2l",
-    categoryId: "bebidas",
-    name: "Dydyo Guaraná 2L",
-    description: "Refrigerante regional sabor Guaraná da Amazônia 2 Litros geladíssimo.",
-    price: 10.00,
-    badge: "Regional 🥤",
-    image: "https://assets.olaclick.app/companies/products/images/800/a0597d6a-fee7-43a6-99be-e072f6beba77.png"
   },
   {
     id: "dydyo-laranja-2l",
@@ -548,28 +605,53 @@ export const PRODUCTS = [
     image: "https://assets.olaclick.app/companies/products/images/800/7a8f04b2-2b44-4e12-bdc7-1c9173c97537.png"
   },
   {
+    id: "dydyo-guarana-2l",
+    categoryId: "bebidas",
+    name: "Dydyo Guaraná 2L",
+    description: "Refrigerante regional sabor Guaraná da Amazônia 2 Litros geladíssimo.",
+    price: 10.00,
+    badge: "Regional 🥤",
+    image: "https://assets.olaclick.app/companies/products/images/800/a0597d6a-fee7-43a6-99be-e072f6beba77.png"
+  },
+  {
     id: "coca-cola-2l",
     categoryId: "bebidas",
     name: "Coca-Cola Original 2L",
-    description: "Refrigerante Coca-Cola 2 Litros sabor original, perfeito para acompanhar sua pizza ou esfirras.",
-    price: 15.00,
+    description: "Sabor original Coca-Cola 2 Litros, perfeito para acompanhar sua pizza ou esfirras.",
+    price: 16.00,
     image: "https://assets.olaclick.app/companies/products/images/800/5cf5a9e3-d887-4309-a531-94c6ba777299.png"
   },
   {
     id: "fanta-laranja-2l",
     categoryId: "bebidas",
     name: "Fanta Laranja 2L",
-    description: "Refrigerante Fanta Laranja 2 Litros bem gelado.",
-    price: 15.00,
+    description: "Fanta sabor laranja 2 Litros bem gelada.",
+    price: 16.00,
     image: "https://assets.olaclick.app/companies/products/images/800/492710b2-5b16-497c-a43c-40b4fb7d6a0c.png"
   },
   {
     id: "fanta-uva-2l",
     categoryId: "bebidas",
     name: "Fanta Uva 2L",
-    description: "Refrigerante Fanta Uva 2 Litros bem gelado.",
-    price: 15.00,
+    description: "Fanta sabor uva 2 Litros bem gelada.",
+    price: 16.00,
     image: "https://assets.olaclick.app/companies/products/images/800/dbb4b323-f5a2-47e0-ba15-35fcc41e22c9.png"
+  },
+  {
+    id: "refrigerante-lata",
+    categoryId: "bebidas",
+    name: "Refrigerante em Lata (Coca-Cola 350ml)",
+    description: "Refrigerante Coca-Cola em lata 350ml gelada.",
+    price: 6.00,
+    image: "https://assets.olaclick.app/companies/products/images/800/5cf5a9e3-d887-4309-a531-94c6ba777299.png"
+  },
+  {
+    id: "coca-cola-2-5l",
+    categoryId: "bebidas",
+    name: "Coca-Cola 2,5L",
+    description: "Coca-Cola tamanho família 2,5 Litros sabor original bem gelada.",
+    price: 18.00,
+    image: "https://assets.olaclick.app/companies/products/images/800/5cf5a9e3-d887-4309-a531-94c6ba777299.png"
   }
 ];
 
@@ -579,7 +661,23 @@ export const INITIAL_PIZZA_FLAVORS = [
     name: "Calabresa Especial com Cebola",
     price: 40.00,
     category: "salgadas",
-    description: "Molho de tomate artesanal, muçarela derretida, calabresa fatiada crocante, cebola e orégano.",
+    description: "Molho artesanal, queijo muçarela derretido, calabresa fatiada crocante, cebola e orégano.",
+    isAvailable: true
+  },
+  {
+    id: "mucarela",
+    name: "Muçarela Tradicional",
+    price: 40.00,
+    category: "salgadas",
+    description: "Muçarela de primeira qualidade, molho artesanal e orégano perfumado.",
+    isAvailable: true
+  },
+  {
+    id: "dois-queijos",
+    name: "Dois Queijos Cremoso",
+    price: 40.00,
+    category: "salgadas",
+    description: "Combinação saborosa de muçarela especial e queijo cremoso com orégano.",
     isAvailable: true
   },
   {
@@ -587,55 +685,15 @@ export const INITIAL_PIZZA_FLAVORS = [
     name: "Frango com Catupiry",
     price: 40.00,
     category: "salgadas",
-    description: "Peito de frango desfiado temperado, muçarela, o legítimo Catupiry cremoso e orégano.",
+    description: "Peito de frango desfiado temperado, muçarela, legítimo Catupiry cremoso e orégano.",
     isAvailable: true
   },
   {
-    id: "mucarela",
-    name: "Muçarela com Tomate e Manjericão",
-    price: 35.00,
-    category: "salgadas",
-    description: "Muçarela de primeira qualidade, rodelas de tomate fresco selecionado, manjericão e orégano.",
-    isAvailable: true
-  },
-  {
-    id: "bacon-crocante",
-    name: "Bacon Crocante com Muçarela",
+    id: "frango-cheddar",
+    name: "Frango com Cheddar",
     price: 40.00,
     category: "salgadas",
-    description: "Cubos crocantes e dourados de bacon, queijo muçarela derretido e toque de orégano.",
-    isAvailable: true
-  },
-  {
-    id: "carne-moida",
-    name: "Carne Moída Temperada",
-    price: 40.00,
-    category: "salgadas",
-    description: "Carne moída de primeira muito bem refogada com especiarias da casa, queijo muçarela e orégano.",
-    isAvailable: true
-  },
-  {
-    id: "calabresa-picadinha",
-    name: "Calabresa Picadinha com Ervilha",
-    price: 40.00,
-    category: "salgadas",
-    description: "Calabresa especial picadinha, ervilhas frescas crocantes, muçarela derretida e orégano.",
-    isAvailable: true
-  },
-  {
-    id: "quatro-queijos",
-    name: "Quatro Queijos Cremoso",
-    price: 45.00,
-    category: "especiais",
-    description: "A harmonia perfeita entre muçarela especial, Catupiry cremoso, provolone defumado e parmesão.",
-    isAvailable: true
-  },
-  {
-    id: "milho-bacon",
-    name: "Milho com Bacon",
-    price: 40.00,
-    category: "salgadas",
-    description: "Milho verde doce e suculento, bacon dourado em cubos, queijo muçarela e orégano.",
+    description: "Frango desfiado suculento, muçarela e delicioso queijo cheddar derretido.",
     isAvailable: true
   },
   {
@@ -643,55 +701,103 @@ export const INITIAL_PIZZA_FLAVORS = [
     name: "Vegetariana da Casa",
     price: 40.00,
     category: "salgadas",
-    description: "Milho verde, ervilhas frescas, azeitonas fatiadas, rodelas de tomate, cebola e muçarela.",
+    description: "Milho verde, ervilha fresca, azeitona, muçarela, cebola crocante e orégano.",
     isAvailable: true
   },
   {
-    id: "brocolis-alho",
-    name: "Brócolis com Alho e Queijo",
+    id: "calabresa-picadinha",
+    name: "Calabresa Picadinha com Ervilha",
     price: 40.00,
     category: "salgadas",
-    description: "Brócolis frescos salteados no azeite com alho dourado crocante e muçarela derretida.",
+    description: "Calabresa picadinha especial, ervilhas frescas, queijo muçarela e orégano.",
     isAvailable: true
   },
   {
-    id: "carne-seca-catupiry",
-    name: "Carne Seca com Catupiry (Gourmet)",
+    id: "bacon-crocante",
+    name: "Bacon Crocante",
+    price: 40.00,
+    category: "salgadas",
+    description: "Cubos de bacon dourados e crocantes, queijo muçarela derretido e orégano.",
+    isAvailable: true
+  },
+  {
+    id: "romanesca",
+    name: "Romanesca",
+    price: 40.00,
+    category: "salgadas",
+    description: "Receita especial com muçarela, presunto, champignon e orégano.",
+    isAvailable: true
+  },
+  {
+    id: "hot-dog",
+    name: "Hot-Dog Especial",
+    price: 40.00,
+    category: "salgadas",
+    description: "Molho artesanal, muçarela, salsicha fatiada selecionada, milho e batata palha.",
+    isAvailable: true
+  },
+  {
+    id: "baiana-apimentada",
+    name: "Baiana Apimentada",
+    price: 40.00,
+    category: "salgadas",
+    description: "Calabresa moída, pimenta calabresa selecionada, cebola, ovos e muçarela.",
+    isAvailable: true
+  },
+  {
+    id: "frango-milho",
+    name: "Frango com Milho",
+    price: 40.00,
+    category: "salgadas",
+    description: "Frango desfiado suculento, milho verde selecionado e queijo muçarela.",
+    isAvailable: true
+  },
+  {
+    id: "milho",
+    name: "Milho Verde com Queijo",
+    price: 40.00,
+    category: "salgadas",
+    description: "Milho verde doce e suculento, muçarela derretida e orégano.",
+    isAvailable: true
+  },
+  {
+    id: "calabresa-catupiry",
+    name: "Calabresa com Catupiry (Gourmet)",
     price: 50.00,
     category: "especiais",
-    description: "Carne seca desfiada de primeiríssima, cebola roxa fininha e generoso Catupiry cremoso.",
+    description: "Fatias de calabresa artesanal combinadas com o legítimo Catupiry cremoso e muçarela.",
     isAvailable: true
   },
   {
-    id: "camarao-especial",
-    name: "Camarão Especial com Cream Cheese (Nobre)",
+    id: "carne-seca",
+    name: "Carne Seca com Catupiry (Gourmet)",
     price: 65.00,
     category: "especiais",
-    description: "Camarões selecionados ao alho e azeite, cream cheese cremoso, muçarela e toque de cheiro-verde.",
+    description: "Carne seca desfiada de primeiríssima qualidade com generoso Catupiry cremoso.",
     isAvailable: true
   },
   {
-    id: "brigadeiro-gourmet",
-    name: "Brigadeiro Gourmet com Granulado",
-    price: 40.00,
-    category: "doces",
-    description: "Chocolate ao leite nobre cremoso, granulado de puro cacau e leve toque suave de queijo.",
+    id: "strogonoff-frango",
+    name: "Strogonoff de Frango (Especial)",
+    price: 55.00,
+    category: "especiais",
+    description: "Strogonoff de frango cremoso feito na hora, muçarela e batata palha crocante.",
     isAvailable: true
   },
   {
-    id: "banana-canela",
-    name: "Banana com Canela e Leite Condensado",
-    price: 40.00,
-    category: "doces",
-    description: "Fatias de banana fresca, leite condensado artesanal, queijo muçarela e canela em pó.",
+    id: "lombo-abacaxi",
+    name: "Lombo com Abacaxi (Especial)",
+    price: 65.00,
+    category: "especiais",
+    description: "Lombo canadense fatiado, pedaços doces de abacaxi e queijo muçarela derretido.",
     isAvailable: true
   },
   {
-    id: "romeu-julieta",
-    name: "Romeu e Julieta Nobre",
-    price: 40.00,
-    category: "doces",
-    description: "Goiabada cascão cremosa derretida harmonizada com abundância de queijo muçarela especial.",
+    id: "lombo-portuguesa",
+    name: "Lombo à Portuguesa (Especial)",
+    price: 65.00,
+    category: "especiais",
+    description: "Lombo especial com cebola, ovos, azeitonas selecionadas e muçarela.",
     isAvailable: true
   }
 ];
@@ -713,14 +819,14 @@ export function getStoredProducts() {
     const saved = localStorage.getItem("el_shadday_delivery_products_v2");
     if (saved !== null) {
       const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed)) {
+      if (Array.isArray(parsed) && parsed.length > 0) {
         return parsed;
       }
     }
   } catch (e) {
     console.error("Error reading stored products:", e);
   }
-  return isSupabaseConfigured ? [] : PRODUCTS;
+  return PRODUCTS;
 }
 
 export function saveStoredProducts(products) {
@@ -801,8 +907,7 @@ export function getStoredPizzaFlavors() {
     const saved = localStorage.getItem("el_shadday_pizza_flavors_v2");
     if (saved !== null) {
       const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed)) {
-        // Normaliza para garantir formato uniforme
+      if (Array.isArray(parsed) && parsed.length > 0) {
         return parsed.map((item, idx) => {
           if (typeof item === 'string') {
             return {
@@ -828,7 +933,7 @@ export function getStoredPizzaFlavors() {
   } catch (e) {
     console.error("Error reading stored pizza flavors:", e);
   }
-  return isSupabaseConfigured ? [] : INITIAL_PIZZA_FLAVORS;
+  return INITIAL_PIZZA_FLAVORS;
 }
 
 export function saveStoredPizzaFlavors(flavors) {
@@ -844,9 +949,6 @@ export function saveStoredPizzaFlavors(flavors) {
 
 /**
  * Regra de cálculo de Pizza por Sabor (Regra do Estabelecimento):
- * "Se eu pedir um sabor mais caro, vai agregar na pizza...
- *  Se eu fizer uma pizza pequena de R$ 20 e pedir um valor de 120, a pizza vai ficar 120, que sempre vai puxar para o maior valor."
- * 
  * - Se os sabores tiverem preço igual ou inferior ao preço base da pizza, mantém o preço base.
  * - Se algum sabor escolhido for maior que o preço base, puxa para o MAIOR valor entre os sabores escolhidos.
  */
@@ -861,7 +963,6 @@ export function calculatePizzaPrice(basePrice, selectedFlavors) {
     if (typeof f === 'object') {
       return Number(f.price) || 0;
     }
-    // Caso seja string, busca o sabor cadastrado
     const stored = getStoredPizzaFlavors();
     const found = stored.find(s => s.name === f);
     return found ? (Number(found.price) || 0) : 0;
@@ -892,7 +993,6 @@ export function calculateCardMachineFee(subtotal, cardSettings, cardType = 'cred
       : (Number(cardSettings.creditRate) || 0);
     return Math.round((numSubtotal * (rate / 100)) * 100) / 100;
   }
-  // Padrão: 'percentage'
   const rate = Number(cardSettings.percentageRate) || 0;
   return Math.round((numSubtotal * (rate / 100)) * 100) / 100;
 }
@@ -919,5 +1019,3 @@ export function getCardMachineNoticeText(cardSettings) {
   const pctStr = (Number(cardSettings.percentageRate) || 0).toString().replace('.', ',');
   return `⚠️ Pagamentos no cartão possuem acréscimo de ${pctStr}% referente à taxa da maquininha cobrada pela operadora.`;
 }
-
-

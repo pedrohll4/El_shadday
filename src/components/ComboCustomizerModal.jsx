@@ -40,13 +40,13 @@ export function getComboPizzasConfig(product) {
     ];
   }
 
-  if (id === 'combo-1-fm-10esf' || id === 'combo-fm-acai') {
+  if (id === 'combo-1-fm-10esf' || id === 'combo-fm-acai' || id === 'combo-pizza-fm-p-dydyo') {
     return [
       { id: 'p1', title: 'Pizza Família (8 fatias)', shortTitle: 'Pizza Família', maxFlavors: 2 }
     ];
   }
 
-  if (id === 'combo-gg-acai') {
+  if (id === 'combo-gg-acai' || id === 'combo-pizza-gg-p-dydyo' || id === 'combo-pizza-gg-dydyo') {
     return [
       { id: 'p1', title: 'Pizza Gigante (12 fatias)', shortTitle: 'Pizza Gigante', maxFlavors: 3 }
     ];

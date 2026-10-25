@@ -152,14 +152,14 @@ export async function fetchCloudConfigHistory() {
         .single();
 
       if (!error && data) {
-        const products = Array.isArray(data.menu_products) ? data.menu_products : [];
+        const products = Array.isArray(data.menu_products) && data.menu_products.length > 0 ? data.menu_products : null;
         const gallery = Array.isArray(data.buffet_gallery) ? data.buffet_gallery : [];
-        const flavors = Array.isArray(data.pizza_flavors) ? data.pizza_flavors : [];
+        const flavors = Array.isArray(data.pizza_flavors) && data.pizza_flavors.length > 0 ? data.pizza_flavors : null;
         const promos = data.promo_settings || null;
         
-        saveStoredProducts(products);
+        if (products) saveStoredProducts(products);
         saveStoredBuffetGallery(gallery);
-        saveStoredPizzaFlavors(flavors);
+        if (flavors) saveStoredPizzaFlavors(flavors);
         if (promos) {
           saveStoredPromoSettings(promos);
           if (Array.isArray(promos.buffet_unavailable_items)) {

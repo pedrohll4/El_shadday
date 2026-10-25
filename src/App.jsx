@@ -284,7 +284,7 @@ export default function App() {
               // company_settings vazio para galeria — busca na tabela buffet_gallery
               syncGalleryFromSupabase();
             }
-            if (Array.isArray(data.menu_products)) {
+            if (Array.isArray(data.menu_products) && data.menu_products.length > 0) {
               setProducts(data.menu_products);
               saveStoredProducts(data.menu_products);
             }
@@ -332,7 +332,7 @@ export default function App() {
               saveStoredBuffetGallery(cleanGal);
               window.dispatchEvent(new CustomEvent("buffet_gallery_updated", { detail: cleanGal }));
             }
-            if (Array.isArray(freshData.menu_products)) {
+            if (Array.isArray(freshData.menu_products) && freshData.menu_products.length > 0) {
               setProducts(freshData.menu_products);
               saveStoredProducts(freshData.menu_products);
             }
