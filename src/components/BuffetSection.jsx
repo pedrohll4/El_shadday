@@ -400,28 +400,29 @@ export function BuffetSection({ onExploreFullBuffet, onBackToDelivery }) {
             Montagem completa, serviço de mesa e equipe uniformizada inclusos no seu evento.
           </p>
 
-          {onExploreFullBuffet && (
-            <div className="mt-4 pt-3 border-t border-dark-750 flex flex-col sm:flex-row items-center justify-between gap-3 text-left">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-brand-gold/15 text-brand-gold flex items-center justify-center flex-shrink-0 border border-brand-gold/30">
-                  <Camera className="w-4 h-4" />
-                </div>
-                <div>
-                  <p className="text-xs font-bold text-white">Quer ver nossa equipe e mesas montadas?</p>
-                  <p className="text-[11px] text-slate-400">Fotos de casamentos, formaturas e vídeos de eventos reais.</p>
-                </div>
+          <div className="mt-4 pt-3 border-t border-dark-750 flex flex-col sm:flex-row items-center justify-between gap-3 text-left">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-brand-gold/15 text-brand-gold flex items-center justify-center flex-shrink-0 border border-brand-gold/30">
+                <Camera className="w-4 h-4" />
               </div>
-
-              <button
-                type="button"
-                onClick={onExploreFullBuffet}
-                className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-gradient-to-r from-brand-gold via-amber-400 to-brand-gold hover:brightness-110 active:scale-95 text-dark-950 font-black text-xs flex items-center justify-center gap-2 transition-all shadow-glow-gold cursor-pointer whitespace-nowrap"
-              >
-                <span>Ver Apresentação Completa</span>
-                <ArrowRight className="w-3.5 h-3.5 stroke-[2.5]" />
-              </button>
+              <div>
+                <p className="text-xs font-bold text-white">Quer ver nossa equipe e mesas montadas?</p>
+                <p className="text-[11px] text-slate-400">Fotos de casamentos, formaturas e vídeos de eventos reais.</p>
+              </div>
             </div>
-          )}
+
+            <button
+              type="button"
+              onClick={() => {
+                const el = document.getElementById('buffet-galeria');
+                if (el) el.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-gradient-to-r from-brand-gold via-amber-400 to-brand-gold hover:brightness-110 active:scale-95 text-dark-950 font-black text-xs flex items-center justify-center gap-2 transition-all shadow-glow-gold cursor-pointer whitespace-nowrap"
+            >
+              <span>Ver Fotos & Galeria</span>
+              <ArrowRight className="w-3.5 h-3.5 stroke-[2.5]" />
+            </button>
+          </div>
         </div>
 
         {/* 3. Cardápio na Ordem Gastronômica Correta:
@@ -654,23 +655,16 @@ export function BuffetSection({ onExploreFullBuffet, onBackToDelivery }) {
         </div>
 
         {/* 4. Fotos do Buffet em Destaque Rotativo (Muda Sozinho sem Virar Testão) */}
-        <div className="mt-10 rounded-3xl bg-dark-900 border border-dark-750 p-4 sm:p-6 text-center shadow-lg">
+        <div id="buffet-galeria" className="mt-10 rounded-3xl bg-dark-900 border border-dark-750 p-4 sm:p-6 text-center shadow-lg scroll-mt-24">
           <div className="flex items-center justify-between gap-2 mb-3">
             <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-brand-gold">
               <Camera className="w-4 h-4" />
               <span>Fotos do Buffet em Ação</span>
             </div>
 
-            {onExploreFullBuffet && (
-              <button
-                type="button"
-                onClick={onExploreFullBuffet}
-                className="text-xs text-brand-gold hover:text-amber-200 font-semibold inline-flex items-center gap-1 cursor-pointer hover:underline"
-              >
-                <span>Ver todas no carrossel</span>
-                <ChevronRight className="w-3.5 h-3.5" />
-              </button>
-            )}
+            <span className="text-xs text-brand-gold font-semibold inline-flex items-center gap-1">
+              <span>Galeria de Eventos Reais</span>
+            </span>
           </div>
 
           <h3 className="font-serif text-base sm:text-lg font-bold text-white text-left">
@@ -693,8 +687,7 @@ export function BuffetSection({ onExploreFullBuffet, onBackToDelivery }) {
                 return (
                   <div 
                     key={photo.id || offset}
-                    onClick={onExploreFullBuffet}
-                    className="group relative h-40 sm:h-44 rounded-2xl overflow-hidden bg-dark-950 border border-dark-750 hover:border-brand-gold transition-all cursor-pointer shadow-md"
+                    className="group relative h-40 sm:h-44 rounded-2xl overflow-hidden bg-dark-950 border border-dark-750 hover:border-brand-gold transition-all shadow-md"
                   >
                     {isVid ? (
                       <div className="w-full h-full relative bg-black flex items-center justify-center">
@@ -894,24 +887,6 @@ export function BuffetSection({ onExploreFullBuffet, onBackToDelivery }) {
                   : 'Solicitar Orçamento no WhatsApp'}
               </span>
             </button>
-
-            {/* Botão de Destaque para a Apresentação Completa do Buffet */}
-            {onExploreFullBuffet && (
-              <div className="pt-3">
-                <button
-                  type="button"
-                  onClick={onExploreFullBuffet}
-                  className="w-full py-3.5 px-5 rounded-2xl bg-gradient-to-r from-brand-gold via-amber-400 to-brand-gold hover:brightness-110 text-dark-950 font-black text-sm sm:text-base flex items-center justify-center gap-2.5 transition-all shadow-glow-gold hover:scale-[1.01] active:scale-[0.99] cursor-pointer group"
-                >
-                  <Sparkles className="w-5 h-5 text-dark-950 group-hover:rotate-12 transition-transform" />
-                  <span className="uppercase tracking-wide">👑 Ver Apresentação Completa do Buffet</span>
-                  <ArrowRight className="w-5 h-5 text-dark-950 group-hover:translate-x-1.5 transition-transform" />
-                </button>
-                <p className="text-center text-[11px] sm:text-xs text-amber-200 mt-2 font-medium">
-                  ✨ Conheça fotos em alta resolução, vídeos de eventos reais e toda nossa estrutura!
-                </p>
-              </div>
-            )}
 
             <div className="flex items-center justify-center pt-2 text-[11px] text-slate-400">
               <span>Atendimento em Ariquemes e região</span>

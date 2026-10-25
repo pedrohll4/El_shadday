@@ -48,7 +48,7 @@ import {
   fetchCloudConfigHistory, 
   subscribeToConfigEvents 
 } from './services/configSyncService';
-import { ShoppingBag, ArrowRight, Sparkles, ChevronRight, Phone, Search, ChefHat } from 'lucide-react';
+import { ShoppingBag, ArrowRight, Sparkles, ChevronRight, Phone, Search, ChefHat, Camera } from 'lucide-react';
 
 const getInitialOrders = () => {
   try {
@@ -122,11 +122,9 @@ export default function App() {
   const [appView, setAppView] = useState(() => {
     try {
       const params = new URLSearchParams(window.location.search);
-      if (params.get('mode') === 'buffet') return 'full-buffet';
-      if (params.get('mode') === 'cardapio-evento' || params.get('mode') === 'orcamento') return 'cardapio-evento';
+      if (params.get('mode') === 'buffet' || params.get('mode') === 'cardapio-evento' || params.get('mode') === 'orcamento') return 'cardapio-evento';
       const hash = window.location.hash;
-      if (hash.includes('cardapio-evento') || hash.includes('orcamento') || hash.includes('buffet-cardapio')) return 'cardapio-evento';
-      if (hash.includes('buffet')) return 'full-buffet';
+      if (hash.includes('cardapio-evento') || hash.includes('orcamento') || hash.includes('buffet')) return 'cardapio-evento';
       if (params.get('mode') === 'admin' || hash.includes('admin')) {
         if (sessionStorage.getItem('el_shadday_admin_auth') === 'true') {
           return 'admin';
@@ -550,10 +548,8 @@ export default function App() {
         } else {
           setIsAdminLoginModalOpen(true);
         }
-      } else if (hash.includes('cardapio-evento') || hash.includes('buffet-cardapio') || hash.includes('orcamento-evento')) {
+      } else if (hash.includes('cardapio-evento') || hash.includes('buffet') || hash.includes('orcamento')) {
         setAppView('cardapio-evento');
-      } else if (hash === '#/buffet' || hash === '#buffet') {
-        setAppView('full-buffet');
       }
     };
 
@@ -890,9 +886,8 @@ export default function App() {
   };
 
   const handleOpenFullBuffet = () => {
-    window.location.hash = '#buffet';
-    window.scrollTo({ top: 0, behavior: 'instant' });
-    setAppView('full-buffet');
+    // Redireciona sempre para o novo layout de Buffet & Eventos
+    handleOpenBuffetSubpage();
   };
 
   const handleBackToDelivery = () => {
@@ -987,11 +982,15 @@ export default function App() {
           <div className="flex items-center gap-2 ml-auto sm:ml-0">
             <button 
               type="button"
-              onClick={handleOpenFullBuffet} 
+              onClick={() => {
+                const el = document.getElementById('buffet-galeria');
+                if (el) el.scrollIntoView({ behavior: 'smooth' });
+              }} 
               className="px-3.5 py-1.5 rounded-xl bg-dark-900 border border-brand-gold/40 hover:border-brand-gold text-brand-gold text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
               title="Ver fotos reais, equipe e estrutura do Buffet"
             >
-              <span>👑 Ver Apresentação & Galeria</span>
+              <Camera className="w-3.5 h-3.5 text-brand-gold" />
+              <span>Ver Fotos & Galeria</span>
             </button>
 
             <button 
@@ -1276,7 +1275,7 @@ export default function App() {
 
                 <button
                   type="button"
-                  onClick={handleOpenFullBuffet}
+                  onClick={handleOpenBuffetSubpage}
                   className="px-4 py-3 rounded-xl bg-dark-950 hover:bg-dark-850 text-slate-200 hover:text-white border border-dark-750 hover:border-brand-gold/40 font-bold text-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5 text-center"
                 >
                   <span>👑 Ver Apresentação</span>
