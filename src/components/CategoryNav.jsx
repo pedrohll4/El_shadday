@@ -1,6 +1,6 @@
 import React from 'react';
 import { 
-  Flame, Package, Utensils, HeartHandshake, Pizza, Wine, Search, X, Crown 
+  Flame, Package, Utensils, HeartHandshake, Pizza, Wine, Search, X, Crown, IceCream, Soup 
 } from 'lucide-react';
 import { CATEGORIES, PRODUCTS } from '../data/menuData';
 
@@ -10,7 +10,9 @@ const ICONS_MAP = {
   Utensils,
   HeartHandshake,
   Pizza,
-  Wine
+  Wine,
+  IceCream,
+  Soup
 };
 
 export function CategoryNav({ 

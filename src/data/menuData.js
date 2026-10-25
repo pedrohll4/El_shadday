@@ -1,4 +1,4 @@
-import { isSupabaseConfigured } from '../services/supabaseClient';
+import { isSupabaseConfigured } from '../services/supabaseClient.js';
 
 export const RESTAURANT_INFO = {
   name: "El Shadday Delivery Esfirraria e Pizzaria",
@@ -101,6 +101,8 @@ export const CATEGORIES = [
   { id: "esfirras-salgadas", name: "Esfirras Salgadas", icon: "Utensils", tag: "Massa Secreta & Macia" },
   { id: "esfirras-doces", name: "Esfirras Doces", icon: "HeartHandshake", tag: "Sobremesas Irresistíveis" },
   { id: "pizzas", name: "Pizzas Especiais", icon: "Pizza", tag: "Borda de Catupiry Grátis!" },
+  { id: "acai", name: "Açaí & Barcas", icon: "IceCream", tag: "Cremoso & Refrescante" },
+  { id: "caldos", name: "Caldos Quentinhos", icon: "Soup", tag: "Sabor Caseiro & Reconfortante" },
   { id: "bebidas", name: "Bebidas Geladas", icon: "Wine", tag: "Linha Dydyo & Tradicionais" }
 ];
 
@@ -581,6 +583,103 @@ export const PRODUCTS = [
       { name: "Gigante (12 fatias)", price: 33.00 }
     ],
     image: "https://assets.olaclick.app/companies/products/images/800/92c9d90d-851c-4044-8ba3-e460c12b5c36.png"
+  },
+
+  // ==========================================
+  // AÇAÍ & BARCAS (4 ITENS)
+  // ==========================================
+  {
+    id: "barca-acai-especial",
+    categoryId: "acai",
+    name: "Barca de Açaí Especial",
+    description: "A famosa barca de açaí da El Shadday! Açaí cremoso de altíssima qualidade trufado, servido na barca com até 5 adicionais generosos: Leite em pó, Leite condensado, Granola, Paçoca, Banana fatiada e Coberturas.",
+    price: 35.00,
+    originalPrice: 40.00,
+    badge: "Sucesso da Casa 🍧",
+    image: "/barca_acai.jpg",
+    details: "Açaí cremoso trufado + até 5 adicionais generosos à sua escolha."
+  },
+  {
+    id: "acai-copo-500ml",
+    categoryId: "acai",
+    name: "Copo de Açaí 500ml Turbinado",
+    description: "Copo de 500ml de puro açaí cremoso montado em camadas com leite em pó Ninho, leite condensado, banana fresca fatiada e granola crocante.",
+    price: 20.00,
+    badge: "Mais Pedido 🍨",
+    image: "https://images.unsplash.com/photo-1590080875515-8a3a8dc5735e?auto=format&fit=crop&w=800&q=80",
+    details: "500ml montado em camadas generosas."
+  },
+  {
+    id: "acai-copo-700ml",
+    categoryId: "acai",
+    name: "Copo de Açaí Gigante 700ml",
+    description: "Para os verdadeiros amantes de açaí! Copão de 700ml com camadas fartas de açaí, leite Ninho, leite condensado, banana, morango e paçoca.",
+    price: 28.00,
+    badge: "Gigante 🏆",
+    image: "https://images.unsplash.com/photo-1590080875515-8a3a8dc5735e?auto=format&fit=crop&w=800&q=80",
+    details: "700ml bem servido para matar qualquer vontade."
+  },
+  {
+    id: "acai-copo-300ml",
+    categoryId: "acai",
+    name: "Copo de Açaí 300ml Express",
+    description: "Porção individual refrescante de açaí batido cremoso com leite em pó, leite condensado e paçoca crocante.",
+    price: 15.00,
+    image: "https://images.unsplash.com/photo-1590080875515-8a3a8dc5735e?auto=format&fit=crop&w=800&q=80",
+    details: "Porção individual 300ml."
+  },
+
+  // ==========================================
+  // CALDOS QUENTINHOS (5 ITENS)
+  // ==========================================
+  {
+    id: "caldo-frango-milho",
+    categoryId: "caldos",
+    name: "Caldo de Frango com Milho e Mandioca",
+    description: "Caldo cremoso com base de mandioca selecionada e frango desfiado suculento, milho verde e tempero caseiro especial. Acompanha cheiro-verde e torradinhas crocantes.",
+    price: 20.00,
+    badge: "Tradicional 🍲",
+    image: "https://images.unsplash.com/photo-1582878826629-29b7ad1cdc43?auto=format&fit=crop&w=800&q=80",
+    details: "Pote térmico 500ml quentinho + torradinhas e cheiro-verde."
+  },
+  {
+    id: "caldo-carne-seca-mandioca",
+    categoryId: "caldos",
+    name: "Caldo de Carne Seca com Mandioca",
+    description: "O clássico do norte: carne seca desfiada de primeira qualidade cozida no ponto certo com mandioca cremosa, alho frito e especiarias da casa. Acompanha torradinhas crocantes.",
+    price: 24.00,
+    badge: "Mais Vendido 🔥",
+    image: "https://images.unsplash.com/photo-1603105037880-880cd4edfb0d?auto=format&fit=crop&w=800&q=80",
+    details: "Pote térmico 500ml bem quentinho."
+  },
+  {
+    id: "caldo-feijao-bacon-calabresa",
+    categoryId: "caldos",
+    name: "Caldo de Feijão com Bacon e Calabresa",
+    description: "Caldo de feijão encorpado e aveludado, temperado com muito alho e louro, recheado com cubos dourados de bacon crocante e calabresa fatiada. Acompanha torresminho e cheiro-verde.",
+    price: 22.00,
+    badge: "Saboroso 🥓",
+    image: "https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=800&q=80",
+    details: "Pote térmico 500ml + torresmo crocante e cheiro-verde."
+  },
+  {
+    id: "caldo-verde-especial",
+    categoryId: "caldos",
+    name: "Caldo Verde Especial da El Shadday",
+    description: "Tradicional caldo verde com base cremosa de batatas, couve fininha refogada no azeite extra virgem e rodelas de calabresa defumada. Acompanha torradinhas.",
+    price: 22.00,
+    image: "https://images.unsplash.com/photo-1547592166-23ac45744acd?auto=format&fit=crop&w=800&q=80",
+    details: "Pote térmico 500ml."
+  },
+  {
+    id: "caldo-mocoto-tradicional",
+    categoryId: "caldos",
+    name: "Caldo de Mocotó Tradicional",
+    description: "Rico em colágeno e muito sabor, cozido lentamente com temperos caseiros, cheiro-verde e ovos de codorna. Puro revigorante!",
+    price: 25.00,
+    badge: "Fortalecedor 💪",
+    image: "https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=800&q=80",
+    details: "Pote térmico 500ml."
   },
 
   // ==========================================
