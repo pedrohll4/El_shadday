@@ -64,7 +64,7 @@ const getInitialOrders = () => {
 
 
 // Error Boundary to prevent blank/black screens on any unexpected runtime error
-class ErrorBoundary extends React.Component {
+export class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
     this.state = { hasError: false, error: null };
@@ -80,25 +80,27 @@ class ErrorBoundary extends React.Component {
       return (
         <div className="min-h-screen bg-dark-950 text-white flex flex-col items-center justify-center p-6 text-center">
           <div className="w-16 h-16 rounded-3xl bg-amber-500/20 text-brand-gold border border-brand-gold/40 flex items-center justify-center mb-4 text-3xl font-black">
-            ⚠️
+            ✨
           </div>
           <h2 className="text-xl sm:text-2xl font-black mb-2 text-white font-display">
-            Restaurando Painel El Shadday
+            El Shadday Ariquemes
           </h2>
-          <p className="text-xs sm:text-sm text-slate-400 max-w-md mb-6">
-            Ocorreu uma pequena oscilação temporária na interface. Seus pedidos e configurações permanecem 100% seguros.
+          <p className="text-xs sm:text-sm text-slate-400 max-w-md mb-6 leading-relaxed">
+            Houve uma pequena oscilação no carregamento desta página. Seus dados e configurações continuam 100% preservados.
           </p>
           <div className="flex flex-wrap items-center justify-center gap-3">
             <button
+              type="button"
               onClick={() => {
                 this.setState({ hasError: false });
                 window.location.reload();
               }}
               className="px-5 py-3 rounded-xl bg-gradient-to-r from-brand-gold via-amber-400 to-brand-gold text-dark-950 font-black text-xs hover:scale-102 transition-transform shadow-glow-gold cursor-pointer"
             >
-              🔄 Recarregar Painel
+              🔄 Recarregar Página
             </button>
             <button
+              type="button"
               onClick={() => {
                 this.setState({ hasError: false });
                 sessionStorage.removeItem('el_shadday_admin_auth');
@@ -881,7 +883,9 @@ export default function App() {
   // Navigation helpers for views
   const handleOpenBuffetSubpage = () => {
     window.location.hash = '#cardapio-evento';
-    window.scrollTo({ top: 0, behavior: 'instant' });
+    try {
+      window.scrollTo(0, 0);
+    } catch (e) {}
     setAppView('cardapio-evento');
   };
 
@@ -892,7 +896,9 @@ export default function App() {
 
   const handleBackToDelivery = () => {
     window.location.hash = '';
-    window.scrollTo({ top: 0, behavior: 'instant' });
+    try {
+      window.scrollTo(0, 0);
+    } catch (e) {}
     setAppView('delivery');
   };
 
@@ -923,97 +929,101 @@ export default function App() {
   // VIEW 2: FULL BUFFET SHOWCASE (APRESENTAÇÃO INSTITUCIONAL)
   if (appView === 'full-buffet') {
     return (
-      <div className="relative min-h-screen bg-dark-950 text-slate-100">
-        <div className="bg-dark-950/90 backdrop-blur-md border-b border-dark-750/80 shadow-2xl py-2.5 px-4 sm:px-6 sticky top-0 z-50 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-brand-gold/15 border border-brand-gold/30 text-brand-gold text-[11px] font-black uppercase tracking-wider shadow-sm">
-              <Sparkles className="w-3.5 h-3.5 text-brand-gold" />
-              Buffet El Shadday
-            </span>
-            <span className="text-xs text-slate-300 font-medium hidden sm:inline">
-              Apresentação Completa para Casamentos, Formaturas e Eventos
-            </span>
-          </div>
+      <ErrorBoundary>
+        <div className="relative min-h-screen bg-dark-950 text-slate-100">
+          <div className="bg-dark-950/90 backdrop-blur-md border-b border-dark-750/80 shadow-2xl py-2.5 px-4 sm:px-6 sticky top-0 z-50 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-brand-gold/15 border border-brand-gold/30 text-brand-gold text-[11px] font-black uppercase tracking-wider shadow-sm">
+                <Sparkles className="w-3.5 h-3.5 text-brand-gold" />
+                Buffet El Shadday
+              </span>
+              <span className="text-xs text-slate-300 font-medium hidden sm:inline">
+                Apresentação Completa para Casamentos, Formaturas e Eventos
+              </span>
+            </div>
 
-          <div className="flex items-center gap-2 ml-auto sm:ml-0">
-            <button 
-              type="button"
-              onClick={handleOpenBuffetSubpage} 
-              className="px-3.5 py-1.5 rounded-xl bg-dark-900 border border-brand-gold/40 hover:border-brand-gold text-brand-gold text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
-              title="Abrir o montador de cardápio"
-            >
-              <span>🍽️ Montar Cardápio</span>
-            </button>
+            <div className="flex items-center gap-2 ml-auto sm:ml-0">
+              <button 
+                type="button"
+                onClick={handleOpenBuffetSubpage} 
+                className="px-3.5 py-1.5 rounded-xl bg-dark-900 border border-brand-gold/40 hover:border-brand-gold text-brand-gold text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
+                title="Abrir o montador de cardápio"
+              >
+                <span>🍽️ Montar Cardápio</span>
+              </button>
 
-            <button 
-              type="button"
-              onClick={handleBackToDelivery} 
-              className="px-4 py-1.5 rounded-xl bg-gradient-to-r from-brand-gold via-amber-400 to-brand-gold hover:brightness-110 active:scale-95 text-dark-950 text-xs font-black uppercase tracking-wider shadow-glow-gold transition-all cursor-pointer flex items-center gap-2"
-            >
-              <span>🍕 Voltar para o Delivery</span>
-            </button>
+              <button 
+                type="button"
+                onClick={handleBackToDelivery} 
+                className="px-4 py-1.5 rounded-xl bg-gradient-to-r from-brand-gold via-amber-400 to-brand-gold hover:brightness-110 active:scale-95 text-dark-950 text-xs font-black uppercase tracking-wider shadow-glow-gold transition-all cursor-pointer flex items-center gap-2"
+              >
+                <span>🍕 Voltar para o Delivery</span>
+              </button>
+            </div>
           </div>
+          <BuffetApp 
+            currentAppMode="buffet" 
+            onToggleAppMode={handleBackToDelivery}
+            onNavigateToBuilder={handleOpenBuffetSubpage}
+          />
         </div>
-        <BuffetApp 
-          currentAppMode="buffet" 
-          onToggleAppMode={handleBackToDelivery}
-          onNavigateToBuilder={handleOpenBuffetSubpage}
-        />
-      </div>
+      </ErrorBoundary>
     );
   }
 
   // VIEW 2.5: DEDICATED BUFFET & EVENT MENU SUBPAGE ("Monte o Cardápio do Seu Evento")
   if (appView === 'cardapio-evento') {
     return (
-      <div className="relative min-h-screen bg-dark-950 text-slate-100 flex flex-col font-sans selection:bg-brand-gold selection:text-dark-950">
-        {/* Sticky Subpage Top Bar */}
-        <div className="bg-dark-950/95 backdrop-blur-md border-b border-dark-750/80 shadow-2xl py-2.5 px-4 sm:px-6 sticky top-0 z-50 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-brand-gold/15 border border-brand-gold/30 text-brand-gold text-[11px] font-black uppercase tracking-wider shadow-sm">
-              <Sparkles className="w-3.5 h-3.5 text-brand-gold" />
-              Buffet El Shadday
-            </span>
-            <span className="text-xs text-slate-300 font-medium hidden sm:inline">
-              Montador de Cardápio para Eventos & Casamentos
-            </span>
+      <ErrorBoundary>
+        <div className="relative min-h-screen bg-dark-950 text-slate-100 flex flex-col font-sans selection:bg-brand-gold selection:text-dark-950">
+          {/* Sticky Subpage Top Bar */}
+          <div className="bg-dark-950/95 backdrop-blur-md border-b border-dark-750/80 shadow-2xl py-2.5 px-4 sm:px-6 sticky top-0 z-50 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-brand-gold/15 border border-brand-gold/30 text-brand-gold text-[11px] font-black uppercase tracking-wider shadow-sm">
+                <Sparkles className="w-3.5 h-3.5 text-brand-gold" />
+                Buffet El Shadday
+              </span>
+              <span className="text-xs text-slate-300 font-medium hidden sm:inline">
+                Montador de Cardápio para Eventos & Casamentos
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2 ml-auto sm:ml-0">
+              <button 
+                type="button"
+                onClick={() => {
+                  const el = document.getElementById('buffet-galeria');
+                  if (el) el.scrollIntoView({ behavior: 'smooth' });
+                }} 
+                className="px-3.5 py-1.5 rounded-xl bg-dark-900 border border-brand-gold/40 hover:border-brand-gold text-brand-gold text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
+                title="Ver fotos reais, equipe e estrutura do Buffet"
+              >
+                <Camera className="w-3.5 h-3.5 text-brand-gold" />
+                <span>Ver Fotos & Galeria</span>
+              </button>
+
+              <button 
+                type="button"
+                onClick={handleBackToDelivery} 
+                className="px-4 py-1.5 rounded-xl bg-gradient-to-r from-brand-gold via-amber-400 to-brand-gold hover:brightness-110 active:scale-95 text-dark-950 text-xs font-black uppercase tracking-wider shadow-glow-gold transition-all cursor-pointer flex items-center gap-2"
+              >
+                <span>🍕 Voltar para o Delivery</span>
+              </button>
+            </div>
           </div>
 
-          <div className="flex items-center gap-2 ml-auto sm:ml-0">
-            <button 
-              type="button"
-              onClick={() => {
-                const el = document.getElementById('buffet-galeria');
-                if (el) el.scrollIntoView({ behavior: 'smooth' });
-              }} 
-              className="px-3.5 py-1.5 rounded-xl bg-dark-900 border border-brand-gold/40 hover:border-brand-gold text-brand-gold text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
-              title="Ver fotos reais, equipe e estrutura do Buffet"
-            >
-              <Camera className="w-3.5 h-3.5 text-brand-gold" />
-              <span>Ver Fotos & Galeria</span>
-            </button>
+          {/* The Event Menu Builder Component */}
+          <main className="flex-1">
+            <BuffetSection 
+              onExploreFullBuffet={handleOpenFullBuffet}
+              onBackToDelivery={handleBackToDelivery}
+            />
+          </main>
 
-            <button 
-              type="button"
-              onClick={handleBackToDelivery} 
-              className="px-4 py-1.5 rounded-xl bg-gradient-to-r from-brand-gold via-amber-400 to-brand-gold hover:brightness-110 active:scale-95 text-dark-950 text-xs font-black uppercase tracking-wider shadow-glow-gold transition-all cursor-pointer flex items-center gap-2"
-            >
-              <span>🍕 Voltar para o Delivery</span>
-            </button>
-          </div>
+          {/* Footer */}
+          <Footer onOpenAdmin={handleOpenAdminTrigger} />
         </div>
-
-        {/* The Event Menu Builder Component */}
-        <main className="flex-1">
-          <BuffetSection 
-            onExploreFullBuffet={handleOpenFullBuffet}
-            onBackToDelivery={handleBackToDelivery}
-          />
-        </main>
-
-        {/* Footer */}
-        <Footer onOpenAdmin={handleOpenAdminTrigger} />
-      </div>
+      </ErrorBoundary>
     );
   }
 

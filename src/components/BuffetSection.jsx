@@ -31,19 +31,40 @@ import { isVideoUrl, getVideoPosterUrl } from '../utils/imageCompressor';
 
 export function BuffetSection({ onExploreFullBuffet, onBackToDelivery }) {
   // Dynamic categories state (allows admin to manage & disable items)
-  const [categories, setCategories] = useState(() => getStoredBuffetCategories());
-  const [unavailableItemIds, setUnavailableItemIds] = useState(() => getUnavailableBuffetItemIds());
+  const [categories, setCategories] = useState(() => {
+    try {
+      const cats = getStoredBuffetCategories();
+      return Array.isArray(cats) && cats.length > 0 ? cats : INITIAL_BUFFET_CATEGORIES;
+    } catch (e) {
+      return INITIAL_BUFFET_CATEGORIES;
+    }
+  });
+
+  const [unavailableItemIds, setUnavailableItemIds] = useState(() => {
+    try {
+      const unavail = getUnavailableBuffetItemIds();
+      return Array.isArray(unavail) ? unavail : [];
+    } catch (e) {
+      return [];
+    }
+  });
 
   // Listen to live category & unavailability updates across devices
   useEffect(() => {
     const handleBuffetSync = () => {
-      const freshCats = getStoredBuffetCategories();
-      const freshUnavail = getUnavailableBuffetItemIds();
-      setCategories(freshCats);
-      setUnavailableItemIds(freshUnavail);
+      try {
+        const freshCats = getStoredBuffetCategories();
+        const freshUnavail = getUnavailableBuffetItemIds();
+        const safeCats = Array.isArray(freshCats) && freshCats.length > 0 ? freshCats : INITIAL_BUFFET_CATEGORIES;
+        const safeUnavail = Array.isArray(freshUnavail) ? freshUnavail : [];
+        setCategories(safeCats);
+        setUnavailableItemIds(safeUnavail);
 
-      // Auto-prune any unavailable items from the client's current selection
-      setSelectedItemIds(prev => prev.filter(id => !freshUnavail.includes(id)));
+        // Auto-prune any unavailable items from the client's current selection
+        setSelectedItemIds(prev => (Array.isArray(prev) ? prev : []).filter(id => !safeUnavail.includes(id)));
+      } catch (e) {
+        console.warn('Erro ao sincronizar categorias do buffet:', e);
+      }
     };
 
     window.addEventListener('buffet_categories_updated', handleBuffetSync);
@@ -62,10 +83,11 @@ export function BuffetSection({ onExploreFullBuffet, onBackToDelivery }) {
     try {
       const saved = localStorage.getItem('el_shadday_selected_items');
       const unavail = getUnavailableBuffetItemIds();
+      const safeUnavail = Array.isArray(unavail) ? unavail : [];
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          return parsed.filter(id => !unavail.includes(id));
+          return parsed.filter(id => id && !safeUnavail.includes(id));
         }
       }
       return [];
@@ -96,105 +118,128 @@ export function BuffetSection({ onExploreFullBuffet, onBackToDelivery }) {
   // Toggle specific meat in churrasco
   const handleToggleChurrascoMeat = (meatLabel) => {
     setSelectedChurrascoMeats(prev => {
+      const safePrev = Array.isArray(prev) ? prev : [];
       let updated;
-      if (prev.includes(meatLabel)) {
-        if (prev.length === 1) return prev; // Mantenha pelo menos uma opção
-        updated = prev.filter(m => m !== meatLabel);
+      if (safePrev.includes(meatLabel)) {
+        if (safePrev.length === 1) return safePrev; // Mantenha pelo menos uma opção
+        updated = safePrev.filter(m => m !== meatLabel);
       } else {
-        updated = [...prev, meatLabel];
+        updated = [...safePrev, meatLabel];
       }
       return updated;
     });
   };
 
   // Sincronização em tempo real das fotos da galeria (localStorage + Supabase)
-  const [galleryPhotos, setGalleryPhotos] = useState(() => getStoredBuffetGallery());
+  const [galleryPhotos, setGalleryPhotos] = useState(() => {
+    try {
+      const stored = getStoredBuffetGallery();
+      return Array.isArray(stored) ? stored : [];
+    } catch (e) {
+      return [];
+    }
+  });
 
   useEffect(() => {
+    let isMounted = true;
     // Escuta atualizações locais (cross-tab e evento custom)
     const handleGallerySync = (e) => {
-      if (e?.detail && Array.isArray(e.detail)) {
-        setGalleryPhotos(e.detail);
-      } else {
-        const stored = getStoredBuffetGallery();
-        setGalleryPhotos(stored);
-      }
+      if (!isMounted) return;
+      try {
+        if (e?.detail && Array.isArray(e.detail)) {
+          setGalleryPhotos(e.detail);
+        } else {
+          const stored = getStoredBuffetGallery();
+          setGalleryPhotos(Array.isArray(stored) ? stored : []);
+        }
+      } catch (err) {}
     };
     window.addEventListener('storage', handleGallerySync);
     window.addEventListener('buffet_gallery_updated', handleGallerySync);
 
     // ========== CARREGA GALERIA DO SUPABASE ==========
-    // Estratégia: company_settings.buffet_gallery PRIMEIRO (tabela garantida),
-    // depois tenta buffet_gallery (tabela dedicada) se existir.
     if (isSupabaseConfigured && supabase) {
-      // 1) Busca de company_settings (SEMPRE existe)
       supabase
         .from('company_settings')
         .select('buffet_gallery')
         .eq('id', 'el_shadday_config')
         .single()
         .then(({ data: csData, error: csError }) => {
+          if (!isMounted) return;
           if (!csError && Array.isArray(csData?.buffet_gallery)) {
-            const cleanCs = csData.buffet_gallery.filter(p => !isFakeGalleryItem(p));
-            console.log('[BuffetSection] ✅ Galeria carregada de company_settings:', cleanCs.length, 'itens');
+            const cleanCs = csData.buffet_gallery.filter(p => p && !isFakeGalleryItem(p));
             setGalleryPhotos(cleanCs);
             saveStoredBuffetGallery(cleanCs);
-            return; // Já carregou — não precisa tentar buffet_gallery
+            return;
           }
-          // 2) Fallback: tenta tabela buffet_gallery (pode não existir)
           supabase
             .from('buffet_gallery')
             .select('*')
             .order('position', { ascending: true })
             .then(({ data, error }) => {
+              if (!isMounted) return;
               if (!error && Array.isArray(data) && data.length > 0) {
-                const clean = data.filter(p => !isFakeGalleryItem(p));
-                console.log('[BuffetSection] ✅ Galeria carregada de buffet_gallery:', clean.length, 'itens');
+                const clean = data.filter(p => p && !isFakeGalleryItem(p));
                 setGalleryPhotos(clean);
                 saveStoredBuffetGallery(clean);
               }
-            });
-        });
+            })
+            .catch(() => {});
+        })
+        .catch(() => {});
 
       // Realtime: escuta mudanças em company_settings
-      supabase
-        .channel('realtime_gallery_section_cs')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'company_settings' }, () => {
-          supabase
-            .from('company_settings')
-            .select('buffet_gallery')
-            .eq('id', 'el_shadday_config')
-            .single()
-            .then(({ data: csData }) => {
-              if (Array.isArray(csData?.buffet_gallery)) {
-                const clean = csData.buffet_gallery.filter(p => !isFakeGalleryItem(p));
-                setGalleryPhotos(clean);
-                saveStoredBuffetGallery(clean);
-              }
-            });
-        })
-        .subscribe();
+      let channelCs;
+      try {
+        channelCs = supabase
+          .channel('realtime_gallery_section_cs')
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'company_settings' }, () => {
+            if (!isMounted) return;
+            supabase
+              .from('company_settings')
+              .select('buffet_gallery')
+              .eq('id', 'el_shadday_config')
+              .single()
+              .then(({ data: csData }) => {
+                if (!isMounted) return;
+                if (Array.isArray(csData?.buffet_gallery)) {
+                  const clean = csData.buffet_gallery.filter(p => p && !isFakeGalleryItem(p));
+                  setGalleryPhotos(clean);
+                  saveStoredBuffetGallery(clean);
+                }
+              })
+              .catch(() => {});
+          })
+          .subscribe();
+      } catch (e) {}
 
       // Realtime: escuta mudanças em buffet_gallery (se existir)
-      supabase
-        .channel('realtime_gallery_section_bg')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'buffet_gallery' }, () => {
-          supabase
-            .from('buffet_gallery')
-            .select('*')
-            .order('position', { ascending: true })
-            .then(({ data }) => {
-              if (Array.isArray(data)) {
-                const clean = data.filter(p => !isFakeGalleryItem(p));
-                setGalleryPhotos(clean);
-                saveStoredBuffetGallery(clean);
-              }
-            });
-        })
-        .subscribe();
+      let channelBg;
+      try {
+        channelBg = supabase
+          .channel('realtime_gallery_section_bg')
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'buffet_gallery' }, () => {
+            if (!isMounted) return;
+            supabase
+              .from('buffet_gallery')
+              .select('*')
+              .order('position', { ascending: true })
+              .then(({ data }) => {
+                if (!isMounted) return;
+                if (Array.isArray(data)) {
+                  const clean = data.filter(p => p && !isFakeGalleryItem(p));
+                  setGalleryPhotos(clean);
+                  saveStoredBuffetGallery(clean);
+                }
+              })
+              .catch(() => {});
+          })
+          .subscribe();
+      } catch (e) {}
     }
 
     return () => {
+      isMounted = false;
       window.removeEventListener('storage', handleGallerySync);
       window.removeEventListener('buffet_gallery_updated', handleGallerySync);
     };
@@ -225,23 +270,25 @@ export function BuffetSection({ onExploreFullBuffet, onBackToDelivery }) {
 
   // Toggle item selection (respects item availability)
   const handleToggleItem = (itemId) => {
-    // Prevent selecting unavailable items
-    if (unavailableItemIds.includes(itemId)) {
+    if (!itemId) return;
+    const safeUnavail = Array.isArray(unavailableItemIds) ? unavailableItemIds : [];
+    if (safeUnavail.includes(itemId)) {
       return;
     }
 
     setSelectedItemIds(prev => {
-      const isRemoving = prev.includes(itemId);
+      const safePrev = Array.isArray(prev) ? prev : [];
+      const isRemoving = safePrev.includes(itemId);
       const updated = isRemoving
-        ? prev.filter(id => id !== itemId)
-        : [...prev, itemId];
+        ? safePrev.filter(id => id !== itemId)
+        : [...safePrev, itemId];
       
       try {
         localStorage.setItem('el_shadday_selected_items', JSON.stringify(updated));
       } catch (e) {}
 
       // Se selecionou churrasco e não havia carnes marcadas, restaura todas
-      if (!isRemoving && itemId === 'pp_churrasco_assados' && selectedChurrascoMeats.length === 0) {
+      if (!isRemoving && itemId === 'pp_churrasco_assados' && (!Array.isArray(selectedChurrascoMeats) || selectedChurrascoMeats.length === 0)) {
         setSelectedChurrascoMeats(DEFAULT_CHURRASCO_OPTIONS.map(o => o.label));
       }
 
@@ -251,23 +298,28 @@ export function BuffetSection({ onExploreFullBuffet, onBackToDelivery }) {
 
   // Select all or clear items in a category (only affects available items)
   const handleToggleCategory = (categoryId) => {
-    const cat = categories.find(c => c.id === categoryId);
+    if (!Array.isArray(categories)) return;
+    const cat = categories.find(c => c && c.id === categoryId);
     if (!cat) return;
-    const availableItems = cat.items.filter(i => i.active !== false && !unavailableItemIds.includes(i.id));
+    const catItems = Array.isArray(cat.items) ? cat.items : [];
+    const safeUnavail = Array.isArray(unavailableItemIds) ? unavailableItemIds : [];
+    const availableItems = catItems.filter(i => i && i.active !== false && !safeUnavail.includes(i.id));
     const availableIds = availableItems.map(i => i.id);
     if (availableIds.length === 0) return;
 
-    const isAllSelected = availableIds.every(id => selectedItemIds.includes(id));
+    const safeSelected = Array.isArray(selectedItemIds) ? selectedItemIds : [];
+    const isAllSelected = availableIds.every(id => safeSelected.includes(id));
 
     setSelectedItemIds(prev => {
+      const safePrev = Array.isArray(prev) ? prev : [];
       let updated;
       if (isAllSelected) {
         // Unselect all available items in this category
         const setIds = new Set(availableIds);
-        updated = prev.filter(id => !setIds.has(id));
+        updated = safePrev.filter(id => !setIds.has(id));
       } else {
         // Select all available items in this category
-        updated = Array.from(new Set([...prev, ...availableIds]));
+        updated = Array.from(new Set([...safePrev, ...availableIds]));
       }
 
       try {
@@ -281,11 +333,22 @@ export function BuffetSection({ onExploreFullBuffet, onBackToDelivery }) {
   // Group selected items by category in correct gastronomic order
   const selectedGrouped = useMemo(() => {
     const groups = [];
+    if (!Array.isArray(categories)) return groups;
+    const safeSelected = Array.isArray(selectedItemIds) ? selectedItemIds : [];
+    const safeUnavail = Array.isArray(unavailableItemIds) ? unavailableItemIds : [];
+
     categories.forEach(cat => {
-      const matched = cat.items.filter(item => selectedItemIds.includes(item.id) && item.active !== false && !unavailableItemIds.includes(item.id));
+      if (!cat) return;
+      const catItems = Array.isArray(cat.items) ? cat.items : [];
+      const matched = catItems.filter(item => 
+        item && 
+        safeSelected.includes(item.id) && 
+        item.active !== false && 
+        !safeUnavail.includes(item.id)
+      );
       if (matched.length > 0) {
         groups.push({
-          categoryName: cat.name,
+          categoryName: cat.name || '',
           categoryId: cat.id,
           items: matched
         });
@@ -433,14 +496,18 @@ export function BuffetSection({ onExploreFullBuffet, onBackToDelivery }) {
             5. Bebidas
         */}
         <div className="space-y-6">
-          {categories.map((category, index) => {
-            const availableItems = category.items.filter(i => i.active !== false && !unavailableItemIds.includes(i.id));
-            const countInCat = availableItems.filter(i => selectedItemIds.includes(i.id)).length;
-            const isAllSelected = availableItems.length > 0 && availableItems.every(i => selectedItemIds.includes(i.id));
+          {(Array.isArray(categories) ? categories : []).map((category, index) => {
+            if (!category) return null;
+            const catItems = Array.isArray(category.items) ? category.items : [];
+            const safeUnavail = Array.isArray(unavailableItemIds) ? unavailableItemIds : [];
+            const safeSelected = Array.isArray(selectedItemIds) ? selectedItemIds : [];
+            const availableItems = catItems.filter(i => i && i.active !== false && !safeUnavail.includes(i.id));
+            const countInCat = availableItems.filter(i => safeSelected.includes(i.id)).length;
+            const isAllSelected = availableItems.length > 0 && availableItems.every(i => safeSelected.includes(i.id));
 
             return (
               <div 
-                key={category.id}
+                key={category.id || index}
                 className="rounded-3xl bg-dark-900 border border-dark-750/90 p-4 sm:p-5 shadow-lg"
               >
                 
@@ -451,10 +518,10 @@ export function BuffetSection({ onExploreFullBuffet, onBackToDelivery }) {
                       <span className="text-brand-gold text-xs sm:text-sm font-sans font-bold">
                         0{index + 1}.
                       </span>
-                      <span>{category.name}</span>
+                      <span>{category.name || 'Opções'}</span>
                     </h3>
                     <span className="text-[11px] text-slate-400">
-                      {category.items.length} {category.items.length === 1 ? 'opção' : 'opções'}
+                      {catItems.length} {catItems.length === 1 ? 'opção' : 'opções'}
                       {countInCat > 0 && ` • ${countInCat} selecionada(s)`}
                     </span>
                   </div>
@@ -472,9 +539,10 @@ export function BuffetSection({ onExploreFullBuffet, onBackToDelivery }) {
 
                 {/* Grid de Itens: Compacto, limpo e bem dimensionado no celular */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  {category.items.map(item => {
-                    const isUnavailable = item.active === false || item.isAvailable === false || unavailableItemIds.includes(item.id);
-                    const isSelected = !isUnavailable && selectedItemIds.includes(item.id);
+                  {catItems.map(item => {
+                    if (!item || !item.id) return null;
+                    const isUnavailable = item.active === false || item.isAvailable === false || safeUnavail.includes(item.id);
+                    const isSelected = !isUnavailable && safeSelected.includes(item.id);
                     const isChurrasco = item.id === 'pp_churrasco_assados';
 
                     // Item Indisponível / Esgotado Temporariamente
@@ -675,14 +743,20 @@ export function BuffetSection({ onExploreFullBuffet, onBackToDelivery }) {
           </p>
 
           {/* Mini Carrossel de 3 Fotos / Vídeos Rotativos */}
-          {galleryPhotos && galleryPhotos.length > 0 ? (
+          {Array.isArray(galleryPhotos) && galleryPhotos.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
               {[0, 1, 2].slice(0, Math.min(3, galleryPhotos.length)).map(offset => {
-                const photoIdx = (galleryIndex + offset) % galleryPhotos.length;
+                const totalPhotos = galleryPhotos.length;
+                const safeBaseIdx = Math.abs(Number(galleryIndex) || 0);
+                const photoIdx = (safeBaseIdx + offset) % totalPhotos;
                 const photo = galleryPhotos[photoIdx];
                 if (!photo) return null;
-                const isVid = Boolean(photo.type === 'video' || isVideoUrl(photo.url));
-                const poster = photo.thumbnail || getVideoPosterUrl(photo.url);
+                const photoUrl = typeof photo.url === 'string' ? photo.url : '';
+                const photoTitle = typeof photo.title === 'string' ? photo.title : (photo.title ? String(photo.title) : 'Buffet El Shadday');
+                const photoSubtitle = typeof photo.subtitle === 'string' ? photo.subtitle : (photo.subtitle ? String(photo.subtitle) : '');
+                const photoTag = typeof photo.tag === 'string' ? photo.tag : (photo.tag ? String(photo.tag) : 'Buffet');
+                const isVid = Boolean(photo.type === 'video' || isVideoUrl(photoUrl));
+                const poster = photo.thumbnail || getVideoPosterUrl(photoUrl);
 
                 return (
                   <div 
@@ -694,13 +768,13 @@ export function BuffetSection({ onExploreFullBuffet, onBackToDelivery }) {
                         {poster ? (
                           <img 
                             src={poster} 
-                            alt={photo.title}
+                            alt={photoTitle}
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
                             loading="lazy"
                           />
                         ) : (
                           <video
-                            src={photo.url}
+                            src={photoUrl}
                             className="w-full h-full object-cover"
                             muted
                             playsInline
@@ -718,8 +792,8 @@ export function BuffetSection({ onExploreFullBuffet, onBackToDelivery }) {
                       </div>
                     ) : (
                       <img 
-                        src={photo.url} 
-                        alt={photo.title}
+                        src={photoUrl} 
+                        alt={photoTitle}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
                         loading="lazy"
                       />
@@ -727,18 +801,18 @@ export function BuffetSection({ onExploreFullBuffet, onBackToDelivery }) {
                     <div className="absolute inset-0 bg-gradient-to-t from-dark-950 via-transparent to-transparent pointer-events-none" />
                     
                     <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-dark-950/85 text-brand-gold-light border border-brand-gold/30 text-[9px] font-bold uppercase">
-                      {photo.tag || 'Buffet'}
+                      {photoTag}
                     </span>
 
                     <div className="absolute bottom-2 left-2 right-2 text-left pointer-events-none">
                       <div className="flex items-center gap-1">
                         {isVid && <Film className="w-3 h-3 text-amber-400 flex-shrink-0" />}
                         <h5 className="font-serif text-xs font-bold text-white truncate group-hover:text-amber-200">
-                          {photo.title}
+                          {photoTitle}
                         </h5>
                       </div>
                       <p className="text-[10px] text-slate-400 truncate">
-                        {photo.subtitle}
+                        {photoSubtitle}
                       </p>
                     </div>
                   </div>
@@ -751,14 +825,14 @@ export function BuffetSection({ onExploreFullBuffet, onBackToDelivery }) {
             </div>
           )}
 
-          {galleryPhotos && galleryPhotos.length > 0 && (
+          {Array.isArray(galleryPhotos) && galleryPhotos.length > 0 && (
             <div className="mt-3.5 flex items-center justify-between text-[11px] text-slate-400">
               <span className="flex items-center gap-1.5 text-slate-300">
                 <Sparkles className="w-3.5 h-3.5 text-brand-gold" />
                 <span>Fotos e vídeos reais que mudam automaticamente a cada 3,5s</span>
               </span>
               <span className="font-mono text-brand-gold text-[10px] font-semibold">
-                Foto {((galleryIndex % galleryPhotos.length) + 1)} de {galleryPhotos.length}
+                Foto {((Math.abs(Number(galleryIndex) || 0) % galleryPhotos.length) + 1)} de {galleryPhotos.length}
               </span>
             </div>
           )}
