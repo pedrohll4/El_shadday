@@ -11,7 +11,8 @@ export function RestaurantStoreHeader({
   onOpenBranchModal, 
   deliveryMode = 'delivery',
   onToggleDeliveryMode,
-  onScrollToCategory
+  onScrollToCategory,
+  onOpenBuffet
 }) {
   const handleScrollToMenu = () => {
     if (onScrollToCategory) {
@@ -23,6 +24,10 @@ export function RestaurantStoreHeader({
   };
 
   const handleScrollToBuffet = () => {
+    if (onOpenBuffet) {
+      onOpenBuffet();
+      return;
+    }
     const el = document.getElementById('buffet-section');
     if (el) el.scrollIntoView({ behavior: 'smooth' });
   };

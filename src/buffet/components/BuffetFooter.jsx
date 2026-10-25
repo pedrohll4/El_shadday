@@ -2,7 +2,7 @@ import React from 'react';
 import { ElShaddayLogo, GoldFiligree } from './ElShaddayLogo';
 import { Phone, Instagram, MapPin, Shield, Heart } from 'lucide-react';
 
-export function BuffetFooter({ company, onOpenAdmin, onScrollToSection }) {
+export function BuffetFooter({ company, onOpenAdmin, onScrollToSection, onNavigateToBuilder }) {
   const scrollTo = (id) => {
     if (onScrollToSection) {
       onScrollToSection(id);
@@ -82,7 +82,13 @@ export function BuffetFooter({ company, onOpenAdmin, onScrollToSection }) {
               </li>
               <li>
                 <button 
-                  onClick={() => scrollTo('montador')} 
+                  onClick={() => {
+                    if (onNavigateToBuilder) {
+                      onNavigateToBuilder();
+                    } else {
+                      scrollTo('montador-cta');
+                    }
+                  }} 
                   className="hover:text-[#E8D58A] text-[#D8B85A] font-semibold transition-colors cursor-pointer"
                 >
                   Monte seu Orçamento

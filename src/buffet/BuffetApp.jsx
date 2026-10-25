@@ -16,15 +16,15 @@ import { BuffetAbout } from './components/BuffetAbout';
 import { BuffetHowItWorks } from './components/BuffetHowItWorks';
 import { BuffetMenuPreview } from './components/BuffetMenuPreview';
 import { BuffetGallery } from './components/BuffetGallery';
-import { BuffetBuilder } from './components/BuffetBuilder';
 import { BuffetFooter } from './components/BuffetFooter';
 import { BuffetFloatingWhatsApp } from './components/BuffetFloatingWhatsApp';
 import { BuffetAdminLoginModal } from './components/BuffetAdminLoginModal';
 import { BuffetAdminDashboard } from './components/BuffetAdminDashboard';
 import { supabase, isSupabaseConfigured } from '../services/supabaseClient';
 import { dispatchConfigSync } from '../services/configSyncService';
+import { Utensils, ArrowRight, Sparkles } from 'lucide-react';
 
-export function BuffetApp({ currentAppMode, onToggleAppMode }) {
+export function BuffetApp({ currentAppMode, onToggleAppMode, onNavigateToBuilder }) {
   // App Dynamic State (Editable & Persisted)
   const [company, setCompany] = useState(() => getStoredBuffetCompany());
   const [categories, setCategories] = useState(() => getStoredBuffetCategories());
@@ -289,13 +289,13 @@ export function BuffetApp({ currentAppMode, onToggleAppMode }) {
         company={company}
         onOpenAdmin={handleOpenAdminTrigger}
         selectedItemsCount={selectedCount}
-        onNavigateToBuilder={() => scrollTo('montador')}
+        onNavigateToBuilder={onNavigateToBuilder || (() => scrollTo('montador-cta'))}
       />
 
       {/* Hero Section */}
       <BuffetHero
         company={company}
-        onScrollToBuilder={() => scrollTo('montador')}
+        onScrollToBuilder={onNavigateToBuilder || (() => scrollTo('montador-cta'))}
         onScrollToAbout={() => scrollTo('quem-somos')}
       />
 
@@ -305,30 +305,63 @@ export function BuffetApp({ currentAppMode, onToggleAppMode }) {
         {/* Section 1: Quem Somos */}
         <BuffetAbout
           company={company}
-          onScrollToBuilder={() => scrollTo('montador')}
+          onScrollToBuilder={onNavigateToBuilder || (() => scrollTo('montador-cta'))}
         />
 
         {/* Section 2: Como Funciona */}
         <BuffetHowItWorks
-          onScrollToBuilder={() => scrollTo('montador')}
+          onScrollToBuilder={onNavigateToBuilder || (() => scrollTo('montador-cta'))}
         />
 
         {/* Section 3: O que Servimos / Cardápio Preview */}
         <BuffetMenuPreview
           categories={categories}
-          onScrollToBuilder={() => scrollTo('montador')}
+          onScrollToBuilder={onNavigateToBuilder || (() => scrollTo('montador-cta'))}
         />
 
         {/* Section 3.1: Galeria de Fotos Dinâmica com Carrossel */}
         <BuffetGallery galleryItems={galleryPhotos} />
 
-        {/* Section 4: Montador de Orçamento (Principal Funcionalidade) */}
-        <BuffetBuilder
-          company={company}
-          categories={categories}
-          eventTypes={eventTypes}
-          onQuoteSent={() => updateSelectedCount()}
-        />
+        {/* Section 4: Chamada em Destaque para Montar o Cardápio na Subpágina */}
+        <section id="montador-cta" className="py-16 sm:py-24 bg-gradient-to-b from-[#15191F] via-[#1A202A] to-[#15191F] text-slate-100 border-t border-[#2E3744] relative overflow-hidden text-center px-4">
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[400px] bg-[#D8B85A]/10 rounded-full blur-[140px] pointer-events-none" />
+          
+          <div className="max-w-3xl mx-auto relative z-10 space-y-4">
+            <span className="text-[11px] font-bold uppercase tracking-[0.3em] text-[#D8B85A] inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#D8B85A]/10 border border-[#D8B85A]/30">
+              <Sparkles className="w-3.5 h-3.5 text-[#D8B85A]" />
+              Cardápio Sob Medida para Seu Evento
+            </span>
+            <h2 className="font-serif text-3xl sm:text-4xl lg:text-5xl font-bold text-white tracking-tight">
+              Monte o Cardápio do Seu Evento
+            </h2>
+            <div className="w-24 h-0.5 bg-gradient-to-r from-transparent via-[#D8B85A] to-transparent mx-auto my-2" />
+            <p className="text-xs sm:text-base text-slate-300 max-w-xl mx-auto leading-relaxed font-light">
+              Acesse nossa página exclusiva do montador para escolher entradas, assados na brasa, guarnições, sobremesas e bebidas. Receba sua proposta detalhada direto no WhatsApp!
+            </p>
+
+            <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  if (onNavigateToBuilder) {
+                    onNavigateToBuilder();
+                  } else {
+                    window.location.hash = '#cardapio-evento';
+                  }
+                }}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-8 py-4 rounded-xl font-black text-xs sm:text-sm uppercase tracking-wider bg-gradient-to-r from-[#D8B85A] via-[#E8D58A] to-[#D8B85A] text-[#15191F] shadow-[0_4px_25px_rgba(216,184,90,0.35)] hover:shadow-[0_6px_35px_rgba(216,184,90,0.55)] hover:scale-102 active:scale-98 transition-all cursor-pointer group"
+              >
+                <Utensils className="w-4 h-4 text-[#15191F]" />
+                <span>Montar Cardápio de Evento Agora</span>
+                <ArrowRight className="w-4 h-4 text-[#15191F] group-hover:translate-x-1 transition-transform" />
+              </button>
+            </div>
+            
+            <p className="text-[11px] text-[#E8D58A] font-medium pt-2">
+              ✦ Já incluso: garçons uniformizados, prataria, taças, rechauds e talheres.
+            </p>
+          </div>
+        </section>
 
       </main>
 
@@ -337,6 +370,7 @@ export function BuffetApp({ currentAppMode, onToggleAppMode }) {
         company={company}
         onOpenAdmin={handleOpenAdminTrigger}
         onScrollToSection={scrollTo}
+        onNavigateToBuilder={onNavigateToBuilder}
       />
 
       {/* Floating WhatsApp Button */}

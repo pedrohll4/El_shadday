@@ -118,12 +118,16 @@ class ErrorBoundary extends React.Component {
 }
 
 export default function App() {
-  // App View mode: 'delivery' (default & primary) | 'admin' (kitchen KDS) | 'full-buffet' (showcase)
+  // App View mode: 'delivery' (default & primary) | 'admin' (kitchen KDS) | 'full-buffet' (showcase) | 'cardapio-evento' (buffet menu builder)
   const [appView, setAppView] = useState(() => {
     try {
       const params = new URLSearchParams(window.location.search);
       if (params.get('mode') === 'buffet') return 'full-buffet';
-      if (params.get('mode') === 'admin' || window.location.hash.includes('admin')) {
+      if (params.get('mode') === 'cardapio-evento' || params.get('mode') === 'orcamento') return 'cardapio-evento';
+      const hash = window.location.hash;
+      if (hash.includes('cardapio-evento') || hash.includes('orcamento') || hash.includes('buffet-cardapio')) return 'cardapio-evento';
+      if (hash.includes('buffet')) return 'full-buffet';
+      if (params.get('mode') === 'admin' || hash.includes('admin')) {
         if (sessionStorage.getItem('el_shadday_admin_auth') === 'true') {
           return 'admin';
         }
@@ -536,7 +540,7 @@ export default function App() {
     };
   }, []);
 
-  // Handle URL hash changes (#/admin, #admin, #/cozinha)
+  // Handle URL hash changes (#/admin, #admin, #/cozinha, #cardapio-evento, #buffet)
   useEffect(() => {
     const handleHash = () => {
       const hash = window.location.hash;
@@ -546,6 +550,10 @@ export default function App() {
         } else {
           setIsAdminLoginModalOpen(true);
         }
+      } else if (hash.includes('cardapio-evento') || hash.includes('buffet-cardapio') || hash.includes('orcamento-evento')) {
+        setAppView('cardapio-evento');
+      } else if (hash === '#/buffet' || hash === '#buffet') {
+        setAppView('full-buffet');
       }
     };
 
@@ -874,12 +882,23 @@ export default function App() {
     }
   };
 
-  // Smooth scroll to Buffet
-  const scrollToBuffet = () => {
-    const el = document.getElementById('buffet-section');
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth' });
-    }
+  // Navigation helpers for views
+  const handleOpenBuffetSubpage = () => {
+    window.location.hash = '#cardapio-evento';
+    window.scrollTo({ top: 0, behavior: 'instant' });
+    setAppView('cardapio-evento');
+  };
+
+  const handleOpenFullBuffet = () => {
+    window.location.hash = '#buffet';
+    window.scrollTo({ top: 0, behavior: 'instant' });
+    setAppView('full-buffet');
+  };
+
+  const handleBackToDelivery = () => {
+    window.location.hash = '';
+    window.scrollTo({ top: 0, behavior: 'instant' });
+    setAppView('delivery');
   };
 
   // VIEW 1: KITCHEN KDS / PAINEL DA COZINHA
@@ -896,7 +915,7 @@ export default function App() {
           onCreateKitchenOrder={handleCreateKitchenOrder}
           onLogout={handleAdminLogout}
           onBackToSite={handleBackToSiteFromAdmin}
-          onSwitchToBuffet={() => setAppView('full-buffet')}
+          onSwitchToBuffet={handleOpenFullBuffet}
           currentUser={currentUser}
           branches={branches}
           currentBranchId={selectedBranchId}
@@ -906,7 +925,7 @@ export default function App() {
     );
   }
 
-  // VIEW 2: FULL BUFFET SHOWCASE
+  // VIEW 2: FULL BUFFET SHOWCASE (APRESENTAÇÃO INSTITUCIONAL)
   if (appView === 'full-buffet') {
     return (
       <div className="relative min-h-screen bg-dark-950 text-slate-100">
@@ -921,25 +940,80 @@ export default function App() {
             </span>
           </div>
 
-          <button 
-            onClick={() => {
-              window.location.hash = '';
-              window.scrollTo({ top: 0, behavior: 'instant' });
-              setAppView('delivery');
-            }} 
-            className="px-4 py-1.5 rounded-xl bg-gradient-to-r from-brand-gold via-amber-400 to-brand-gold hover:brightness-110 active:scale-95 text-dark-950 text-xs font-black uppercase tracking-wider shadow-glow-gold transition-all cursor-pointer flex items-center gap-2 ml-auto sm:ml-0"
-          >
-            <span>🍕 Voltar para o Delivery</span>
-          </button>
+          <div className="flex items-center gap-2 ml-auto sm:ml-0">
+            <button 
+              type="button"
+              onClick={handleOpenBuffetSubpage} 
+              className="px-3.5 py-1.5 rounded-xl bg-dark-900 border border-brand-gold/40 hover:border-brand-gold text-brand-gold text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
+              title="Abrir o montador de cardápio"
+            >
+              <span>🍽️ Montar Cardápio</span>
+            </button>
+
+            <button 
+              type="button"
+              onClick={handleBackToDelivery} 
+              className="px-4 py-1.5 rounded-xl bg-gradient-to-r from-brand-gold via-amber-400 to-brand-gold hover:brightness-110 active:scale-95 text-dark-950 text-xs font-black uppercase tracking-wider shadow-glow-gold transition-all cursor-pointer flex items-center gap-2"
+            >
+              <span>🍕 Voltar para o Delivery</span>
+            </button>
+          </div>
         </div>
         <BuffetApp 
           currentAppMode="buffet" 
-          onToggleAppMode={() => {
-            window.location.hash = '';
-            window.scrollTo({ top: 0, behavior: 'instant' });
-            setAppView('delivery');
-          }} 
+          onToggleAppMode={handleBackToDelivery}
+          onNavigateToBuilder={handleOpenBuffetSubpage}
         />
+      </div>
+    );
+  }
+
+  // VIEW 2.5: DEDICATED BUFFET & EVENT MENU SUBPAGE ("Monte o Cardápio do Seu Evento")
+  if (appView === 'cardapio-evento') {
+    return (
+      <div className="relative min-h-screen bg-dark-950 text-slate-100 flex flex-col font-sans selection:bg-brand-gold selection:text-dark-950">
+        {/* Sticky Subpage Top Bar */}
+        <div className="bg-dark-950/95 backdrop-blur-md border-b border-dark-750/80 shadow-2xl py-2.5 px-4 sm:px-6 sticky top-0 z-50 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-brand-gold/15 border border-brand-gold/30 text-brand-gold text-[11px] font-black uppercase tracking-wider shadow-sm">
+              <Sparkles className="w-3.5 h-3.5 text-brand-gold" />
+              Buffet El Shadday
+            </span>
+            <span className="text-xs text-slate-300 font-medium hidden sm:inline">
+              Montador de Cardápio para Eventos & Casamentos
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 ml-auto sm:ml-0">
+            <button 
+              type="button"
+              onClick={handleOpenFullBuffet} 
+              className="px-3.5 py-1.5 rounded-xl bg-dark-900 border border-brand-gold/40 hover:border-brand-gold text-brand-gold text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
+              title="Ver fotos reais, equipe e estrutura do Buffet"
+            >
+              <span>👑 Ver Apresentação & Galeria</span>
+            </button>
+
+            <button 
+              type="button"
+              onClick={handleBackToDelivery} 
+              className="px-4 py-1.5 rounded-xl bg-gradient-to-r from-brand-gold via-amber-400 to-brand-gold hover:brightness-110 active:scale-95 text-dark-950 text-xs font-black uppercase tracking-wider shadow-glow-gold transition-all cursor-pointer flex items-center gap-2"
+            >
+              <span>🍕 Voltar para o Delivery</span>
+            </button>
+          </div>
+        </div>
+
+        {/* The Event Menu Builder Component */}
+        <main className="flex-1">
+          <BuffetSection 
+            onExploreFullBuffet={handleOpenFullBuffet}
+            onBackToDelivery={handleBackToDelivery}
+          />
+        </main>
+
+        {/* Footer */}
+        <Footer onOpenAdmin={handleOpenAdminTrigger} />
       </div>
     );
   }
@@ -955,7 +1029,7 @@ export default function App() {
         onOpenCart={() => setIsCartOpen(true)}
         activeBranch={activeBranch}
         onOpenBranchModal={() => setIsBranchModalOpen(true)}
-        onScrollToBuffet={scrollToBuffet}
+        onScrollToBuffet={handleOpenBuffetSubpage}
         onOpenAdmin={handleOpenAdminTrigger}
         currentUser={currentUser}
       />
@@ -980,6 +1054,7 @@ export default function App() {
         deliveryMode={deliveryMode}
         onToggleDeliveryMode={setDeliveryMode}
         onScrollToCategory={handleSelectCategory}
+        onOpenBuffet={handleOpenBuffetSubpage}
       />
 
       {/* 2.1 Promotions & Highlights Shelf */}
@@ -1007,7 +1082,7 @@ export default function App() {
           onSelectCategory={handleSelectCategory}
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
-          onScrollToBuffet={scrollToBuffet}
+          onScrollToBuffet={handleOpenBuffetSubpage}
           products={branchProducts}
           showBuffet={selectedBranchId === 'ariquemes'}
         />
@@ -1169,15 +1244,47 @@ export default function App() {
         </div>
       </main>
 
-      {/* 5. Buffet Section at the Bottom (Exclusive to Ariquemes) */}
+      {/* 5. Buffet CTA Banner at the Bottom of Delivery (Exclusive to Ariquemes) */}
       {selectedBranchId === 'ariquemes' && (
-        <BuffetSection 
-          onExploreFullBuffet={() => {
-            window.location.hash = '';
-            window.scrollTo({ top: 0, behavior: 'instant' });
-            setAppView('full-buffet');
-          }} 
-        />
+        <section className="py-10 px-3 sm:px-6 bg-gradient-to-b from-dark-950 via-dark-900 to-dark-950 border-t border-dark-800">
+          <div className="max-w-4xl mx-auto rounded-3xl bg-dark-900/90 border border-brand-gold/30 p-5 sm:p-7 shadow-2xl relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-brand-gold/10 rounded-full blur-3xl pointer-events-none" />
+            
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-5 relative z-10">
+              <div className="text-center sm:text-left space-y-1.5">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-brand-gold/15 text-brand-gold text-[10px] sm:text-[11px] font-black uppercase tracking-wider border border-brand-gold/30">
+                  <Sparkles className="w-3 h-3 text-brand-gold" />
+                  Buffet El Shadday • Ariquemes
+                </span>
+                <h3 className="font-serif text-lg sm:text-2xl font-bold text-white">
+                  Vai realizar um casamento, formatura ou festa?
+                </h3>
+                <p className="text-xs sm:text-sm text-slate-300 max-w-xl">
+                  Equipe completa, garçons uniformizados, prataria, rechauds e assados nobres na brasa inclusos.
+                </p>
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={handleOpenBuffetSubpage}
+                  className="px-5 py-3 rounded-xl bg-gradient-to-r from-brand-gold via-amber-400 to-brand-gold hover:brightness-110 active:scale-98 text-dark-950 font-black text-xs uppercase tracking-wider shadow-glow-gold transition-all cursor-pointer flex items-center justify-center gap-2 text-center"
+                >
+                  <span>🍽️ Montar Cardápio de Evento</span>
+                  <ArrowRight className="w-3.5 h-3.5 stroke-[3]" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleOpenFullBuffet}
+                  className="px-4 py-3 rounded-xl bg-dark-950 hover:bg-dark-850 text-slate-200 hover:text-white border border-dark-750 hover:border-brand-gold/40 font-bold text-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5 text-center"
+                >
+                  <span>👑 Ver Apresentação</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
       )}
 
       {/* 6. Footer */}

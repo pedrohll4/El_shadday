@@ -29,7 +29,7 @@ import {
 import { supabase, isSupabaseConfigured } from '../services/supabaseClient';
 import { isVideoUrl, getVideoPosterUrl } from '../utils/imageCompressor';
 
-export function BuffetSection({ onExploreFullBuffet }) {
+export function BuffetSection({ onExploreFullBuffet, onBackToDelivery }) {
   // Dynamic categories state (allows admin to manage & disable items)
   const [categories, setCategories] = useState(() => getStoredBuffetCategories());
   const [unavailableItemIds, setUnavailableItemIds] = useState(() => getUnavailableBuffetItemIds());
@@ -348,10 +348,27 @@ export function BuffetSection({ onExploreFullBuffet }) {
   };
 
   return (
-    <section id="buffet-section" className="relative py-12 sm:py-20 bg-dark-950 border-t border-dark-800 text-slate-100">
+    <section id="buffet-section" className="relative py-8 sm:py-16 bg-dark-950 text-slate-100">
       
       <div className="max-w-4xl mx-auto px-3 sm:px-6 relative">
         
+        {/* Breadcrumb / Botão de Retorno */}
+        {onBackToDelivery && (
+          <div className="mb-6 flex items-center justify-between border-b border-dark-800 pb-3">
+            <button
+              type="button"
+              onClick={onBackToDelivery}
+              className="inline-flex items-center gap-1.5 text-xs text-slate-300 hover:text-brand-gold transition-colors font-bold cursor-pointer group"
+            >
+              <ChevronLeft className="w-4 h-4 text-brand-gold group-hover:-translate-x-1 transition-transform" />
+              <span>Voltar ao Delivery de Pizzas & Lanches</span>
+            </button>
+            <span className="text-[11px] text-brand-gold font-bold uppercase tracking-wider hidden sm:inline">
+              ✦ Proposta 100% Personalizada
+            </span>
+          </div>
+        )}
+
         {/* 1. Cabeçalho Minimalista e Nobre */}
         <div className="text-center mb-8">
           <div className="flex justify-center mb-3">
