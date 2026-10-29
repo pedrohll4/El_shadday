@@ -1870,7 +1870,7 @@ export function AdminDashboard({
 
         {/* Navigation Tabs */}
         {currentUser?.role !== ROLES.KITCHEN && (
-          <div className="max-w-7xl mx-auto mt-3 flex items-center gap-1.5 border-t border-dark-800 pt-2.5 overflow-x-auto scrollbar-none pb-1 text-xs">
+          <div className="max-w-7xl mx-auto mt-3 flex items-center gap-1.5 border-t border-dark-800 pt-2.5 overflow-x-auto scrollbar-none no-scrollbar pb-1 text-xs">
             
             {/* 1. COZINHA (KDS) */}
             <button
@@ -3425,7 +3425,7 @@ export function AdminDashboard({
                   </div>
 
                   {/* Filter Pills */}
-                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none no-scrollbar">
                     <button
                       type="button"
                       onClick={() => setMenuCategoryFilter('todos')}
@@ -3551,7 +3551,7 @@ export function AdminDashboard({
                       return (
                         <div
                           key={product.id}
-                          className={`rounded-2xl p-3.5 bg-dark-800/80 border transition-all flex flex-col justify-between gap-3 ${
+                          className={`rounded-2xl p-3.5 bg-dark-800/80 border transition-all flex flex-col justify-between gap-3 overflow-hidden ${
                             isAvailable ? 'border-dark-700 hover:border-brand-gold/50' : 'border-rose-900/60 bg-dark-900/90 opacity-75'
                           }`}
                         >
@@ -3619,8 +3619,9 @@ export function AdminDashboard({
                           </div>
 
                           {/* Action Toolbar */}
-                          <div className="pt-2.5 border-t border-dark-700/80 flex items-center justify-between gap-1">
-                            <div className="flex items-center gap-1">
+                          <div className="pt-2.5 border-t border-dark-700/80 space-y-2">
+                            {/* Linha 1: Status e Toggles Rápidos */}
+                            <div className="flex flex-wrap items-center gap-1.5">
                               {/* Toggle Availability */}
                               <button
                                 type="button"
@@ -3643,7 +3644,7 @@ export function AdminDashboard({
                                 className={`px-2 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-colors cursor-pointer ${
                                   product.isHighlight
                                     ? 'bg-brand-gold/20 text-brand-gold border border-brand-gold/40 hover:bg-brand-gold/30'
-                                    : 'bg-dark-900 text-slate-400 hover:text-brand-gold hover:bg-dark-750'
+                                    : 'bg-dark-900 text-slate-400 hover:text-brand-gold hover:bg-dark-750 border border-dark-700/60'
                                 }`}
                                 title="Adicionar ou remover da vitrine 'Destaques da Casa' no topo do delivery"
                               >
@@ -3658,7 +3659,7 @@ export function AdminDashboard({
                                 className={`px-2 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-colors cursor-pointer ${
                                   hasPromo
                                     ? 'bg-amber-400/20 text-amber-300 border border-amber-400/40 hover:bg-amber-400/30'
-                                    : 'bg-dark-900 text-slate-400 hover:text-amber-300 hover:bg-dark-750'
+                                    : 'bg-dark-900 text-slate-400 hover:text-amber-300 hover:bg-dark-750 border border-dark-700/60'
                                 }`}
                                 title="Ativar ou desativar selo promocional"
                               >
@@ -3674,7 +3675,7 @@ export function AdminDashboard({
                                   className={`px-2 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-colors cursor-pointer ${
                                     product.bordaGratis
                                       ? 'bg-amber-400 text-dark-950 font-black shadow-sm hover:bg-amber-300'
-                                      : 'bg-dark-900 text-slate-400 hover:text-amber-300 hover:bg-dark-750 border border-dark-700'
+                                      : 'bg-dark-900 text-slate-400 hover:text-amber-300 hover:bg-dark-750 border border-dark-700/60'
                                   }`}
                                   title={product.bordaGratis ? 'Borda de Catupiry Grátis ativa! Clique para desativar' : 'Sem borda grátis. Clique para ativar'}
                                 >
@@ -3684,36 +3685,40 @@ export function AdminDashboard({
                               )}
                             </div>
 
-                            <div className="flex items-center gap-1">
-                              {/* Duplicate */}
-                              <button
-                                type="button"
-                                onClick={() => handleDuplicateProduct(product)}
-                                className="p-1.5 rounded-lg bg-dark-900 hover:bg-dark-750 text-slate-300 hover:text-white transition-colors cursor-pointer"
-                                title="Duplicar produto"
-                              >
-                                <Copy className="w-3.5 h-3.5" />
-                              </button>
+                            {/* Linha 2: Ações de Gestão (Duplicar, Excluir, Editar) */}
+                            <div className="pt-2 border-t border-dark-700/50 flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-1.5">
+                                {/* Duplicate */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleDuplicateProduct(product)}
+                                  className="px-2.5 py-1.5 rounded-lg bg-dark-900 hover:bg-dark-750 text-slate-400 hover:text-white border border-dark-700/80 text-[11px] font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                                  title="Duplicar produto"
+                                >
+                                  <Copy className="w-3.5 h-3.5" />
+                                  <span>Duplicar</span>
+                                </button>
+
+                                {/* Delete */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteProduct(product.id, product.name)}
+                                  className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/25 text-rose-400 hover:text-rose-200 border border-rose-500/20 transition-colors cursor-pointer"
+                                  title="Excluir produto do cardápio"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
 
                               {/* Edit */}
                               <button
                                 type="button"
                                 onClick={() => handleOpenEditProduct(product)}
-                                className="px-2.5 py-1 rounded-lg bg-brand-gold/15 hover:bg-brand-gold/30 text-brand-gold border border-brand-gold/30 font-bold text-xs flex items-center gap-1 transition-colors cursor-pointer"
+                                className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-brand-gold to-amber-400 hover:brightness-110 text-dark-950 font-black text-xs flex items-center gap-1.5 shadow-sm active:scale-95 transition-all cursor-pointer"
                                 title="Editar produto completo"
                               >
-                                <Edit2 className="w-3 h-3" />
+                                <Edit2 className="w-3.5 h-3.5 stroke-[2.5]" />
                                 <span>Editar</span>
-                              </button>
-
-                              {/* Delete */}
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteProduct(product.id, product.name)}
-                                className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/25 text-rose-400 hover:text-rose-200 transition-colors cursor-pointer"
-                                title="Excluir produto do cardápio"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
                               </button>
                             </div>
                           </div>
@@ -3848,7 +3853,7 @@ export function AdminDashboard({
                       return (
                         <div
                           key={flavor.id}
-                          className={`p-4 rounded-2xl border transition-all flex flex-col justify-between gap-3 ${
+                          className={`p-4 rounded-2xl border transition-all flex flex-col justify-between gap-3 overflow-hidden ${
                             !isAvailable
                               ? 'bg-dark-950/60 border-dark-800/80 opacity-60'
                               : 'bg-dark-850 border-dark-750 hover:border-brand-gold/40 shadow-sm'
