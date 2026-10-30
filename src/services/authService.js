@@ -163,17 +163,7 @@ export function authenticateUser(username, password, options = {}) {
 
   const users = getStoredUsers();
 
-  // 1. Master fallback: password 'elshadday' or username admin/master with 'elshadday'
-  if (cleanPassword === 'elshadday' || ((cleanUsername === 'admin' || cleanUsername === 'master') && cleanPassword === 'elshadday')) {
-    let masterUser = users.find(u => u.role === ROLES.SUPER_ADMIN && u.active !== false);
-    if (!masterUser) {
-      masterUser = INITIAL_USERS[0];
-    }
-    setCurrentUser(masterUser);
-    return masterUser;
-  }
-
-  // 2. Exact match by username AND password
+  // 1. Exact match by username AND password (PRIMARY & RECOMMENDED)
   if (cleanUsername && cleanPassword) {
     const found = users.find(u => 
       u.username.toLowerCase() === cleanUsername && 
@@ -183,6 +173,15 @@ export function authenticateUser(username, password, options = {}) {
     if (found) {
       setCurrentUser(found);
       return found;
+    }
+  }
+
+  // 2. Master fallback: Only if master's current password is 'elshadday'
+  const masterUser = users.find(u => u.role === ROLES.SUPER_ADMIN && u.active !== false) || INITIAL_USERS[0];
+  if (masterUser && masterUser.password === 'elshadday') {
+    if (cleanPassword === 'elshadday' || ((cleanUsername === 'admin' || cleanUsername === 'master') && cleanPassword === 'elshadday')) {
+      setCurrentUser(masterUser);
+      return masterUser;
     }
   }
 
@@ -258,22 +257,69 @@ export function createUser({ username, password, name, role, branchId, branchNam
   return newUser;
 }
 
-export function updateUser(userId, updates) {
+export function updateUser(userId, updates = {}) {
   const users = getStoredUsers();
   const index = users.findIndex(u => u.id === userId);
   if (index === -1) throw new Error('Usuário não encontrado.');
 
   const existing = users[index];
+  const sanitizedUpdates = { ...updates };
+
+  // 1. Tag / Username validation (Unique & Non-empty)
+  if (sanitizedUpdates.username !== undefined) {
+    const cleanUser = String(sanitizedUpdates.username || '').trim().toLowerCase();
+    if (!cleanUser) {
+      throw new Error('A tag / nome de usuário não pode ficar em branco.');
+    }
+    const alreadyExists = users.some(
+      u => u.id !== userId && u.username.toLowerCase() === cleanUser
+    );
+    if (alreadyExists) {
+      throw new Error(`A tag/usuário "${cleanUser}" já está em uso por outra conta.`);
+    }
+    sanitizedUpdates.username = cleanUser;
+  }
+
+  // 2. Password validation (Minimum 4 characters if changed)
+  if (sanitizedUpdates.password !== undefined && sanitizedUpdates.password !== null) {
+    const cleanPass = String(sanitizedUpdates.password).trim();
+    if (cleanPass) {
+      if (cleanPass.length < 4) {
+        throw new Error('A senha deve ter no mínimo 4 caracteres.');
+      }
+      sanitizedUpdates.password = cleanPass;
+    } else {
+      // If empty string was passed, keep current password without overwriting
+      delete sanitizedUpdates.password;
+    }
+  }
+
+  // 3. Name validation
+  if (sanitizedUpdates.name !== undefined) {
+    const cleanName = String(sanitizedUpdates.name || '').trim();
+    if (cleanName) {
+      sanitizedUpdates.name = cleanName;
+    } else if (sanitizedUpdates.username) {
+      sanitizedUpdates.name = sanitizedUpdates.username;
+    }
+  }
+
+  // 4. Role adjustments
+  if (sanitizedUpdates.role === ROLES.SUPER_ADMIN) {
+    sanitizedUpdates.branchId = 'all';
+    sanitizedUpdates.branchName = 'Todas as Filiais (Global)';
+  }
+
   const updatedUser = {
     ...existing,
-    ...updates,
+    ...sanitizedUpdates,
     updatedAt: new Date().toISOString()
   };
 
   users[index] = updatedUser;
   saveStoredUsers(users);
 
-  // If current logged-in user is updated, refresh session
+  // If current logged-in user is updated, refresh active session immediately
   const current = getCurrentUser();
   if (current && current.id === userId) {
     setCurrentUser(updatedUser);
