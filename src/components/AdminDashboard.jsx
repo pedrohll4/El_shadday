@@ -1626,11 +1626,11 @@ export function AdminDashboard({
             }
             if (it.salgadasDetails) {
               const salg = Object.entries(it.salgadasDetails).map(([k,v]) => `${v}x ${k}`).join(', ');
-              if (salg) details.push(`Salgadas: ${salg}`);
+              details.push(it.isSortido ? `[SORTIDO INTERNO] Salg: ${salg}` : `Salgadas: ${salg}`);
             }
             if (it.docesDetails) {
               const doc = Object.entries(it.docesDetails).map(([k,v]) => `${v}x ${k}`).join(', ');
-              if (doc) details.push(`Doces: ${doc}`);
+              details.push(it.isSortido ? `[SORTIDO INTERNO] Doces: ${doc}` : `Doces: ${doc}`);
             }
             if (it.notes) details.push(`Obs: ${it.notes}`);
 
@@ -3097,6 +3097,12 @@ export function AdminDashboard({
                                   {/* Custom Box details */}
                                   {it.isCustomBox && (
                                     <div className="text-[11px] text-brand-goldLight pl-2 mt-0.5 space-y-0.5">
+                                      {it.isSortido && (
+                                        <div className="text-[10px] font-black text-amber-300 bg-amber-950/60 px-1.5 py-0.5 rounded border border-amber-500/40 inline-flex items-center gap-1 mb-1">
+                                          <span>🎲</span>
+                                          <span>SORTIDO DA CASA (PREPARO INTERNO COZINHA)</span>
+                                        </div>
+                                      )}
                                       {it.salgadasDetails && (
                                         <div>🥟 <strong>Salg:</strong> {Object.entries(it.salgadasDetails).map(([k, v]) => `${v}x ${k}`).join(', ')}</div>
                                       )}

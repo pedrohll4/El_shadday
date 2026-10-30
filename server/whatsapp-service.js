@@ -42,24 +42,58 @@ const state = {
 let sock = null;
 let isConnecting = false;
 
+// Normaliza chave de status para deduplicação precisa
+export function normalizeStatusKey(status) {
+  const s = String(status || '').toUpperCase().trim();
+  if (s === 'RECEBIDO_COZINHA' || s === 'RECEBIDO' || s === 'NOVO' || s === 'PENDENTE' || s === 'CRIADO') return 'RECEBIDO';
+  if (s === 'EM_PREPARO' || s === 'PREPARO' || s === 'NO_FORNO' || s === 'FORNO' || s === 'PREPARING') return 'EM_PREPARO';
+  if (s === 'SAIU_ENTREGA' || s === 'ENTREGA' || s === 'EM_ENTREGA' || s === 'A_CAMINHO' || s === 'DESPACHADO') return 'SAIU_ENTREGA';
+  if (s === 'PRONTO_BALCAO' || s === 'BALCAO' || s === 'PRONTO' || s === 'RETIRADA') return 'PRONTO_BALCAO';
+  if (s === 'CONCLUIDO' || s === 'CONCLUÍDO' || s === 'FINALIZADO' || s === 'ENTREGUE') return 'CONCLUIDO';
+  if (s === 'CANCELADO' || s === 'CANCELED') return 'CANCELADO';
+  return s;
+}
+
 // Histórico de mensagens enviadas para evitar duplicatas por status
 const sentHistory = new Map();
 
-function recordSentMessage(orderId, status) {
-  if (!orderId || !status) return;
-  sentHistory.set(`${orderId}:${status}`, Date.now());
-  if (sentHistory.size > 500) {
+/**
+ * Tenta adquirir lock síncrono para o disparo do pedido + status.
+ * Bloqueia se já tiver disparado ou estiver em envio nos últimos 10 minutos.
+ */
+function tryAcquireSendLock(orderId, status) {
+  if (!orderId || !status) return true; // Mensagens avulsas/teste sem ID passam livremente
+  const norm = normalizeStatusKey(status);
+  const key = `${orderId}:${norm}`;
+  const lastTime = sentHistory.get(key);
+
+  if (lastTime && (Date.now() - lastTime < 10 * 60 * 1000)) {
+    return false; // Já enviado ou lock ativo!
+  }
+
+  // Trava imediatamente antes de qualquer await
+  sentHistory.set(key, Date.now());
+
+  if (sentHistory.size > 1000) {
     const firstKey = sentHistory.keys().next().value;
     sentHistory.delete(firstKey);
   }
+
+  return true;
 }
 
 function hasAlreadySent(orderId, status) {
   if (!orderId || !status) return false;
-  const key = `${orderId}:${status}`;
+  const key = `${orderId}:${normalizeStatusKey(status)}`;
   const sentTime = sentHistory.get(key);
   if (!sentTime) return false;
   return Date.now() - sentTime < 10 * 60 * 1000;
+}
+
+function recordSentMessage(orderId, status) {
+  if (!orderId || !status) return;
+  const key = `${orderId}:${normalizeStatusKey(status)}`;
+  sentHistory.set(key, Date.now());
 }
 
 // Persistência de Sessão no Supabase (Garante permanência mesmo em servidores com disco efêmero como Render Free)
@@ -157,7 +191,7 @@ export function formatToWhatsAppQueries(phone) {
   return Array.from(new Set(candidates));
 }
 
-// Formata itens do pedido
+// Formata itens do pedido para o cliente (oculta detalhes internos de sabores caso seja sortido)
 function formatOrderItems(items = []) {
   if (!Array.isArray(items) || items.length === 0) return '• Itens do pedido';
   return items.map(it => {
@@ -167,6 +201,11 @@ function formatOrderItems(items = []) {
       if (sab) line += ` (${sab})`;
     } else if (it.flavors && it.flavors.length > 0) {
       line += ` (${it.flavors.join('/')})`;
+    } else if (it.isSortido || (it.name && it.name.toLowerCase().includes('sortid')) || (it.isBox && !it.salgadasDetails)) {
+      line += ` (Sortido da Casa${it.semSuinos ? ' - Sem Suínos' : ''})`;
+    } else if (it.isCustomBox && !it.isSortido && it.salgadasDetails) {
+      const salg = Object.entries(it.salgadasDetails).map(([f, q]) => `${q}x ${f}`).join(', ');
+      if (salg) line += ` (${salg})`;
     }
     return line;
   }).join('\n');
@@ -490,6 +529,12 @@ function initSupabaseOrderWatcher() {
     .on('broadcast', { event: 'SEND_TEST' }, async ({ payload }) => {
       if (payload?.phone && payload?.message) {
         try {
+          if (payload.orderId && payload.status) {
+            if (!tryAcquireSendLock(payload.orderId, payload.status)) {
+              console.log(`[WhatsApp Service] ⚠️ Ignorando envio duplicado via Broadcast para pedido #${payload.orderId} (${payload.status})`);
+              return;
+            }
+          }
           await sendWhatsAppMessage(payload.phone, payload.message);
           supabaseBridgeChannel.send({
             type: 'broadcast',
@@ -531,9 +576,11 @@ function initSupabaseOrderWatcher() {
 
           // Se for INSERT de novo pedido
           if (payload.eventType === 'INSERT') {
-            if (hasAlreadySent(orderId, 'RECEBIDO')) return;
+            if (!tryAcquireSendLock(orderId, 'RECEBIDO')) {
+              console.log(`[Supabase Realtime] ⚠️ Ignorando INSERT duplicado para #${orderId}`);
+              return;
+            }
             console.log(`[Supabase Realtime] 🔔 Novo pedido: #${orderId} (${row.customer_name})`);
-            recordSentMessage(orderId, 'RECEBIDO');
             const msg = buildOrderWhatsAppText({ order: row, statusType: 'RECEBIDO' });
             await sendWhatsAppMessage(phone, msg).catch(() => {});
             return;
@@ -542,17 +589,19 @@ function initSupabaseOrderWatcher() {
           // Se for UPDATE de status
           if (payload.eventType === 'UPDATE') {
             const oldStatus = String(payload.old?.status || '').toUpperCase().trim();
-            if (status === oldStatus) return;
+            if (oldStatus && status === oldStatus) return;
 
             let notifyType = status;
             if (status === 'CONCLUIDO' && (row.delivery_type === 'balcao' || row.district === 'Balcão')) {
               notifyType = 'PRONTO_BALCAO';
             }
 
-            if (hasAlreadySent(orderId, notifyType)) return;
+            if (!tryAcquireSendLock(orderId, notifyType)) {
+              console.log(`[Supabase Realtime] ⚠️ Ignorando UPDATE duplicado para #${orderId} (${notifyType})`);
+              return;
+            }
 
-            console.log(`[Supabase Realtime] 🔄 Pedido #${orderId}: ${oldStatus} ➔ ${notifyType}`);
-            recordSentMessage(orderId, notifyType);
+            console.log(`[Supabase Realtime] 🔄 Pedido #${orderId}: ${oldStatus || 'status'} ➔ ${notifyType}`);
 
             const msg = buildOrderWhatsAppText({
               order: row,
@@ -644,10 +693,14 @@ const server = http.createServer(async (req, res) => {
         return sendJson(400, { error: "Parâmetro 'message' é obrigatório" });
       }
 
-      const result = await sendWhatsAppMessage(body.phone, body.message);
       if (body.orderId && body.status) {
-        recordSentMessage(body.orderId, body.status);
+        if (!tryAcquireSendLock(body.orderId, body.status)) {
+          console.log(`[WhatsApp Service] ⚠️ Ignorando envio duplicado via HTTP POST /send para pedido #${body.orderId} (${body.status})`);
+          return sendJson(200, { success: true, duplicateIgnored: true });
+        }
       }
+
+      const result = await sendWhatsAppMessage(body.phone, body.message);
       return sendJson(200, result);
     }
 

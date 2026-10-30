@@ -103,6 +103,7 @@ export function BoxBuilderModal({ isOpen, onClose, onAddBoxToCart, initialBox = 
   const [selectedBox, setSelectedBox] = useState(BOX_CONFIGS[0]);
   const [activeTab, setActiveTab] = useState('salgadas'); // 'salgadas' | 'doces'
   const [semSuinos, setSemSuinos] = useState(false);
+  const [isSortido, setIsSortido] = useState(true);
   const [salgadasSelections, setSalgadasSelections] = useState({});
   const [docesSelections, setDocesSelections] = useState({});
   const [feedbackNotice, setFeedbackNotice] = useState('');
@@ -131,40 +132,98 @@ export function BoxBuilderModal({ isOpen, onClose, onAddBoxToCart, initialBox = 
     );
   }, [activeProducts]);
 
+  // Algoritmo gerador de sortido respeitando regras e sem carne suína
+  const generateAutoFill = (box = selectedBox, noPork = semSuinos) => {
+    const availableSalgadas = salgadasList.filter(f => !noPork || !isPorkFlavor(f.name));
+    if (availableSalgadas.length === 0) return { salgadas: {}, doces: {} };
+
+    const newSalgadas = {};
+    let salgToDistribute = box.salgadas;
+    let sIdx = 0;
+    let loops = 0;
+
+    while (salgToDistribute > 0 && loops < 250) {
+      loops++;
+      const flavor = availableSalgadas[sIdx % availableSalgadas.length];
+      const maxAllowed = noPork && isPorkFlavor(flavor.name)
+        ? 0
+        : isCarneFlavor(flavor.name)
+        ? box.maxCarne
+        : box.maxPerSalgada;
+      const current = newSalgadas[flavor.name] || 0;
+
+      if (current < maxAllowed) {
+        newSalgadas[flavor.name] = current + 1;
+        salgToDistribute--;
+      }
+      sIdx++;
+    }
+
+    const newDoces = {};
+    let docesToDistribute = box.doces;
+    let dIdx = 0;
+    loops = 0;
+
+    while (docesToDistribute > 0 && loops < 150) {
+      loops++;
+      const flavor = docesList[dIdx % docesList.length];
+      const maxAllowed = box.maxPerDoce;
+      const current = newDoces[flavor.name] || 0;
+
+      if (current < maxAllowed) {
+        newDoces[flavor.name] = current + 1;
+        docesToDistribute--;
+      }
+      dIdx++;
+    }
+
+    return { salgadas: newSalgadas, doces: newDoces };
+  };
+
   // Sync initial box size and reset state when opening
   useEffect(() => {
     if (isOpen) {
+      let currentB = BOX_CONFIGS[0];
       if (initialBox) {
         const match = BOX_CONFIGS.find(b => b.id === initialBox.id || b.total === initialBox.totalCount);
         if (match) {
+          currentB = match;
           setSelectedBox(match);
         }
       }
-      setSalgadasSelections({});
-      setDocesSelections({});
+      setIsSortido(true);
+      const { salgadas, doces } = generateAutoFill(currentB, semSuinos);
+      setSalgadasSelections(salgadas);
+      setDocesSelections(doces);
       setFeedbackNotice('');
       setActiveTab('salgadas');
     }
   }, [initialBox, isOpen]);
 
-  // Clean pork flavors whenever semSuinos is enabled
+  // Clean or refill when semSuinos changes
   useEffect(() => {
-    if (semSuinos) {
-      setSalgadasSelections(prev => {
-        const next = { ...prev };
-        let removedCount = 0;
-        Object.keys(next).forEach(flavorName => {
-          if (isPorkFlavor(flavorName)) {
-            removedCount += next[flavorName];
-            delete next[flavorName];
+    if (isOpen) {
+      if (isSortido) {
+        const { salgadas, doces } = generateAutoFill(selectedBox, semSuinos);
+        setSalgadasSelections(salgadas);
+        setDocesSelections(doces);
+      } else if (semSuinos) {
+        setSalgadasSelections(prev => {
+          const next = { ...prev };
+          let removedCount = 0;
+          Object.keys(next).forEach(flavorName => {
+            if (isPorkFlavor(flavorName)) {
+              removedCount += next[flavorName];
+              delete next[flavorName];
+            }
+          });
+          if (removedCount > 0) {
+            setFeedbackNotice(`Opção Sem Suínos ativa: ${removedCount} esfirras com porco foram removidas.`);
+            setTimeout(() => setFeedbackNotice(''), 4000);
           }
+          return next;
         });
-        if (removedCount > 0) {
-          setFeedbackNotice(`Opção Sem Suínos ativa: ${removedCount} esfirras com porco foram removidas.`);
-          setTimeout(() => setFeedbackNotice(''), 4000);
-        }
-        return next;
-      });
+      }
     }
   }, [semSuinos]);
 
@@ -179,9 +238,32 @@ export function BoxBuilderModal({ isOpen, onClose, onAddBoxToCart, initialBox = 
 
   const handleBoxChange = (box) => {
     setSelectedBox(box);
-    setSalgadasSelections({});
-    setDocesSelections({});
     setFeedbackNotice('');
+    if (isSortido) {
+      const { salgadas, doces } = generateAutoFill(box, semSuinos);
+      setSalgadasSelections(salgadas);
+      setDocesSelections(doces);
+    } else {
+      setSalgadasSelections({});
+      setDocesSelections({});
+    }
+  };
+
+  const handleToggleSortidoMode = (sortido) => {
+    setIsSortido(sortido);
+    setFeedbackNotice('');
+    if (sortido) {
+      const { salgadas, doces } = generateAutoFill(selectedBox, semSuinos);
+      setSalgadasSelections(salgadas);
+      setDocesSelections(doces);
+      setFeedbackNotice('✨ Sortido da Casa ativado! A equipe selecionará os sabores mais frescos.');
+    } else {
+      setSalgadasSelections({});
+      setDocesSelections({});
+      setActiveTab('salgadas');
+      setFeedbackNotice('✍️ Escolha manual: Selecione as quantidades de cada sabor abaixo.');
+    }
+    setTimeout(() => setFeedbackNotice(''), 3500);
   };
 
   // Get maximum allowed count for a specific flavor under all business rules
@@ -202,6 +284,7 @@ export function BoxBuilderModal({ isOpen, onClose, onAddBoxToCart, initialBox = 
   // Handle Increment/Decrement with strict validation
   const handleUpdateCount = (flavor, type, delta) => {
     setFeedbackNotice('');
+    setIsSortido(false);
 
     if (type === 'salgadas') {
       const current = salgadasSelections[flavor.name] || 0;
@@ -320,52 +403,11 @@ export function BoxBuilderModal({ isOpen, onClose, onAddBoxToCart, initialBox = 
   // Smart Assorted Pre-Fill adhering strictly to all business rules
   const handleAutoFill = () => {
     setFeedbackNotice('');
-
-    // 1. Distribute Salgadas
-    const availableSalgadas = salgadasList.filter(f => !semSuinos || !isPorkFlavor(f.name));
-    if (availableSalgadas.length === 0) return;
-
-    const newSalgadas = {};
-    let salgToDistribute = selectedBox.salgadas;
-    let sIdx = 0;
-
-    // Distribute in round-robin respecting individual flavor limits
-    let loops = 0;
-    while (salgToDistribute > 0 && loops < 250) {
-      loops++;
-      const flavor = availableSalgadas[sIdx % availableSalgadas.length];
-      const maxAllowed = getMaxAllowedForFlavor(flavor, 'salgadas');
-      const current = newSalgadas[flavor.name] || 0;
-
-      if (current < maxAllowed) {
-        newSalgadas[flavor.name] = current + 1;
-        salgToDistribute--;
-      }
-      sIdx++;
-    }
-    setSalgadasSelections(newSalgadas);
-
-    // 2. Distribute Doces
-    const newDoces = {};
-    let docesToDistribute = selectedBox.doces;
-    let dIdx = 0;
-    loops = 0;
-
-    while (docesToDistribute > 0 && loops < 150) {
-      loops++;
-      const flavor = docesList[dIdx % docesList.length];
-      const maxAllowed = selectedBox.maxPerDoce;
-      const current = newDoces[flavor.name] || 0;
-
-      if (current < maxAllowed) {
-        newDoces[flavor.name] = current + 1;
-        docesToDistribute--;
-      }
-      dIdx++;
-    }
-    setDocesSelections(newDoces);
-
-    setFeedbackNotice('✨ Caixa preenchida com o sortido perfeito da casa!');
+    const { salgadas, doces } = generateAutoFill(selectedBox, semSuinos);
+    setSalgadasSelections(salgadas);
+    setDocesSelections(doces);
+    setIsSortido(true);
+    setFeedbackNotice('✨ Sortido da Casa ativado! A equipe selecionará os melhores sabores.');
     setTimeout(() => setFeedbackNotice(''), 3500);
   };
 
@@ -377,12 +419,15 @@ export function BoxBuilderModal({ isOpen, onClose, onAddBoxToCart, initialBox = 
       name: `${selectedBox.name} Sortida`,
       price: selectedBox.price,
       isCustomBox: true,
+      isSortido: isSortido,
       totalCount: selectedBox.total,
       semSuinos: semSuinos,
-      salgadasDetails: salgadasSelections,
-      docesDetails: docesSelections,
+      salgadasDetails: salgadasSelections, // Salvo para a cozinha / equipe interna
+      docesDetails: docesSelections,       // Salvo para a cozinha / equipe interna
       image: "https://assets.olaclick.app/companies/products/images/800/4cfa4549-ad5f-4b4e-b539-468584a0eeba.png",
-      description: `${selectedBox.salgadas} Salgadas e ${selectedBox.doces} Doces sortidas.${semSuinos ? ' 🚫 OPÇÃO SEM SUÍNOS.' : ''}`
+      description: isSortido
+        ? `${selectedBox.salgadas} Salgadas e ${selectedBox.doces} Doces sortidas da casa.${semSuinos ? ' 🚫 OPÇÃO SEM SUÍNOS.' : ''}`
+        : `${selectedBox.salgadas} Salgadas e ${selectedBox.doces} Doces.${semSuinos ? ' 🚫 OPÇÃO SEM SUÍNOS.' : ''}`
     };
     onAddBoxToCart(customItem);
     onClose();
@@ -482,6 +527,50 @@ export function BoxBuilderModal({ isOpen, onClose, onAddBoxToCart, initialBox = 
                   {semSuinos ? 'SEM SUÍNOS ATIVO' : 'Permitir Suínos'}
                 </span>
               </label>
+            </div>
+
+            {/* Escolha do Modo: Sortido da Casa vs Escolher Sabores */}
+            <div className="mt-2.5 p-2 rounded-2xl bg-dark-900 border border-dark-800">
+              <div className="text-[11px] font-bold text-slate-300 mb-2 px-1 flex items-center justify-between">
+                <span>Modo de Seleção dos Sabores:</span>
+                <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${isSortido ? 'bg-amber-500/20 text-brand-gold border border-brand-gold/30' : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'}`}>
+                  {isSortido ? '🎲 Sortido da Casa' : '✍️ Escolha Manual'}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleToggleSortidoMode(true)}
+                  className={`py-2 px-3 rounded-xl border flex items-center justify-center gap-2 text-xs font-bold transition-all cursor-pointer ${
+                    isSortido
+                      ? 'bg-gradient-to-r from-brand-gold to-amber-400 text-dark-950 border-brand-gold font-black shadow-md'
+                      : 'bg-dark-850 border-dark-750 text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <Shuffle className="w-4 h-4" />
+                  <span>🎲 Sortido da Casa</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleToggleSortidoMode(false)}
+                  className={`py-2 px-3 rounded-xl border flex items-center justify-center gap-2 text-xs font-bold transition-all cursor-pointer ${
+                    !isSortido
+                      ? 'bg-gradient-to-r from-brand-gold to-amber-400 text-dark-950 border-brand-gold font-black shadow-md'
+                      : 'bg-dark-850 border-dark-750 text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <span>✍️ Escolher Sabores</span>
+                </button>
+              </div>
+
+              {isSortido && (
+                <div className="mt-2 p-2 rounded-xl bg-amber-500/10 border border-brand-gold/30 text-amber-200 text-[11px] flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                  <span>
+                    <strong>Sortido Ativo:</strong> A El Shadday preparará os sabores mais frescos do forno. Sabores específicos serão preparados internamente pela equipe.
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 

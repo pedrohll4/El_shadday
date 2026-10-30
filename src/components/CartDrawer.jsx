@@ -146,18 +146,25 @@ export function CartDrawer({
 
                     {/* Breakdown for custom box */}
                     {item.isCustomBox && (
-                      <div className="text-[10px] text-brand-goldLight mt-1 space-y-0.5">
-                        {item.salgadasDetails && (
-                          <div className="line-clamp-2">
-                            🥟 <strong>Salg:</strong> {Object.entries(item.salgadasDetails).map(([k, v]) => `${v}x ${k}`).join(', ')}
-                          </div>
-                        )}
-                        {item.docesDetails && (
-                          <div className="line-clamp-2">
-                            🍫 <strong>Doces:</strong> {Object.entries(item.docesDetails).map(([k, v]) => `${v}x ${k}`).join(', ')}
-                          </div>
-                        )}
-                      </div>
+                      item.isSortido ? (
+                        <div className="text-[10px] text-amber-300 font-medium mt-1">
+                          🎲 Sortido da Casa (selecionado pela equipe){item.semSuinos ? ' • Sem suínos' : ''}
+                        </div>
+                      ) : (
+                        <div className="text-[10px] text-brand-goldLight mt-1 space-y-0.5">
+                          {item.salgadasDetails && (
+                            <div className="line-clamp-2">
+                              🥟 <strong>Salg:</strong> {Object.entries(item.salgadasDetails).map(([k, v]) => `${v}x ${k}`).join(', ')}
+                            </div>
+                          )}
+                          {item.docesDetails && (
+                            <div className="line-clamp-2">
+                              🍫 <strong>Doces:</strong> {Object.entries(item.docesDetails).map(([k, v]) => `${v}x ${k}`).join(', ')}
+                            </div>
+                          )}
+                          {item.semSuinos && <div className="text-red-400 font-bold text-[10px]">🚫 Sem suínos</div>}
+                        </div>
+                      )
                     )}
 
                     <div className="mt-2 flex items-center justify-between">

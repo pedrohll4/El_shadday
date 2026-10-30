@@ -78,7 +78,27 @@ export function getBranchForOrder(order, branches = null) {
 }
 
 /**
- * Formata lista resumida de itens para o texto da mensagem
+ * Cache local de disparos para evitar duplicidade de mensagens na mesma sessão/dispositivo
+ */
+const recentDispatches = new Map();
+
+function shouldBlockDuplicateDispatch(orderId, statusType) {
+  if (!orderId || !statusType) return false;
+  const key = `${orderId}:${String(statusType).toUpperCase()}`;
+  const lastTime = recentDispatches.get(key);
+  if (lastTime && Date.now() - lastTime < 15000) {
+    return true; // Bloqueia tentativas repetidas em menos de 15 segundos
+  }
+  recentDispatches.set(key, Date.now());
+  if (recentDispatches.size > 200) {
+    const oldest = recentDispatches.keys().next().value;
+    recentDispatches.delete(oldest);
+  }
+  return false;
+}
+
+/**
+ * Formata lista resumida de itens para o texto da mensagem (oculta detalhes se for sortido)
  */
 function formatOrderItemsSummary(items = []) {
   if (!Array.isArray(items) || items.length === 0) return '• Itens do pedido';
@@ -90,6 +110,11 @@ function formatOrderItemsSummary(items = []) {
       if (sab) line += ` (${sab})`;
     } else if (it.flavors && it.flavors.length > 0) {
       line += ` (${it.flavors.join('/')})`;
+    } else if (it.isSortido || (it.name && it.name.toLowerCase().includes('sortid')) || (it.isBox && !it.salgadasDetails)) {
+      line += ` (Sortido da Casa${it.semSuinos ? ' - Sem Suínos' : ''})`;
+    } else if (it.isCustomBox && !it.isSortido && it.salgadasDetails) {
+      const salg = Object.entries(it.salgadasDetails).map(([f, q]) => `${q}x ${f}`).join(', ');
+      if (salg) line += ` (${salg})`;
     }
     return line;
   }).join('\n');
@@ -213,6 +238,11 @@ export function openWhatsAppInstantLink({ order, statusType, branch, reason = ''
   const cleanPhone = cleanPhoneNumber(rawPhone);
   if (!cleanPhone) return null;
 
+  if (shouldBlockDuplicateDispatch(order.orderId, statusType)) {
+    console.log('[WhatsApp] Abertura instantânea evitada por duplicata recente:', order.orderId, statusType);
+    return { success: true, skippedDuplicate: true };
+  }
+
   const resolvedBranch = branch || getBranchForOrder(order);
   const message = buildStatusMessage({ order, statusType, branch: resolvedBranch, reason });
   const encoded = encodeURIComponent(message);
@@ -238,6 +268,11 @@ export async function sendCustomerWhatsAppNotification({
   forceOpen = false
 }) {
   if (!order) return { success: false, error: 'Pedido inválido' };
+
+  if (!forceOpen && shouldBlockDuplicateDispatch(order.orderId, statusType)) {
+    console.log('[WhatsApp] Disparo duplicado ignorado no cliente:', order.orderId, statusType);
+    return { success: true, duplicateIgnored: true };
+  }
 
   const rawPhone = order.customerPhone;
   const cleanPhone = cleanPhoneNumber(rawPhone);

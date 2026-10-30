@@ -117,11 +117,18 @@ export function DeliveryCartDrawer({
           desc += ` - Obs: ${item.notes}`;
         }
       } else if (item.isCustomBox) {
-        const salgText = Object.entries(item.salgadasDetails || {}).map(([f, q]) => `${q}x ${f}`).join(', ');
-        const docesText = Object.entries(item.docesDetails || {}).map(([f, q]) => `${q}x ${f}`).join(', ');
-        desc = `\n   ↳ 🥟 Salgadas: ${salgText}\n   ↳ 🍫 Doces: ${docesText}`;
-        if (item.semSuinos) {
-          desc += `\n   ↳ 🚫 *SEM SUÍNOS:* Sim (Sem porco / bacon / calabresa)`;
+        if (item.isSortido) {
+          desc = `\n   ↳ 🎲 *Sabores:* Sortido especial da casa (selecionado pela equipe)`;
+          if (item.semSuinos) {
+            desc += `\n   ↳ 🚫 *SEM SUÍNOS:* Sim (Sem porco / bacon / calabresa)`;
+          }
+        } else {
+          const salgText = Object.entries(item.salgadasDetails || {}).map(([f, q]) => `${q}x ${f}`).join(', ');
+          const docesText = Object.entries(item.docesDetails || {}).map(([f, q]) => `${q}x ${f}`).join(', ');
+          desc = `\n   ↳ 🥟 Salgadas: ${salgText}\n   ↳ 🍫 Doces: ${docesText}`;
+          if (item.semSuinos) {
+            desc += `\n   ↳ 🚫 *SEM SUÍNOS:* Sim (Sem porco / bacon / calabresa)`;
+          }
         }
       } else if (item.description && (item.isBox || item.isCombo)) {
         desc = `\n   ↳ ${item.description}`;
@@ -392,11 +399,18 @@ Pedido gerado via Cardápio Digital El Shadday.`;
                       )}
 
                       {/* Box Flavors Details */}
-                      {item.isCustomBox && item.salgadasDetails && (
-                        <div className="mt-1 text-[10px] text-slate-400 space-y-0.5 bg-dark-950 p-2 rounded-lg border border-dark-800">
-                          <p><strong className="text-white">Salgadas:</strong> {Object.entries(item.salgadasDetails).map(([f, q]) => `${q}x ${f}`).join(', ')}</p>
-                          <p><strong className="text-white">Doces:</strong> {Object.entries(item.docesDetails || {}).map(([f, q]) => `${q}x ${f}`).join(', ')}</p>
-                        </div>
+                      {item.isCustomBox && (
+                        item.isSortido ? (
+                          <div className="mt-1 text-[11px] text-amber-300 font-medium bg-dark-950 p-2 rounded-lg border border-brand-gold/30 flex items-center gap-1.5">
+                            <span>🎲</span>
+                            <span>Sortido da Casa (sabores variados pela equipe){item.semSuinos ? ' • Sem suínos' : ''}</span>
+                          </div>
+                        ) : item.salgadasDetails ? (
+                          <div className="mt-1 text-[10px] text-slate-400 space-y-0.5 bg-dark-950 p-2 rounded-lg border border-dark-800">
+                            <p><strong className="text-white">Salgadas:</strong> {Object.entries(item.salgadasDetails).map(([f, q]) => `${q}x ${f}`).join(', ')}</p>
+                            <p><strong className="text-white">Doces:</strong> {Object.entries(item.docesDetails || {}).map(([f, q]) => `${q}x ${f}`).join(', ')}</p>
+                          </div>
+                        ) : null
                       )}
 
                       {/* Quantity & Price */}
