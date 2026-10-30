@@ -1,5 +1,5 @@
 import { getStoredBranches } from '../data/branchesData';
-import { getBranchWhatsApp } from './whatsappBranchService';
+import { getBranchWhatsApp, sendEngineDirectMessage } from './whatsappBranchService';
 
 const STORAGE_SETTINGS_KEY = 'el_shadday_whatsapp_settings_v1';
 
@@ -11,7 +11,7 @@ export const DEFAULT_WHATSAPP_SETTINGS = {
   notifyOnReadyCounter: true,// Ao marcar pronto no balcão
   notifyOnComplete: true,    // Ao marcar como concluído
   notifyOnCancel: true,      // Ao cancelar o pedido
-  openDirectly: true         // Abre o WhatsApp Web / App diretamente
+  openDirectly: false        // Disparos 100% silenciosos em segundo plano (sem abrir abas)
 };
 
 export function getWhatsAppSettings() {
@@ -237,40 +237,57 @@ export async function sendCustomerWhatsAppNotification({
 
   let apiSuccess = false;
 
-  // 1. TENTA ENVIAR VIA WEBHOOK / API (Se configurado na filial ou nas opções)
-  const webhookUrl = branch?.whatsappApiUrl || settings.whatsappApiUrl;
-  if (webhookUrl) {
-    try {
-      const response = await fetch(webhookUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(branch?.whatsappApiToken ? { 'Authorization': `Bearer ${branch.whatsappApiToken}` } : {})
-        },
-        body: JSON.stringify({
-          phone: cleanPhone,
-          message,
-          orderId: order.orderId,
-          status: statusType,
-          branchId: branch?.id || 'ariquemes'
-        })
-      });
-      if (response.ok) {
-        apiSuccess = true;
-        console.log('[WhatsApp] Mensagem enviada com sucesso via API para', cleanPhone);
+  // 1. TENTA ENVIAR VIA MOTOR GRATUITO LOCAL / SUPABASE BRIDGE (100% Silencioso)
+  try {
+    const directResult = await sendEngineDirectMessage({
+      phone: cleanPhone,
+      message,
+      orderId: order.orderId,
+      status: statusType
+    });
+    if (directResult.success) {
+      apiSuccess = true;
+      console.log('✅ [WhatsApp] Notificação disparada silenciosamente para', cleanPhone);
+    }
+  } catch (err) {
+    console.warn('[WhatsApp] Falha ao enviar via motor direto:', err);
+  }
+
+  // 2. TENTA ENVIAR VIA WEBHOOK / API EXTERNA SE CONFIGURADA
+  if (!apiSuccess) {
+    const webhookUrl = branch?.whatsappApiUrl || settings.whatsappApiUrl;
+    if (webhookUrl && !webhookUrl.includes('127.0.0.1')) {
+      try {
+        const response = await fetch(webhookUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(branch?.whatsappApiToken ? { 'Authorization': `Bearer ${branch.whatsappApiToken}` } : {})
+          },
+          body: JSON.stringify({
+            phone: cleanPhone,
+            message,
+            orderId: order.orderId,
+            status: statusType,
+            branchId: branch?.id || 'ariquemes'
+          })
+        });
+        if (response.ok) {
+          apiSuccess = true;
+          console.log('[WhatsApp] Mensagem enviada com sucesso via webhook para', cleanPhone);
+        }
+      } catch (err) {
+        console.warn('[WhatsApp] Falha ao enviar via webhook customizado:', err);
       }
-    } catch (err) {
-      console.warn('[WhatsApp] Falha ao enviar via webhook/API, caindo para link web:', err);
     }
   }
 
-  // 2. Se não tem webhook ou se a configuração pede abertura direta
-  if (!apiSuccess && (settings.openDirectly || forceOpen)) {
+  // 3. Fallback MANUAL: se for forceOpen (ex: clique no botão 'Avisar Cliente') e não tiver disparado
+  if (!apiSuccess && (forceOpen || settings.openDirectly)) {
     try {
-      // Abre WhatsApp Web ou App nativo
       window.open(whatsappUrl, '_blank');
     } catch (e) {
-      console.error('[WhatsApp] Erro ao abrir janela do WhatsApp:', e);
+      console.error('[WhatsApp] Erro ao abrir janela manual do WhatsApp:', e);
     }
   }
 

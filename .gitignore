@@ -28,3 +28,7 @@ asset_*
 banner_*
 logo_el_shadday.png
 generate_banner_*.py
+
+# WhatsApp session credentials
+data/
+
