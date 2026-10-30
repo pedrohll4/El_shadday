@@ -14,7 +14,8 @@ import { createClient } from '@supabase/supabase-js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const PORT = 5001;
+// Porta dinâmica (Render atribui porta via process.env.PORT)
+const PORT = process.env.PORT || 5001;
 const AUTH_DIR = path.join(process.cwd(), 'data', 'wa_auth');
 
 // Garante que o diretório de dados existe
@@ -22,7 +23,7 @@ if (!fs.existsSync(AUTH_DIR)) {
   fs.mkdirSync(AUTH_DIR, { recursive: true });
 }
 
-// Configuração do Supabase para escuta de pedidos em tempo real (compatível com Vercel)
+// Configuração do Supabase
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://yzeemqzxlgudynydvpof.supabase.co';
 const SUPABASE_KEY = process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl6ZWVtcXp4bGd1ZHlueWR2cG9mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE1MjAwOTgsImV4cCI6MjEwNzA5NjA5OH0.aahKZCTuVyJ9lNS09EZPVhaucSRhTL6pDGwKITSUnwg';
 
@@ -34,7 +35,7 @@ const state = {
   qrCodeDataUrl: null,
   userInfo: null,
   lastError: null,
-  batteryLevel: 96,
+  batteryLevel: 98,
   autoNotify: true
 };
 
@@ -42,12 +43,11 @@ let sock = null;
 let isConnecting = false;
 
 // Histórico de mensagens enviadas para evitar duplicatas por status
-const sentHistory = new Map(); // key: `${orderId}:${status}` -> timestamp
+const sentHistory = new Map();
 
 function recordSentMessage(orderId, status) {
   if (!orderId || !status) return;
   sentHistory.set(`${orderId}:${status}`, Date.now());
-  // Mantém no máximo 500 registros
   if (sentHistory.size > 500) {
     const firstKey = sentHistory.keys().next().value;
     sentHistory.delete(firstKey);
@@ -59,11 +59,56 @@ function hasAlreadySent(orderId, status) {
   const key = `${orderId}:${status}`;
   const sentTime = sentHistory.get(key);
   if (!sentTime) return false;
-  // Se foi enviado há menos de 10 minutos, considera duplicata
   return Date.now() - sentTime < 10 * 60 * 1000;
 }
 
-// Broadcast de status para o canal do Supabase (para telas no Vercel receberem o QR Code)
+// Persistência de Sessão no Supabase (Garante permanência mesmo em servidores com disco efêmero como Render Free)
+async function backupAuthToSupabase() {
+  try {
+    if (!fs.existsSync(AUTH_DIR)) return;
+    const files = fs.readdirSync(AUTH_DIR);
+    const authData = {};
+    for (const file of files) {
+      if (file.endsWith('.json')) {
+        authData[file] = fs.readFileSync(path.join(AUTH_DIR, file), 'utf-8');
+      }
+    }
+    if (Object.keys(authData).length > 0) {
+      const { data } = await supabase.from('company_settings').select('card_machine_settings').eq('id', 'el_shadday_config').single();
+      const existing = data?.card_machine_settings || {};
+      await supabase.from('company_settings').update({
+        card_machine_settings: {
+          ...existing,
+          baileys_cloud_auth: authData,
+          baileys_cloud_status: state.status,
+          baileys_cloud_phone: state.userInfo?.phone || ''
+        }
+      }).eq('id', 'el_shadday_config');
+    }
+  } catch (e) {
+    console.warn('[WhatsApp Service] Falha ao fazer backup de sessão no Supabase:', e.message);
+  }
+}
+
+async function restoreAuthFromSupabase() {
+  try {
+    const { data } = await supabase.from('company_settings').select('card_machine_settings').eq('id', 'el_shadday_config').single();
+    const authData = data?.card_machine_settings?.baileys_cloud_auth;
+    if (authData && typeof authData === 'object' && Object.keys(authData).length > 0) {
+      if (!fs.existsSync(AUTH_DIR)) fs.mkdirSync(AUTH_DIR, { recursive: true });
+      for (const [file, content] of Object.entries(authData)) {
+        fs.writeFileSync(path.join(AUTH_DIR, file), String(content), 'utf-8');
+      }
+      console.log('✅ [WhatsApp Service] Sessão permanente restaurada do Supabase com sucesso!');
+      return true;
+    }
+  } catch (e) {
+    console.warn('[WhatsApp Service] Falha ao restaurar sessão do Supabase:', e.message);
+  }
+  return false;
+}
+
+// Broadcast de status para o canal do Supabase
 let supabaseBridgeChannel = null;
 
 function broadcastStateToSupabase() {
@@ -82,19 +127,15 @@ function broadcastStateToSupabase() {
         timestamp: Date.now()
       }
     }).catch(() => {});
-  } catch (err) {
-    // Silencia erros de broadcast
-  }
+  } catch (err) {}
 }
 
-// Normaliza números de telefone do Brasil para consulta e envio no WhatsApp
+// Normaliza números de telefone do Brasil
 export function formatToWhatsAppQueries(phone) {
   const digits = String(phone || '').replace(/\D/g, '');
   if (!digits) return [];
 
   const candidates = [];
-
-  // Se tem DDD de 2 dígitos + número (10 ou 11 dígitos) sem o 55 do país
   if (digits.length === 10 || digits.length === 11) {
     candidates.push(`55${digits}`);
     if (digits.length === 11 && digits[2] === '9') {
@@ -116,7 +157,7 @@ export function formatToWhatsAppQueries(phone) {
   return Array.from(new Set(candidates));
 }
 
-// Formata itens do pedido para texto do WhatsApp
+// Formata itens do pedido
 function formatOrderItems(items = []) {
   if (!Array.isArray(items) || items.length === 0) return '• Itens do pedido';
   return items.map(it => {
@@ -131,7 +172,7 @@ function formatOrderItems(items = []) {
   }).join('\n');
 }
 
-// Construtor das mensagens padrão da El Shadday
+// Construtor das mensagens padrão
 export function buildOrderWhatsAppText({ order, statusType, reason = '' }) {
   const customerName = order.customer_name || order.customerName || 'Cliente';
   const orderId = order.id || order.orderId || 'S/N';
@@ -259,14 +300,17 @@ async function initWhatsApp(forceReconnect = false) {
       auth: authState,
       logger: pino({ level: 'warn' }),
       printQRInTerminal: true,
-      browser: ['Windows', 'Brave', '131.0.0.0'],
+      browser: ['Windows', 'Chrome', '131.0.0.0'],
       connectTimeoutMs: 60000,
       keepAliveIntervalMs: 25000,
       syncFullHistory: false,
       markOnlineOnConnect: false
     });
 
-    sock.ev.on('creds.update', saveCreds);
+    sock.ev.on('creds.update', async () => {
+      await saveCreds();
+      await backupAuthToSupabase();
+    });
 
     sock.ev.on('connection.update', async (update) => {
       const { connection, lastDisconnect, qr } = update;
@@ -282,7 +326,7 @@ async function initWhatsApp(forceReconnect = false) {
             }
           });
           state.status = 'SCAN_QR';
-          console.log('\n[WhatsApp Service] 📲 NOVO QR CODE GERADO! Escaneie no WhatsApp:');
+          console.log('\n[WhatsApp Service] 📲 NOVO QR CODE GERADO! Escaneie no painel:');
           broadcastStateToSupabase();
         } catch (err) {
           console.error('[WhatsApp Service] Erro ao gerar imagem do QR Code:', err);
@@ -303,8 +347,9 @@ async function initWhatsApp(forceReconnect = false) {
           phone: cleanPhone
         };
 
-        console.log(`\n[WhatsApp Service] ✅ CONECTADO COM SUCESSO! Telefone Oficial: +${cleanPhone}`);
+        console.log(`\n[WhatsApp Service] ✅ CONECTADO COM SUCESSO! Telefone: +${cleanPhone}`);
         broadcastStateToSupabase();
+        await backupAuthToSupabase();
       }
 
       if (connection === 'close') {
@@ -353,7 +398,6 @@ export async function sendWhatsAppMessage(phone, message) {
 
   let targetJid = null;
 
-  // Verifica se o número existe no WhatsApp
   for (const q of queries) {
     try {
       const results = await sock.onWhatsApp(q);
@@ -364,22 +408,18 @@ export async function sendWhatsAppMessage(phone, message) {
           break;
         }
       }
-    } catch (e) {
-      // Ignora erro no loop de checagem
-    }
+    } catch (e) {}
   }
 
-  // Fallback para query padrão com sufixo
   if (!targetJid) {
     targetJid = `${queries[0]}@s.whatsapp.net`;
   }
 
-  // Simulação de presença humana antes do envio (evita bloqueio)
   try {
     await sock.sendPresenceUpdate('available');
-    await new Promise(r => setTimeout(r, 600));
+    await new Promise(r => setTimeout(r, 500));
     await sock.sendPresenceUpdate('composing', targetJid);
-    const typingTime = Math.min(3000, Math.max(1000, message.length * 15));
+    const typingTime = Math.min(2500, Math.max(800, message.length * 12));
     await new Promise(r => setTimeout(r, typingTime));
     await sock.sendPresenceUpdate('paused', targetJid);
   } catch (e) {}
@@ -419,31 +459,35 @@ async function logoutWhatsApp() {
   state.lastError = null;
   broadcastStateToSupabase();
 
+  try {
+    const { data } = await supabase.from('company_settings').select('card_machine_settings').eq('id', 'el_shadday_config').single();
+    const existing = data?.card_machine_settings || {};
+    delete existing.baileys_cloud_auth;
+    delete existing.baileys_cloud_status;
+    delete existing.baileys_cloud_phone;
+    await supabase.from('company_settings').update({ card_machine_settings: existing }).eq('id', 'el_shadday_config');
+  } catch (e) {}
+
   return { success: true };
 }
 
-// Escutador de pedidos no Supabase Realtime (Permite que o site na Vercel acione o disparo silencioso!)
+// Escutador de pedidos no Supabase Realtime
 function initSupabaseOrderWatcher() {
-  console.log('[WhatsApp Service] 📡 Conectando ao Supabase Realtime para ouvir pedidos...');
+  console.log('[WhatsApp Service] 📡 Conectando ao Supabase Realtime...');
 
-  // Canal de Broadcast bi-direcional para comunicar com o Admin no Vercel
   supabaseBridgeChannel = supabase.channel('el_shadday_whatsapp_bridge');
 
   supabaseBridgeChannel
     .on('broadcast', { event: 'REQUEST_STATUS' }, () => {
-      console.log('[WhatsApp Bridge] 📨 Pedido de status recebido via Supabase Broadcast');
       broadcastStateToSupabase();
     })
     .on('broadcast', { event: 'CONNECT' }, () => {
-      console.log('[WhatsApp Bridge] 🔌 Comando CONNECT recebido via Supabase Broadcast');
       initWhatsApp(true);
     })
     .on('broadcast', { event: 'LOGOUT' }, () => {
-      console.log('[WhatsApp Bridge] 🚪 Comando LOGOUT recebido via Supabase Broadcast');
       logoutWhatsApp();
     })
     .on('broadcast', { event: 'SEND_TEST' }, async ({ payload }) => {
-      console.log('[WhatsApp Bridge] 🧪 Envio de teste solicitado:', payload?.phone);
       if (payload?.phone && payload?.message) {
         try {
           await sendWhatsAppMessage(payload.phone, payload.message);
@@ -463,12 +507,12 @@ function initSupabaseOrderWatcher() {
     })
     .subscribe((status) => {
       if (status === 'SUBSCRIBED') {
-        console.log('✅ [WhatsApp Bridge] Conectado ao canal de broadcast do Supabase!');
+        console.log('✅ [WhatsApp Bridge] Conectado ao Supabase Realtime!');
         broadcastStateToSupabase();
       }
     });
 
-  // Escuta alterações na tabela 'orders'
+  // Ouve atualizações nos pedidos da cozinha
   supabase
     .channel('whatsapp_orders_changes')
     .on(
@@ -488,31 +532,26 @@ function initSupabaseOrderWatcher() {
           // Se for INSERT de novo pedido
           if (payload.eventType === 'INSERT') {
             if (hasAlreadySent(orderId, 'RECEBIDO')) return;
-            console.log(`[Supabase Realtime] 🔔 Novo pedido recebido: #${orderId} (${row.customer_name})`);
+            console.log(`[Supabase Realtime] 🔔 Novo pedido: #${orderId} (${row.customer_name})`);
             recordSentMessage(orderId, 'RECEBIDO');
             const msg = buildOrderWhatsAppText({ order: row, statusType: 'RECEBIDO' });
-            await sendWhatsAppMessage(phone, msg).catch((err) => {
-              console.warn('[WhatsApp Service] Falha ao enviar confirmação de novo pedido:', err.message);
-            });
+            await sendWhatsAppMessage(phone, msg).catch(() => {});
             return;
           }
 
           // Se for UPDATE de status
           if (payload.eventType === 'UPDATE') {
             const oldStatus = String(payload.old?.status || '').toUpperCase().trim();
-            if (status === oldStatus) return; // Status não mudou
+            if (status === oldStatus) return;
 
-            // Mapeia se o pedido é balcão para mensagem correta de conclusão
             let notifyType = status;
             if (status === 'CONCLUIDO' && (row.delivery_type === 'balcao' || row.district === 'Balcão')) {
               notifyType = 'PRONTO_BALCAO';
             }
 
-            if (hasAlreadySent(orderId, notifyType)) {
-              return; // Já enviado
-            }
+            if (hasAlreadySent(orderId, notifyType)) return;
 
-            console.log(`[Supabase Realtime] 🔄 Status alterado no pedido #${orderId}: ${oldStatus} ➔ ${notifyType}`);
+            console.log(`[Supabase Realtime] 🔄 Pedido #${orderId}: ${oldStatus} ➔ ${notifyType}`);
             recordSentMessage(orderId, notifyType);
 
             const msg = buildOrderWhatsAppText({
@@ -522,20 +561,17 @@ function initSupabaseOrderWatcher() {
             });
 
             await sendWhatsAppMessage(phone, msg).catch((err) => {
-              console.warn(`[WhatsApp Service] Falha ao enviar atualização (${notifyType}):`, err.message);
+              console.warn(`[WhatsApp Service] Erro ao enviar status (${notifyType}):`, err.message);
             });
           }
-        } catch (err) {
-          console.warn('[WhatsApp Service] Erro no processamento de evento do Supabase:', err);
-        }
+        } catch (err) {}
       }
     )
     .subscribe();
 }
 
-// Servidor HTTP Local (porta 5001) para uso no mesmo computador / rede local
+// Servidor HTTP com CORS Completo
 const server = http.createServer(async (req, res) => {
-  // Configuração de CORS completo
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -555,8 +591,8 @@ const server = http.createServer(async (req, res) => {
 
   try {
     // GET /health
-    if (req.method === 'GET' && url.pathname === '/health') {
-      return sendJson(200, { ok: true, status: state.status, port: PORT });
+    if (req.method === 'GET' && (url.pathname === '/health' || url.pathname === '/')) {
+      return sendJson(200, { ok: true, status: state.status, port: PORT, provider: 'Baileys Cloud Engine' });
     }
 
     // GET /status
@@ -583,7 +619,6 @@ const server = http.createServer(async (req, res) => {
       });
     }
 
-    // Helper para leitura do corpo JSON
     const readBody = () => {
       return new Promise((resolve, reject) => {
         let body = '';
@@ -624,22 +659,33 @@ const server = http.createServer(async (req, res) => {
 
     return sendJson(404, { error: 'Rota não encontrada' });
   } catch (error) {
-    console.error('[WhatsApp Service Error]', error);
     return sendJson(500, { error: error?.message || 'Erro interno do serviço WhatsApp' });
   }
 });
 
-// Inicia servidor HTTP e escutador Supabase
-server.listen(PORT, '127.0.0.1', () => {
+// Auto-ping para manter ativo se estiver no Render
+if (process.env.RENDER_EXTERNAL_URL) {
+  const pingUrl = `${process.env.RENDER_EXTERNAL_URL}/health`;
+  setInterval(() => {
+    fetch(pingUrl).catch(() => {});
+  }, 10 * 60 * 1000);
+}
+
+// Inicialização
+server.listen(PORT, '0.0.0.0', async () => {
   console.log(`\n============================================================`);
-  console.log(`🚀 [WhatsApp Service] Motor El Shadday rodando em http://127.0.0.1:${PORT}`);
-  console.log(`⚡ 100% Gratuito | Sem API Paga | Disparos Silenciosos Ativos`);
+  console.log(`🚀 [WhatsApp Service] Motor El Shadday rodando na porta ${PORT}`);
+  console.log(`⚡ 100% Gratuito | Sem Limite de Mensagens | Nuvem Render / Local`);
   console.log(`============================================================\n`);
 
-  // Conecta ao Supabase Realtime
   initSupabaseOrderWatcher();
 
-  // Inicia conexão do WhatsApp
+  // Tenta restaurar sessão permanente salva no Supabase
+  const restored = await restoreAuthFromSupabase();
+  if (restored) {
+    console.log('[WhatsApp Service] Tentando reconexão automática com sessão salva...');
+  }
+
   initWhatsApp().catch((err) => {
     console.log('[WhatsApp Service] Aguardando comando de conexão:', err.message);
   });

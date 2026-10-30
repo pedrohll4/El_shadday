@@ -18,28 +18,28 @@ import {
   AlertTriangle,
   Zap,
   Cloud,
-  MousePointer,
   HelpCircle,
-  Copy
+  Copy,
+  Terminal,
+  Check
 } from 'lucide-react';
 import { 
   getAllBranchWhatsApp, 
   getBranchWhatsApp, 
-  updateBranchWhatsApp
+  updateBranchWhatsApp,
+  getCloudEngineUrl,
+  saveCloudEngineUrl,
+  syncCloudEngineUrlFromDatabase,
+  fetchEngineStatus,
+  requestEngineConnect,
+  disconnectBranchWhatsApp,
+  sendEngineDirectMessage,
+  isCloudBaileysActive
 } from '../../services/whatsappBranchService';
 import { 
   getWhatsAppSettings, 
-  saveWhatsAppSettings,
-  openWhatsAppInstantLink
+  saveWhatsAppSettings 
 } from '../../services/whatsappNotificationService';
-import { 
-  getGreenApiConfig, 
-  saveGreenApiConfig, 
-  checkGreenApiStatus, 
-  getGreenApiQRCode, 
-  sendGreenApiMessage,
-  syncGreenApiFromCloud
-} from '../../services/greenApiService';
 
 export default function WhatsAppManagerView({ 
   currentUser, 
@@ -48,12 +48,13 @@ export default function WhatsAppManagerView({
 }) {
   const [sessions, setSessions] = useState(() => getAllBranchWhatsApp());
   const [settings, setSettings] = useState(() => getWhatsAppSettings());
-  const [greenConfig, setGreenConfig] = useState(() => getGreenApiConfig());
-  const [greenStatus, setGreenStatus] = useState('checking'); // 'authorized' | 'notAuthorized' | 'not_configured' | 'checking'
-  const [greenQrDataUrl, setGreenQrDataUrl] = useState(null);
-  const [showGreenQrModal, setShowGreenQrModal] = useState(false);
-  const [isCheckingGreen, setIsCheckingGreen] = useState(false);
-  const [showGreenTutorial, setShowGreenTutorial] = useState(false);
+  const [cloudUrlInput, setCloudUrlInput] = useState(() => getCloudEngineUrl());
+  const [activeQrModal, setActiveQrModal] = useState(false);
+  const [qrCodeDataUrl, setQrCodeDataUrl] = useState(null);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [isCheckingStatus, setIsCheckingStatus] = useState(false);
+  const [showTutorial, setShowTutorial] = useState(false);
+  const [copiedText, setCopiedText] = useState(null);
 
   const [testPhone, setTestPhone] = useState('');
   const [testFeedback, setTestFeedback] = useState(null);
@@ -61,96 +62,104 @@ export default function WhatsAppManagerView({
 
   // Sincroniza configurações ao montar
   useEffect(() => {
-    syncGreenApiFromCloud().then((cfg) => {
-      if (cfg) {
-        setGreenConfig(cfg);
-        if (cfg.idInstance && cfg.apiTokenInstance) {
-          checkGreenApiStatus().then(res => {
-            setGreenStatus(res.authorized ? 'authorized' : 'notAuthorized');
-          }).catch(() => setGreenStatus('not_configured'));
-        } else {
-          setGreenStatus('not_configured');
-        }
-      }
+    syncCloudEngineUrlFromDatabase().then(url => {
+      if (url) setCloudUrlInput(url);
     });
 
-    const handleGreenUpdate = (e) => {
-      if (e?.detail) setGreenConfig(e.detail);
+    fetchEngineStatus('ariquemes').catch(() => {});
+
+    const handleSync = (e) => {
+      if (e?.detail) setSessions(getAllBranchWhatsApp());
     };
 
-    window.addEventListener('el_shadday_green_api_updated', handleGreenUpdate);
-    return () => window.removeEventListener('el_shadday_green_api_updated', handleGreenUpdate);
+    const handleEngineUpdate = (e) => {
+      if (e?.detail) {
+        setSessions(getAllBranchWhatsApp());
+        if (e.detail.status === 'CONNECTED' || e.detail.status === 'connected') {
+          setActiveQrModal(false);
+        }
+      }
+    };
+
+    window.addEventListener('el_shadday_whatsapp_session_updated', handleSync);
+    window.addEventListener('el_shadday_whatsapp_engine_update', handleEngineUpdate);
+
+    return () => {
+      window.removeEventListener('el_shadday_whatsapp_session_updated', handleSync);
+      window.removeEventListener('el_shadday_whatsapp_engine_update', handleEngineUpdate);
+    };
   }, []);
 
-  // Polling de QR Code se modal da Green API estiver aberto
+  // Polling de QR Code quando modal estiver aberto
   useEffect(() => {
-    if (!showGreenQrModal) return;
+    if (!activeQrModal) return;
 
-    const interval = setInterval(async () => {
-      const res = await checkGreenApiStatus();
-      if (res.authorized) {
-        setGreenStatus('authorized');
-        setShowGreenQrModal(false);
-        setGreenQrDataUrl(null);
-      }
-    }, 3000);
+    const interval = setInterval(() => {
+      fetchEngineStatus('ariquemes').then(data => {
+        if (data?.status === 'CONNECTED' || data?.status === 'connected') {
+          setActiveQrModal(false);
+          setQrCodeDataUrl(null);
+        } else if (data?.qrCodeDataUrl) {
+          setQrCodeDataUrl(data.qrCodeDataUrl);
+        }
+      }).catch(() => {});
+    }, 2500);
 
     return () => clearInterval(interval);
-  }, [showGreenQrModal]);
+  }, [activeQrModal]);
 
-  // Salvar credenciais da Green API
-  const handleSaveGreenConfig = async () => {
-    setIsCheckingGreen(true);
+  const session = sessions['ariquemes'] || getBranchWhatsApp('ariquemes');
+  const isConnected = session.status === 'connected' || session.status === 'CONNECTED';
+  const isScanning = session.status === 'scan_qr' || session.status === 'SCAN_QR';
+
+  // Salvar URL do motor na nuvem
+  const handleSaveCloudUrl = async () => {
+    setIsCheckingStatus(true);
     setTestFeedback(null);
     try {
-      await saveGreenApiConfig(greenConfig);
-      const res = await checkGreenApiStatus();
-      if (res.authorized) {
-        setGreenStatus('authorized');
-        setTestFeedback({ success: true, msg: '✅ Green API Conectada com Sucesso! Disparos 100% silenciosos ativos.' });
+      const clean = saveCloudEngineUrl(cloudUrlInput);
+      const data = await fetchEngineStatus('ariquemes');
+      if (data?.status === 'CONNECTED' || data?.status === 'connected') {
+        setTestFeedback({ success: true, msg: '✅ Conexão com o Motor Baileys estabelecida com sucesso! WhatsApp Conectado.' });
       } else {
-        setGreenStatus('notAuthorized');
-        setTestFeedback({ success: false, msg: '⚠️ Credenciais salvas, mas a instância ainda não está conectada ao WhatsApp. Clique em "Escanear QR Code".' });
+        setTestFeedback({ success: true, msg: `✅ URL salva (${clean}). Clique em "Reconectar / QR Code" para emparelhar seu WhatsApp.` });
       }
     } catch (err) {
-      setTestFeedback({ success: false, msg: `Erro ao testar Green API: ${err.message}` });
+      setTestFeedback({ success: false, msg: `⚠️ Erro ao verificar URL: ${err.message}` });
     } finally {
-      setIsCheckingGreen(false);
+      setIsCheckingStatus(false);
       setTimeout(() => setTestFeedback(null), 7000);
     }
   };
 
-  // Abrir Modal de QR Code da Green API
-  const handleOpenGreenQrModal = async () => {
-    if (!greenConfig.idInstance || !greenConfig.apiTokenInstance) {
-      alert('Preencha o ID da Instância e o Token da Green API primeiro.');
-      return;
-    }
-
-    setIsCheckingGreen(true);
-    setShowGreenQrModal(true);
-    setGreenQrDataUrl(null);
-
+  // Abrir Modal de QR Code
+  const handleOpenQrModal = async () => {
+    setActiveQrModal(true);
+    setIsConnecting(true);
+    setQrCodeDataUrl(null);
     try {
-      const res = await getGreenApiQRCode();
-      if (res.alreadyLogged) {
-        setGreenStatus('authorized');
-        setShowGreenQrModal(false);
-        alert('Este WhatsApp já está autenticado e conectado na Green API!');
-      } else if (res.qrCodeDataUrl) {
-        setGreenQrDataUrl(res.qrCodeDataUrl);
-      } else {
-        alert(res.error || 'Não foi possível carregar o QR Code.');
+      await requestEngineConnect('ariquemes');
+      const data = await fetchEngineStatus('ariquemes');
+      if (data?.qrCodeDataUrl) {
+        setQrCodeDataUrl(data.qrCodeDataUrl);
       }
     } catch (err) {
-      console.warn('Erro ao carregar QR Code:', err);
+      console.warn('Erro ao solicitar conexão:', err);
     } finally {
-      setIsCheckingGreen(false);
+      setIsConnecting(false);
     }
   };
 
-  // Envio de Mensagem de Teste (usa Green API se configurada, senão usa Opção 2 link direto)
-  const handleSendTestMessage = async () => {
+  // Desconectar WhatsApp
+  const handleDisconnect = async () => {
+    if (window.confirm('Tem certeza que deseja desconectar o WhatsApp da pizzaria? Será necessário escanear o QR Code novamente para reconectar.')) {
+      disconnectBranchWhatsApp('ariquemes');
+      setSessions(getAllBranchWhatsApp());
+    }
+  };
+
+  // Enviar Teste Silencioso
+  const handleSendTest = async () => {
     if (!testPhone || testPhone.replace(/\D/g, '').length < 8) {
       setTestFeedback({ success: false, msg: 'Digite um número de telefone com DDD (ex: 69992228682)' });
       return;
@@ -160,21 +169,14 @@ export default function WhatsAppManagerView({
     setTestFeedback(null);
 
     const clean = testPhone.replace(/\D/g, '');
-    const testMsg = `🍕 *TESTE DE NOTIFICAÇÃO - EL SHADDAY DELIVERY*\n📍 *Unidade Ariquemes*\n\nTeste realizado com sucesso! Suas notificações de pedidos (No Forno, Saiu para Entrega, Balcão) estão configuradas e prontas. ✅`;
+    const testMsg = `🍕 *TESTE DE NOTIFICAÇÃO - EL SHADDAY DELIVERY*\n📍 *Unidade Ariquemes*\n\nConexão com WhatsApp na Nuvem realizada com sucesso! As notificações de pedidos (No Forno, Saiu para Entrega, Balcão) serão disparadas 100% silenciosamente por este número. ✅`;
 
     try {
-      if (greenStatus === 'authorized') {
-        const res = await sendGreenApiMessage({ phone: clean, message: testMsg });
-        if (res.success) {
-          setTestFeedback({ success: true, msg: `✅ Mensagem enviada silenciosamente via Green API para +${clean}!` });
-        } else {
-          setTestFeedback({ success: false, msg: `⚠️ Falha no envio pela Green API: ${res.error}` });
-        }
+      const res = await sendEngineDirectMessage({ phone: clean, message: testMsg });
+      if (res.success) {
+        setTestFeedback({ success: true, msg: `✅ Mensagem enviada com sucesso no WhatsApp de +${clean}! Verifique o aplicativo.` });
       } else {
-        // Opção 2: Abre no clique
-        const url = `https://wa.me/55${clean}?text=${encodeURIComponent(testMsg)}`;
-        window.open(url, '_blank', 'noopener,noreferrer');
-        setTestFeedback({ success: true, msg: `✅ WhatsApp Web aberto com a mensagem de teste para +${clean}!` });
+        setTestFeedback({ success: false, msg: `⚠️ Falha: ${res.error || 'WhatsApp não conectado. Escaneie o QR Code primeiro.'}` });
       }
     } catch (err) {
       setTestFeedback({ success: false, msg: `Erro ao enviar teste: ${err.message}` });
@@ -184,14 +186,18 @@ export default function WhatsAppManagerView({
     }
   };
 
-  // Alternar regras de disparo
+  // Alternar regras
   const handleToggleSetting = (key) => {
     const next = { ...settings, [key]: !settings[key] };
     setSettings(next);
     saveWhatsAppSettings(next);
   };
 
-  const isGreenActive = greenStatus === 'authorized' && greenConfig.enabled;
+  const copyToClipboard = (text, id) => {
+    navigator.clipboard.writeText(text);
+    setCopiedText(id);
+    setTimeout(() => setCopiedText(null), 2000);
+  };
 
   return (
     <div className="space-y-6">
@@ -204,21 +210,14 @@ export default function WhatsAppManagerView({
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-lg font-bold text-white">Central de WhatsApp</h2>
-              {isGreenActive ? (
-                <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-[11px] font-bold text-emerald-400 flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                  Opção 1 Ativa: Nuvem Silenciosa (Green API)
-                </span>
-              ) : (
-                <span className="px-2.5 py-0.5 rounded-full bg-blue-500/15 border border-blue-500/30 text-[11px] font-bold text-blue-400 flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-blue-400" />
-                  Opção 2 Ativa: Disparo Imediato no Clique (Nativo)
-                </span>
-              )}
+              <h2 className="text-lg font-bold text-white">Central de WhatsApp (Nuvem Gratuita)</h2>
+              <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-[11px] font-bold text-emerald-400 flex items-center gap-1.5">
+                <Zap className="w-3 h-3 text-emerald-400" />
+                Motor Baileys Cloud • Sem Limite de Mensagens
+              </span>
             </div>
             <p className="text-xs text-slate-400">
-              Notifique seus clientes automaticamente quando o pedido entrar no forno, for despachado para entrega ou ficar pronto no balcão.
+              Disparos 100% automáticos e silenciosos na nuvem (sem abrir abas no navegador e sem limite de mensagens).
             </p>
           </div>
         </div>
@@ -239,167 +238,175 @@ export default function WhatsAppManagerView({
         </div>
       </div>
 
-      {/* Grid: Opção 1 e Opção 2 Lado a Lado */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        
-        {/* CARD: OPÇÃO 2 - Disparo no Clique (Nativo / Ativo Agora) */}
-        <div className="rounded-2xl border border-dark-800 bg-dark-900 p-5 space-y-4">
-          <div className="flex items-start justify-between gap-3 pb-3 border-b border-dark-800">
-            <div className="space-y-1">
+      {/* Status em Tempo Real da Conexão */}
+      <div className={`rounded-2xl border p-5 transition-all bg-dark-900 ${
+        isConnected ? 'border-emerald-500/40 shadow-lg shadow-emerald-950/20' : 'border-dark-800'
+      }`}>
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-dark-800">
+          <div className="flex items-center gap-3">
+            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center border ${
+              isConnected 
+                ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30 shadow-md' 
+                : 'bg-dark-800 text-slate-400 border-dark-750'
+            }`}>
+              <Smartphone className="w-6 h-6" />
+            </div>
+            <div>
               <div className="flex items-center gap-2">
-                <span className="px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-400 font-black text-[11px]">
-                  OPÇÃO 2
-                </span>
-                <h3 className="font-bold text-white text-sm">Disparo Imediato no Clique</h3>
+                <h3 className="font-bold text-white text-base">WhatsApp Pizzaria El Shadday</h3>
+                {isConnected ? (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 font-bold text-xs border border-emerald-500/30">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    Conectado na Nuvem
+                  </span>
+                ) : isScanning ? (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400 font-bold text-xs border border-amber-500/30">
+                    <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                    Aguardando Leitura do QR Code
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-dark-800 text-slate-400 font-bold text-xs border border-dark-750">
+                    Desconectado
+                  </span>
+                )}
               </div>
-              <p className="text-[11px] text-slate-400">
-                100% Nativo na Vercel • Sem contas extras • Sem bloqueio no Brave
+              <p className="text-xs text-slate-400">
+                Número Oficial: <strong className="text-emerald-400 font-mono">{session.phoneFormatted || (session.phone ? `+${session.phone}` : '(69) 99222-8682')}</strong>
               </p>
             </div>
-            <div className="w-9 h-9 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20 flex items-center justify-center">
-              <MousePointer className="w-4 h-4" />
-            </div>
           </div>
 
-          <div className="p-3.5 rounded-xl bg-dark-950 border border-dark-800 space-y-2 text-xs">
-            <div className="flex items-center gap-2 text-slate-200 font-bold">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-              <span>Já está ativo e funcionando na cozinha!</span>
-            </div>
-            <p className="text-slate-400 text-[11px] leading-relaxed">
-              Ao clicar em <strong>[Mover p/ Forno]</strong> ou <strong>[Despachar Entrega]</strong> no KDS, o sistema abre o WhatsApp no exato instante do clique com a mensagem pronta. Como o disparo é síncrono, o navegador <strong>nunca bloqueia</strong>.
-            </p>
-          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleOpenQrModal}
+              className="py-2.5 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-dark-950 font-bold text-xs flex items-center gap-2 transition-colors cursor-pointer shadow-sm"
+            >
+              <QrCode className="w-4 h-4" />
+              <span>{isConnected ? 'Reconectar / QR Code' : 'Conectar WhatsApp (QR Code)'}</span>
+            </button>
 
-          <div className="pt-1">
-            <label className="flex items-center gap-3 p-3 rounded-xl bg-dark-950 border border-dark-800 cursor-pointer hover:border-dark-700 transition-colors">
-              <input
-                type="checkbox"
-                checked={settings.notifyOnClick !== false}
-                onChange={() => handleToggleSetting('notifyOnClick')}
-                className="rounded text-blue-500 focus:ring-0 cursor-pointer accent-blue-500"
-              />
-              <div className="text-xs">
-                <div className="font-bold text-slate-200">Abrir WhatsApp com mensagem pronta no clique</div>
-                <div className="text-[11px] text-slate-400">Se desmarcar, não abrirá abas ao alterar o status</div>
-              </div>
-            </label>
+            {isConnected && (
+              <button
+                type="button"
+                onClick={handleDisconnect}
+                className="p-2.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 transition-colors cursor-pointer"
+                title="Desconectar WhatsApp"
+              >
+                <Power className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </div>
 
-        {/* CARD: OPÇÃO 1 - Green API (Nuvem 100% Silenciosa) */}
-        <div className="rounded-2xl border border-dark-800 bg-dark-900 p-5 space-y-4">
-          <div className="flex items-start justify-between gap-3 pb-3 border-b border-dark-800">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-400 font-black text-[11px]">
-                  OPÇÃO 1
-                </span>
-                <h3 className="font-bold text-white text-sm">WhatsApp na Nuvem (Green API)</h3>
+        {/* Banner Explicativo de Comportamento na Cozinha */}
+        <div className="pt-4">
+          {isConnected ? (
+            <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center gap-3 text-xs text-emerald-300">
+              <ShieldCheck className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+              <div>
+                <strong>Modo 100% Silencioso Ativo:</strong> Ao mudar os status dos pedidos na cozinha ("No Forno", "Saiu p/ Entrega", etc.), as mensagens são disparadas direto pela nuvem para o WhatsApp do cliente. <strong>Nenhuma nova guia é aberta no seu navegador.</strong>
               </div>
-              <p className="text-[11px] text-slate-400">
-                100% Silencioso • Não abre abas • Roda 24h na nuvem
-              </p>
             </div>
-            <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center">
-              <Cloud className="w-4 h-4" />
-            </div>
-          </div>
-
-          {/* Status da Conexão */}
-          <div className="flex items-center justify-between p-3 rounded-xl bg-dark-950 border border-dark-800 text-xs">
-            <span className="text-slate-400">Status na Nuvem:</span>
-            {greenStatus === 'authorized' ? (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 font-bold border border-emerald-500/30">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                Conectado e Ativo
-              </span>
-            ) : greenStatus === 'notAuthorized' ? (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400 font-bold border border-amber-500/30">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-                Aguardando QR Code
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-dark-800 text-slate-400 font-bold border border-dark-750">
-                Não configurado
-              </span>
-            )}
-          </div>
-
-          {/* Campos de Configuração */}
-          <div className="space-y-3 text-xs">
-            <div>
-              <label className="text-[11px] font-bold text-slate-400 block mb-1">ID da Instância (idInstance):</label>
-              <input
-                type="text"
-                placeholder="Ex: 1101234567"
-                value={greenConfig.idInstance || ''}
-                onChange={(e) => setGreenConfig(prev => ({ ...prev, idInstance: e.target.value.trim() }))}
-                className="w-full px-3.5 py-2 rounded-xl bg-dark-950 border border-dark-800 text-xs text-white focus:outline-none focus:border-emerald-500 font-mono"
-              />
-            </div>
-
-            <div>
-              <label className="text-[11px] font-bold text-slate-400 block mb-1">Token da Instância (apiTokenInstance):</label>
-              <input
-                type="password"
-                placeholder="Ex: ab12cd34ef56gh78..."
-                value={greenConfig.apiTokenInstance || ''}
-                onChange={(e) => setGreenConfig(prev => ({ ...prev, apiTokenInstance: e.target.value.trim() }))}
-                className="w-full px-3.5 py-2 rounded-xl bg-dark-950 border border-dark-800 text-xs text-white focus:outline-none focus:border-emerald-500 font-mono"
-              />
-            </div>
-          </div>
-
-          {/* Botões de Ação */}
-          <div className="flex items-center gap-2 pt-1">
-            <button
-              type="button"
-              disabled={isCheckingGreen}
-              onClick={handleSaveGreenConfig}
-              className="flex-1 py-2 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-dark-950 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-            >
-              {isCheckingGreen ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
-              <span>Salvar e Conectar</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={handleOpenGreenQrModal}
-              className="py-2 px-3 rounded-xl bg-dark-800 hover:bg-dark-750 text-slate-200 border border-dark-700 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
-              title="Escanear QR Code da Green API"
-            >
-              <QrCode className="w-3.5 h-3.5 text-emerald-400" />
-              <span>QR Code</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setShowGreenTutorial(!showGreenTutorial)}
-              className="p-2 rounded-xl bg-dark-800 hover:bg-dark-750 text-slate-400 hover:text-white border border-dark-750 cursor-pointer"
-              title="Como pegar sua chave gratuita na Green API"
-            >
-              <HelpCircle className="w-4 h-4" />
-            </button>
-          </div>
-
-          {/* Tutorial Colapsável da Green API */}
-          {showGreenTutorial && (
-            <div className="p-3.5 rounded-xl bg-dark-950 border border-emerald-500/30 text-xs text-slate-300 space-y-2 animate-in fade-in">
-              <div className="font-bold text-emerald-400 flex items-center gap-1.5">
-                <HelpCircle className="w-3.5 h-3.5" />
-                <span>Como pegar o Token Grátis na Green API:</span>
+          ) : (
+            <div className="p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center gap-3 text-xs text-blue-300">
+              <AlertTriangle className="w-5 h-5 text-blue-400 flex-shrink-0" />
+              <div>
+                <strong>Modo 1-Clique em Espera (Fallback):</strong> Como o motor na nuvem ainda não está conectado, a cozinha abrirá a guia do WhatsApp no clique para você não deixar o cliente sem aviso. Assim que você escanear o QR Code acima, o sistema para de abrir guias e passa a enviar sozinho!
               </div>
-              <ol className="list-decimal list-inside space-y-1 text-[11px] text-slate-400">
-                <li>Acesse <strong>green-api.com</strong> e crie uma conta gratuita.</li>
-                <li>No painel deles, clique em <strong>Create Instance</strong> (Plano Developer gratuito).</li>
-                <li>Copie o <strong>idInstance</strong> e o <strong>apiTokenInstance</strong> e cole nos campos acima.</li>
-                <li>Clique em <strong>"QR Code"</strong> e aponte a câmera do WhatsApp da pizzaria!</li>
-              </ol>
             </div>
           )}
         </div>
+      </div>
 
+      {/* Configuração da URL da Nuvem (Render) */}
+      <div className="rounded-2xl border border-dark-800 bg-dark-900 p-5 space-y-4">
+        <div className="flex items-center justify-between pb-3 border-b border-dark-800">
+          <div className="flex items-center gap-2.5">
+            <Cloud className="w-5 h-5 text-emerald-400" />
+            <div>
+              <h3 className="font-bold text-white text-sm">Hospedagem na Nuvem (Render Free)</h3>
+              <p className="text-[11px] text-slate-400">O motor roda de graça na nuvem do Render e atende a Vercel 24 horas por dia</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowTutorial(!showTutorial)}
+            className="text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-1 font-semibold cursor-pointer"
+          >
+            <HelpCircle className="w-3.5 h-3.5" />
+            <span>{showTutorial ? 'Ocultar Tutorial' : 'Como Hospedar no Render (3 min)'}</span>
+          </button>
+        </div>
+
+        <div className="space-y-2 text-xs">
+          <label className="text-slate-400 font-bold block">URL do Serviço no Render ou Local:</label>
+          <div className="flex flex-col sm:flex-row items-center gap-2">
+            <input
+              type="text"
+              placeholder="Ex: https://el-shadday-whatsapp.onrender.com (ou http://127.0.0.1:5001)"
+              value={cloudUrlInput}
+              onChange={(e) => setCloudUrlInput(e.target.value)}
+              className="flex-1 w-full px-3.5 py-2.5 rounded-xl bg-dark-950 border border-dark-800 text-xs text-white focus:outline-none focus:border-emerald-500 font-mono"
+            />
+            <button
+              type="button"
+              disabled={isCheckingStatus}
+              onClick={handleSaveCloudUrl}
+              className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-dark-800 hover:bg-dark-750 text-slate-200 border border-dark-700 font-bold text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer"
+            >
+              {isCheckingStatus ? <RefreshCw className="w-3.5 h-3.5 animate-spin text-emerald-400" /> : <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />}
+              <span>Salvar e Verificar</span>
+            </button>
+          </div>
+          <p className="text-[11px] text-slate-500">
+            Dica: Se você estiver testando na sua máquina agora, deixe <code>http://127.0.0.1:5001</code>. Quando subir no Render, basta colar o link fornecido pelo Render aqui!
+          </p>
+        </div>
+
+        {/* Tutorial do Render */}
+        {showTutorial && (
+          <div className="p-4 rounded-xl bg-dark-950 border border-emerald-500/30 text-xs text-slate-300 space-y-3 animate-in fade-in">
+            <div className="font-bold text-emerald-400 flex items-center gap-2">
+              <Zap className="w-4 h-4 text-emerald-400" />
+              <span>Passo a Passo para Subir no Render Grátis (100% Pronto):</span>
+            </div>
+            
+            <p className="text-[11px] text-slate-400 leading-relaxed">
+              Já criei o arquivo de configuração <code>render.yaml</code> no projeto. Para colocar o motor no ar:
+            </p>
+
+            <ol className="list-decimal list-inside space-y-2 text-[11px] text-slate-300">
+              <li>
+                Acesse <strong>render.com</strong> e faça login com seu GitHub.
+              </li>
+              <li>
+                Clique no botão <strong>New +</strong> e escolha <strong>Web Service</strong>.
+              </li>
+              <li>
+                Selecione o repositório do projeto: <strong>El_shadday</strong>.
+              </li>
+              <li>
+                O Render preencherá tudo sozinho pelo <code>render.yaml</code>:
+                <ul className="list-disc list-inside ml-4 mt-1 text-slate-400">
+                  <li>Build Command: <code>npm install</code></li>
+                  <li>Start Command: <code>npm run whatsapp</code></li>
+                  <li>Instance Type: <strong>Free ($0/month)</strong></li>
+                </ul>
+              </li>
+              <li>
+                Clique em <strong>Create Web Service</strong>. Em 2 minutos, o Render vai gerar a sua URL (ex: <code>https://el-shadday-whatsapp.onrender.com</code>).
+              </li>
+              <li>
+                Copie essa URL, cole no campo acima e clique em <strong>Salvar e Verificar</strong>!
+              </li>
+            </ol>
+
+            <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-[11px] text-emerald-300">
+              ✨ <strong>Sessão Permanente:</strong> Mesmo que o Render reinicie ou atualize, o código já salva as credenciais automaticamente no Supabase para você nunca perder a conexão do WhatsApp!
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Teste Rápido de Disparo */}
@@ -410,11 +417,11 @@ export default function WhatsAppManagerView({
             <h3 className="font-bold text-sm text-white">Testar Disparo de Mensagem</h3>
           </div>
           <span className="text-[11px] text-slate-400">
-            {isGreenActive ? 'Modo: Nuvem Silenciosa (Green API)' : 'Modo: Disparo no Clique (Nativo)'}
+            {isConnected ? 'Modo: Nuvem Baileys (100% Silencioso)' : 'Modo: 1-Clique no Navegador'}
           </span>
         </div>
         <p className="text-xs text-slate-400">
-          Envie uma mensagem de teste para o seu próprio WhatsApp para verificar se a formatação e o envio estão perfeitos.
+          Envie uma mensagem de teste para o seu próprio WhatsApp para verificar se a entrega está perfeita.
         </p>
         
         <div className="flex flex-col sm:flex-row items-center gap-2">
@@ -428,7 +435,7 @@ export default function WhatsAppManagerView({
           <button
             type="button"
             disabled={isSendingTest}
-            onClick={handleSendTestMessage}
+            onClick={handleSendTest}
             className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-dark-950 font-bold text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer"
           >
             {isSendingTest ? (
@@ -489,8 +496,8 @@ export default function WhatsAppManagerView({
         </div>
       </div>
 
-      {/* MODAL: QR CODE DA GREEN API */}
-      {showGreenQrModal && (
+      {/* MODAL: QR CODE REAL DO BAILEYS NA NUVEM */}
+      {activeQrModal && (
         <div className="fixed inset-0 z-50 bg-dark-950/85 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="relative w-full max-w-md bg-dark-900 border border-emerald-500/40 rounded-3xl p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in-95">
             
@@ -500,13 +507,13 @@ export default function WhatsAppManagerView({
                   <QrCode className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-white text-sm">Escanear QR Code da Green API</h3>
-                  <p className="text-[11px] text-slate-400">Conecte o WhatsApp da pizzaria na nuvem</p>
+                  <h3 className="font-bold text-white text-sm">Conectar WhatsApp na Nuvem</h3>
+                  <p className="text-[11px] text-slate-400">Escaneie o QR Code com o WhatsApp da pizzaria</p>
                 </div>
               </div>
               <button
                 type="button"
-                onClick={() => setShowGreenQrModal(false)}
+                onClick={() => setActiveQrModal(false)}
                 className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-dark-800 cursor-pointer"
               >
                 <XCircle className="w-5 h-5" />
@@ -514,16 +521,24 @@ export default function WhatsAppManagerView({
             </div>
 
             <div className="flex flex-col items-center justify-center p-5 bg-white rounded-2xl shadow-inner min-h-[260px]">
-              {greenQrDataUrl ? (
+              {qrCodeDataUrl ? (
                 <img 
-                  src={greenQrDataUrl} 
-                  alt="QR Code Green API" 
+                  src={qrCodeDataUrl} 
+                  alt="QR Code WhatsApp" 
                   className="w-56 h-56 object-contain"
                 />
-              ) : (
+              ) : isConnecting ? (
                 <div className="flex flex-col items-center gap-2 text-slate-700 py-8">
                   <RefreshCw className="w-8 h-8 animate-spin text-emerald-600" />
-                  <span className="text-xs font-bold">Gerando QR Code na Green API...</span>
+                  <span className="text-xs font-bold">Solicitando QR Code do motor...</span>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-2 text-slate-700 py-8 text-center px-4">
+                  <RefreshCw className="w-8 h-8 animate-spin text-emerald-600" />
+                  <span className="text-xs font-bold">Conectando ao motor na nuvem...</span>
+                  <span className="text-[11px] text-slate-500">
+                    Aguarde alguns segundos enquanto o QR Code é gerado.
+                  </span>
                 </div>
               )}
             </div>
@@ -531,17 +546,17 @@ export default function WhatsAppManagerView({
             <div className="space-y-1.5 text-xs text-slate-300 bg-dark-950 p-3.5 rounded-xl border border-dark-800">
               <div className="font-bold text-slate-200 mb-1">Como escanear:</div>
               <div>1. Abra o WhatsApp no celular da pizzaria</div>
-              <div>2. Vá em <strong>Aparelhos conectados &gt; Conectar um aparelho</strong></div>
+              <div>2. Toque em <strong>Aparelhos conectados &gt; Conectar um aparelho</strong></div>
               <div>3. Aponte a câmera para o QR Code acima</div>
               <div className="text-[11px] text-emerald-400 font-semibold pt-1">
-                ✨ Assim que ler, a conexão fica ativa 24h na nuvem!
+                ✨ Assim que ler, esta janela fecha sozinha e a abertura de novas guias é desativada!
               </div>
             </div>
 
             <div className="pt-1">
               <button
                 type="button"
-                onClick={() => setShowGreenQrModal(false)}
+                onClick={() => setActiveQrModal(false)}
                 className="w-full py-2.5 rounded-xl bg-dark-800 hover:bg-dark-750 text-slate-300 font-bold text-xs cursor-pointer"
               >
                 Fechar

@@ -67,7 +67,7 @@ import {
   cleanPhoneNumber,
   openWhatsAppInstantLink
 } from '../services/whatsappNotificationService';
-import { getGreenApiConfig } from '../services/greenApiService';
+import { isCloudBaileysActive } from '../services/whatsappBranchService';
 import { normalizeOrderStatus } from '../services/ordersSyncService';
 
 export function AdminDashboard({ 
@@ -1615,10 +1615,12 @@ export function AdminDashboard({
       notifyType = 'PRONTO_BALCAO';
     }
 
-    // Opção 2: Se Green API não estiver ativa, abre o WhatsApp no tick síncrono do clique (livre de bloqueio do Brave)
-    const greenCfg = getGreenApiConfig();
-    const isGreenApiActive = Boolean(greenCfg?.idInstance && greenCfg?.apiTokenInstance && greenCfg?.enabled !== false && greenCfg?.status === 'authorized');
-    if (!isGreenApiActive && whatsAppSettings?.autoNotify && whatsAppSettings?.notifyOnClick !== false) {
+    // REGRA DE OURO: Se o motor Baileys na nuvem estiver ATIVADO/CONECTADO:
+    // O sistema de abrir mensagem em nova guia NÃO É USADO! O envio é 100% invisível em segundo plano!
+    const isBaileysActive = isCloudBaileysActive();
+
+    if (!isBaileysActive && whatsAppSettings?.autoNotify && whatsAppSettings?.notifyOnClick !== false) {
+      // Somente abre o WhatsApp Web com texto pronto se o Baileys NÃO estiver conectado
       const branchObj = branchesList.find(b => b.id === (order.branchId || currentBranch?.id)) || currentBranch;
       openWhatsAppInstantLink({
         order,
@@ -1631,7 +1633,7 @@ export function AdminDashboard({
     // 1. Update order status in app state / DB
     onUpdateOrderStatus(order.orderId, newStatus);
 
-    // 2. Dispatch background WhatsApp notification (Green API / local engine)
+    // 2. Dispatch background WhatsApp notification (Baileys Cloud)
     handleTriggerCustomerWhatsApp(order, notifyType, customReason);
 
     // 3. Highlight this specific order card

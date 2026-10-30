@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: el-shadday-whatsapp
+    env: node
+    plan: free
+    region: ohio
+    buildCommand: npm install
+    startCommand: npm run whatsapp
+    envVars:
+      - key: NODE_VERSION
+        value: 20.10.0
+      - key: VITE_SUPABASE_URL
+        value: https://yzeemqzxlgudynydvpof.supabase.co
+      - key: VITE_SUPABASE_ANON_KEY
+        value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl6ZWVtcXp4bGd1ZHlueWR2cG9mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE1MjAwOTgsImV4cCI6MjEwNzA5NjA5OH0.aahKZCTuVyJ9lNS09EZPVhaucSRhTL6pDGwKITSUnwg

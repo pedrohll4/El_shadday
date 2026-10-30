@@ -1,13 +1,69 @@
 /**
- * Serviço de Gerenciamento de Conexões WhatsApp por Filial
- * Conecta com o motor local gratuito (@whiskeysockets/baileys)
- * e via Supabase Realtime Bridge (para funcionamento no Vercel).
+ * Serviço de Gerenciamento do Motor WhatsApp Baileys na Nuvem (Render) e Local
+ * Permite que a Vercel converse diretamente com a URL do Render
+ * e controle quando desativar a abertura de novas guias no navegador.
  */
 
 import { supabase, isSupabaseConfigured } from './supabaseClient';
 
-const STORAGE_KEY = 'el_shadday_branch_whatsapp_sessions_v2';
-export const LOCAL_ENGINE_URL = 'http://127.0.0.1:5001';
+const STORAGE_KEY = 'el_shadday_branch_whatsapp_sessions_v3';
+const CLOUD_URL_KEY = 'el_shadday_cloud_engine_url_v1';
+
+export const DEFAULT_CLOUD_URL = 'http://127.0.0.1:5001';
+
+export function getCloudEngineUrl() {
+  if (typeof window !== 'undefined') {
+    try {
+      const stored = localStorage.getItem(CLOUD_URL_KEY);
+      if (stored && stored.trim()) return stored.trim();
+    } catch (e) {}
+  }
+  return DEFAULT_CLOUD_URL;
+}
+
+export function saveCloudEngineUrl(url) {
+  const clean = (url || '').trim().replace(/\/+$/, '');
+  try {
+    localStorage.setItem(CLOUD_URL_KEY, clean);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('el_shadday_cloud_url_updated', { detail: clean }));
+    }
+  } catch (e) {}
+
+  // Salva no Supabase para sincronizar em todos os computadores/celulares da pizzaria
+  if (isSupabaseConfigured && supabase) {
+    try {
+      supabase.from('company_settings').select('card_machine_settings').eq('id', 'el_shadday_config').single()
+        .then(({ data }) => {
+          const existing = data?.card_machine_settings || {};
+          supabase.from('company_settings').update({
+            card_machine_settings: {
+              ...existing,
+              cloud_engine_url: clean
+            }
+          }).eq('id', 'el_shadday_config');
+        }).catch(() => {});
+    } catch (err) {}
+  }
+
+  return clean;
+}
+
+export async function syncCloudEngineUrlFromDatabase() {
+  if (!isSupabaseConfigured || !supabase) return getCloudEngineUrl();
+  try {
+    const { data } = await supabase.from('company_settings').select('card_machine_settings').eq('id', 'el_shadday_config').single();
+    const cloudUrl = data?.card_machine_settings?.cloud_engine_url;
+    if (cloudUrl && cloudUrl.startsWith('http')) {
+      const current = getCloudEngineUrl();
+      if (!current || current === DEFAULT_CLOUD_URL) {
+        localStorage.setItem(CLOUD_URL_KEY, cloudUrl);
+        return cloudUrl;
+      }
+    }
+  } catch (e) {}
+  return getCloudEngineUrl();
+}
 
 export const DEFAULT_WHATSAPP_SESSIONS = {
   ariquemes: {
@@ -17,34 +73,16 @@ export const DEFAULT_WHATSAPP_SESSIONS = {
     phone: '5569992228682',
     phoneFormatted: '(69) 99222-8682',
     sessionName: 'WhatsApp Ariquemes (Matriz)',
-    device: 'WhatsApp Web (Baileys)',
-    batteryLevel: 96,
+    device: 'WhatsApp Web (Baileys Cloud)',
+    batteryLevel: 98,
     connectedAt: null,
     lastActivity: null,
     qrCodeDataUrl: null,
-    apiUrl: LOCAL_ENGINE_URL,
-    apiToken: '',
-    autoNotify: true
-  },
-  'porto-velho': {
-    branchId: 'porto-velho',
-    branchName: 'Unidade Porto Velho',
-    status: 'disconnected',
-    phone: '5569992228682',
-    phoneFormatted: '(69) 99222-8682',
-    sessionName: 'WhatsApp Porto Velho (Filial)',
-    device: 'WhatsApp Web (Baileys)',
-    batteryLevel: 88,
-    connectedAt: null,
-    lastActivity: null,
-    qrCodeDataUrl: null,
-    apiUrl: LOCAL_ENGINE_URL,
-    apiToken: '',
     autoNotify: true
   }
 };
 
-// Canal Supabase Realtime para ponte Vercel <-> Motor Local
+// Canal Supabase Realtime para ponte Vercel <-> Render
 let supabaseBridgeChannel = null;
 
 if (typeof window !== 'undefined' && isSupabaseConfigured && supabase) {
@@ -55,10 +93,12 @@ if (typeof window !== 'undefined' && isSupabaseConfigured && supabase) {
       .on('broadcast', { event: 'STATUS_UPDATE' }, ({ payload }) => {
         if (!payload) return;
         const normStatus = (payload.status || 'disconnected').toLowerCase();
+        const isConn = normStatus === 'connected';
+
         const updates = {
-          status: normStatus === 'scan_qr' ? 'scan_qr' : (normStatus === 'connected' ? 'connected' : 'disconnected'),
+          status: isConn ? 'connected' : (normStatus === 'scan_qr' ? 'scan_qr' : 'disconnected'),
           qrCodeDataUrl: payload.qrCodeDataUrl || null,
-          batteryLevel: payload.batteryLevel || 95,
+          batteryLevel: payload.batteryLevel || 98,
           lastActivity: new Date().toISOString()
         };
 
@@ -106,21 +146,18 @@ export function getAllBranchWhatsApp() {
 export function getBranchWhatsApp(branchId) {
   const all = getAllBranchWhatsApp();
   const id = branchId || 'ariquemes';
-  if (all[id]) return all[id];
-  return {
+  return all[id] || {
     branchId: id,
-    branchName: id === 'porto-velho' ? 'Unidade Porto Velho' : 'Unidade Ariquemes',
+    branchName: 'Unidade Ariquemes',
     status: 'disconnected',
     phone: '',
     phoneFormatted: '',
-    sessionName: `WhatsApp ${id}`,
-    device: 'WhatsApp Web',
-    batteryLevel: 100,
+    sessionName: 'WhatsApp Ariquemes',
+    device: 'WhatsApp Web (Baileys Cloud)',
+    batteryLevel: 98,
     connectedAt: null,
     lastActivity: null,
     qrCodeDataUrl: null,
-    apiUrl: LOCAL_ENGINE_URL,
-    apiToken: '',
     autoNotify: true
   };
 }
@@ -150,10 +187,19 @@ export function updateBranchWhatsApp(branchId, updates) {
   return updated;
 }
 
-export function disconnectBranchWhatsApp(branchId) {
-  // Envia comando de logout para o motor local e Supabase
+/**
+ * Retorna true se o Baileys na nuvem/local estiver CONECTADO e pronto para envio invisível
+ */
+export function isCloudBaileysActive(branchId = 'ariquemes') {
+  const session = getBranchWhatsApp(branchId);
+  return session.status === 'connected' || session.status === 'CONNECTED';
+}
+
+export function disconnectBranchWhatsApp(branchId = 'ariquemes') {
+  const engineUrl = getCloudEngineUrl();
+
   try {
-    fetch(`${LOCAL_ENGINE_URL}/logout`, { method: 'POST' }).catch(() => {});
+    fetch(`${engineUrl}/logout`, { method: 'POST' }).catch(() => {});
   } catch (e) {}
 
   if (supabaseBridgeChannel) {
@@ -173,32 +219,14 @@ export function disconnectBranchWhatsApp(branchId) {
   });
 }
 
-export function connectBranchWhatsApp(branchId, { phone, phoneFormatted, sessionName, apiUrl, apiToken }) {
-  let cleanPhone = (phone || '').replace(/\D/g, '');
-  if (cleanPhone.length === 10 || cleanPhone.length === 11) {
-    cleanPhone = '55' + cleanPhone;
-  }
-  return updateBranchWhatsApp(branchId, {
-    status: 'connected',
-    phone: cleanPhone || '5569992228682',
-    phoneFormatted: phoneFormatted || formatPhoneDisplay(cleanPhone) || '(69) 99222-8682',
-    sessionName: sessionName || (branchId === 'porto-velho' ? 'WhatsApp Porto Velho' : 'WhatsApp Ariquemes'),
-    device: 'WhatsApp Web (Baileys)',
-    batteryLevel: Math.floor(Math.random() * 15) + 85,
-    connectedAt: new Date().toISOString(),
-    apiUrl: apiUrl || LOCAL_ENGINE_URL,
-    apiToken: apiToken || '',
-    qrCodeDataUrl: null
-  });
-}
-
 /**
  * Consulta o status em tempo real do motor de WhatsApp
- * Tenta HTTP local primeiro; se falhar (ex: HTTPS Vercel), requisita via Supabase Realtime
  */
 export async function fetchEngineStatus(branchId = 'ariquemes') {
+  const engineUrl = getCloudEngineUrl();
+
   try {
-    const res = await fetch(`${LOCAL_ENGINE_URL}/status`, {
+    const res = await fetch(`${engineUrl}/status`, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
       cache: 'no-store'
@@ -211,7 +239,7 @@ export async function fetchEngineStatus(branchId = 'ariquemes') {
       const updates = {
         status: normStatus === 'scan_qr' ? 'scan_qr' : (normStatus === 'connected' ? 'connected' : 'disconnected'),
         qrCodeDataUrl: data.qrCodeDataUrl || null,
-        batteryLevel: data.batteryLevel || 95
+        batteryLevel: data.batteryLevel || 98
       };
 
       if (data.userInfo?.phone) {
@@ -223,8 +251,8 @@ export async function fetchEngineStatus(branchId = 'ariquemes') {
       return data;
     }
   } catch (err) {
-    // Se falhou requisição direta (ex: HTTPS na Vercel bloqueando HTTP local)
-    // Requisita via Supabase Bridge
+    // Fallback: se der erro de conexão direta (ex: HTTPS Vercel sem CORS ou inicializando),
+    // requisita via Supabase Bridge
     if (supabaseBridgeChannel) {
       supabaseBridgeChannel.send({
         type: 'broadcast',
@@ -238,13 +266,14 @@ export async function fetchEngineStatus(branchId = 'ariquemes') {
 }
 
 /**
- * Inicia conexão / geração de QR Code
+ * Inicia conexão / solicitação de QR Code no motor
  */
 export async function requestEngineConnect(branchId = 'ariquemes') {
+  const engineUrl = getCloudEngineUrl();
   updateBranchWhatsApp(branchId, { status: 'connecting' });
 
   try {
-    const res = await fetch(`${LOCAL_ENGINE_URL}/connect`, {
+    const res = await fetch(`${engineUrl}/connect`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' }
     });
@@ -253,7 +282,6 @@ export async function requestEngineConnect(branchId = 'ariquemes') {
       return data;
     }
   } catch (e) {
-    // Fallback Supabase Bridge
     if (supabaseBridgeChannel) {
       supabaseBridgeChannel.send({
         type: 'broadcast',
@@ -267,17 +295,18 @@ export async function requestEngineConnect(branchId = 'ariquemes') {
 }
 
 /**
- * Envia mensagem direta pelo motor
+ * Envia mensagem direta pelo motor Baileys na nuvem
  */
 export async function sendEngineDirectMessage({ phone, message, orderId = null, status = null }) {
+  const engineUrl = getCloudEngineUrl();
   const cleanPhone = String(phone || '').replace(/\D/g, '');
   if (!cleanPhone || !message) {
     return { success: false, error: 'Telefone e mensagem são obrigatórios' };
   }
 
-  // 1. Tenta envio direto via HTTP local
+  // 1. Tenta envio direto via HTTP (para a URL do Render ou Localhost)
   try {
-    const res = await fetch(`${LOCAL_ENGINE_URL}/send`, {
+    const res = await fetch(`${engineUrl}/send`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ phone: cleanPhone, message, orderId, status })
@@ -286,11 +315,9 @@ export async function sendEngineDirectMessage({ phone, message, orderId = null, 
       const data = await res.json();
       return { success: true, ...data };
     }
-  } catch (err) {
-    // Silencia e tenta via Supabase Bridge
-  }
+  } catch (err) {}
 
-  // 2. Fallback via Supabase Bridge (para quando chamado na Vercel)
+  // 2. Fallback via Supabase Bridge
   if (supabaseBridgeChannel) {
     try {
       supabaseBridgeChannel.send({
