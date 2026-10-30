@@ -81,8 +81,9 @@ export function DeliveryCartDrawer({
       setErrorMessage('Por favor, digite seu nome!');
       return;
     }
-    if (!customerPhone.trim()) {
-      setErrorMessage('Por favor, informe seu WhatsApp ou telefone para contato!');
+    const cleanPhoneDigits = customerPhone.replace(/\D/g, '');
+    if (!cleanPhoneDigits || cleanPhoneDigits.length < 8) {
+      setErrorMessage('Por favor, informe um WhatsApp válido com DDD (mínimo 8 ou 9 dígitos)!');
       return;
     }
     if (deliveryType === 'delivery' && !streetAddress.trim()) {
@@ -197,12 +198,21 @@ Pedido gerado via Cardápio Digital El Shadday.`;
       customerName: customerName.trim(),
       customerPhone: customerPhone.trim(),
       deliveryType,
+      deliveryAddress: {
+        street: deliveryType === 'delivery' ? streetAddress.trim() : (activeBranch?.address || 'Rua Maceió, 2333 - Setor 03, Ariquemes - RO'),
+        address: deliveryType === 'delivery' ? streetAddress.trim() : (activeBranch?.address || 'Rua Maceió, 2333 - Setor 03, Ariquemes - RO'),
+        number: addressNumber.trim(),
+        district: deliveryType === 'delivery' ? currentDistrict.name : 'Balcão',
+        reference: reference.trim(),
+        isPickup: deliveryType === 'balcao'
+      },
       district: deliveryType === 'delivery' ? currentDistrict.name : 'Balcão',
       address: deliveryType === 'delivery' 
         ? `${streetAddress.trim()}${addressNumber.trim() ? `, Nº ${addressNumber.trim()}` : ''}`
         : (activeBranch?.address || 'Rua Maceió, 2333 - Setor 03, Ariquemes - RO'),
       number: addressNumber.trim(),
       reference: reference.trim(),
+      notes: orderNotes.trim(),
       subtotal,
       deliveryFee,
       cardFee,
@@ -213,7 +223,10 @@ Pedido gerado via Cardápio Digital El Shadday.`;
         ? `Cartão de ${cardOption === 'debito' ? 'Débito' : 'Crédito'}${cardFee > 0 ? ` (Taxa +R$ ${cardFee.toFixed(2).replace('.', ',')})` : ''}`
         : `Dinheiro ${cashChange ? `(Troco p/ R$ ${cashChange})` : ''}`,
       paymentStatus: paymentMethod === 'pix' ? 'PAGO_APROVADO' : 'PENDENTE_COBRANCA',
+      changeFor: cashChange ? Number(cashChange) : null,
+      cashChange: cashChange ? Number(cashChange) : null,
       orderStatus: 'RECEBIDO_COZINHA',
+      status: 'RECEBIDO_COZINHA',
       pixKey,
       whatsappUrl,
       items: cartItems
@@ -225,14 +238,7 @@ Pedido gerado via Cardápio Digital El Shadday.`;
       localStorage.setItem('el_shadday_orders_history', JSON.stringify([orderData, ...history]));
     } catch (e) {}
 
-    // Dispatch directly to Kitchen (Cloud Pub/Sub + local)
-    try {
-      dispatchOrderToKitchen(orderData);
-    } catch (e) {
-      console.warn('Direct kitchen dispatch failed:', e);
-    }
-
-    // Notify parent to open OrderSuccessModal
+    // Notify parent to open OrderSuccessModal and dispatch to Kitchen across all channels
     onOrderFinished(orderData);
 
     // Open WhatsApp

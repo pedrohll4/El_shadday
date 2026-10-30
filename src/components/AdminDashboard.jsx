@@ -67,7 +67,7 @@ import {
   cleanPhoneNumber,
   openWhatsAppInstantLink
 } from '../services/whatsappNotificationService';
-import { isCloudBaileysActive } from '../services/whatsappBranchService';
+import { isCloudBaileysActive, fetchEngineStatus } from '../services/whatsappBranchService';
 import { normalizeOrderStatus } from '../services/ordersSyncService';
 
 export function AdminDashboard({ 
@@ -200,6 +200,7 @@ export function AdminDashboard({
   const audioCtxRef = useRef(null);
   const [isAudioUnlocked, setIsAudioUnlocked] = useState(false);
   const knownOrderIdsRef = useRef(new Set((orders || []).map(o => o?.orderId).filter(Boolean)));
+  const isInitialOrdersLoadedRef = useRef((orders || []).length > 0);
 
   // WhatsApp Settings & Notification States
   const [whatsAppSettings, setWhatsAppSettings] = useState(() => getWhatsAppSettings());
@@ -299,7 +300,7 @@ export function AdminDashboard({
         });
 
       // Realtime: sincroniza alterações em buffet_gallery
-      supabase
+      const channelBuffetGallery = supabase
         .channel('realtime_buffet_gallery_admin')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'buffet_gallery' }, () => {
           supabase
@@ -317,12 +318,21 @@ export function AdminDashboard({
         .subscribe();
 
       // Realtime company_settings: sincroniza novas fotos enviadas
-      supabase
+      const channelCsGallery = supabase
         .channel('realtime_cs_gallery_admin')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'company_settings' }, () => {
           loadFromCompanySettings();
         })
         .subscribe();
+
+      return () => {
+        window.removeEventListener('storage', handleGallerySync);
+        window.removeEventListener('buffet_gallery_updated', handleGallerySync);
+        if (supabase) {
+          if (channelBuffetGallery) supabase.removeChannel(channelBuffetGallery);
+          if (channelCsGallery) supabase.removeChannel(channelCsGallery);
+        }
+      };
     }
 
     return () => {
@@ -1358,9 +1368,26 @@ export function AdminDashboard({
     playChime(true);
   };
 
+  // Sincroniza status do motor Baileys em background ao carregar o painel
+  useEffect(() => {
+    fetchEngineStatus('ariquemes').catch(() => {});
+  }, []);
+
   // Watch for incoming new orders and sound the alarm safely
   useEffect(() => {
     const list = Array.isArray(orders) ? orders : [];
+
+    // Se é a primeira carga de histórico, apenas popula os IDs conhecidos sem disparar alarme sonoro
+    if (!isInitialOrdersLoadedRef.current) {
+      if (list.length > 0) {
+        list.forEach(o => {
+          if (o?.orderId) knownOrderIdsRef.current.add(o.orderId);
+        });
+        isInitialOrdersLoadedRef.current = true;
+      }
+      return;
+    }
+
     const newOrders = list.filter(o => o?.orderId && !knownOrderIdsRef.current.has(o.orderId));
     
     if (newOrders.length > 0) {
@@ -1495,11 +1522,12 @@ export function AdminDashboard({
     const customerName = order.customerName || order.customer_name || 'Cliente';
     const customerPhone = order.customerPhone || order.customer_phone || '';
     const isBalcao = order.deliveryType === 'balcao' || order.deliveryType === 'retirada' || order.district === 'Balcão';
-    const address = order.deliveryAddress?.address || order.address || '';
+    const address = order.deliveryAddress?.street || order.deliveryAddress?.address || order.address || '';
     const number = order.deliveryAddress?.number || order.number || '';
     const district = order.deliveryAddress?.district || order.district || '';
     const complement = order.deliveryAddress?.complement || order.complement || '';
     const reference = order.deliveryAddress?.reference || order.reference || '';
+    const changeFor = order.changeFor || order.cashChange || null;
     const orderNotes = order.notes || '';
     const formattedDate = order.createdAt ? new Date(order.createdAt).toLocaleString('pt-BR') : new Date().toLocaleString('pt-BR');
     const paymentMethod = order.paymentMethod || 'A Definir';
@@ -1632,9 +1660,9 @@ export function AdminDashboard({
             <span class="bold">STATUS:</span> 
             ${isPaid ? 'PAGO (Pix / Cartão)' : '⚠️ COBRAR NA ENTREGA'}
           </div>
-          ${order.changeFor && Number(order.changeFor) > Number(order.total || 0) ? `
+          ${changeFor && Number(changeFor) > Number(order.total || 0) ? `
             <div class="info-row bold" style="background:#f4f4f4;padding:2px;">
-              TROCO PARA: R$ ${Number(order.changeFor).toFixed(2)} (Levar R$ ${(Number(order.changeFor) - Number(order.total || 0)).toFixed(2)})
+              TROCO PARA: R$ ${Number(changeFor).toFixed(2)} (Levar R$ ${(Number(changeFor) - Number(order.total || 0)).toFixed(2)})
             </div>
           ` : ''}
 

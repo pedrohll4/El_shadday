@@ -34,24 +34,48 @@ export function normalizeOrderStatus(orderOrStatus) {
 function mapSupabaseRowToOrder(row) {
   if (!row) return null;
   const normalized = normalizeOrderStatus(row.status || row.order_status);
+  const addr = (typeof row.delivery_address === 'object' && row.delivery_address !== null)
+    ? row.delivery_address
+    : {};
+  const districtName = addr.district || row.district || '';
+  const streetName = addr.street || addr.address || row.address || '';
+  const numberStr = addr.number || row.number || '';
+  const complementStr = addr.complement || row.complement || '';
+  const referenceStr = addr.reference || row.reference || '';
+  const isPickup = row.delivery_type === 'balcao' || row.delivery_type === 'retirada' || addr.isPickup || districtName === 'Balcão';
+
   return {
     orderId: row.id,
     branchId: row.branch_id || 'ariquemes',
     branchName: row.branch_name || 'Unidade Ariquemes',
-    customerName: row.customer_name,
-    customerPhone: row.customer_phone,
-    deliveryAddress: row.delivery_address,
-    deliveryType: row.delivery_type || (row.delivery_address?.isPickup ? 'balcao' : (row.district === 'Balcão' ? 'balcao' : 'delivery')),
+    customerName: row.customer_name || 'Cliente',
+    customerPhone: row.customer_phone || '',
+    deliveryAddress: {
+      street: streetName,
+      address: streetName,
+      number: numberStr,
+      district: districtName,
+      complement: complementStr,
+      reference: referenceStr,
+      isPickup
+    },
+    district: districtName,
+    address: streetName,
+    number: numberStr,
+    complement: complementStr,
+    reference: referenceStr,
+    deliveryType: row.delivery_type || (isPickup ? 'balcao' : 'delivery'),
     items: row.items || [],
     subtotal: Number(row.subtotal || 0),
     deliveryFee: Number(row.delivery_fee || 0),
     total: Number(row.total || 0),
-    paymentMethod: row.payment_method,
+    paymentMethod: row.payment_method || 'A Definir',
     paymentStatus: row.payment_status || (row.payment_method && row.payment_method.toLowerCase().includes('pix') ? 'PAGO_APROVADO' : 'PENDENTE_COBRANCA'),
     changeFor: row.change_for,
+    cashChange: row.change_for,
     status: normalized,
     orderStatus: normalized,
-    notes: row.notes,
+    notes: row.notes || '',
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
@@ -71,19 +95,30 @@ export async function dispatchOrderToKitchen(orderData) {
   // 2. Dispatch to Supabase PostgreSQL Database (if connected)
   if (isSupabaseConfigured && supabase) {
     try {
+      const addr = orderData.deliveryAddress || {
+        street: orderData.streetAddress || orderData.address || '',
+        address: orderData.streetAddress || orderData.address || '',
+        number: orderData.number || orderData.addressNumber || '',
+        district: orderData.district || '',
+        complement: orderData.complement || '',
+        reference: orderData.reference || '',
+        isPickup: orderData.deliveryType === 'balcao' || orderData.deliveryType === 'retirada'
+      };
+      const changeVal = orderData.changeFor || orderData.cashChange || orderData.change_for || null;
+
       const { error } = await supabase.from('orders').upsert({
         id: orderData.orderId,
         branch_id: orderData.branchId || 'ariquemes',
         branch_name: orderData.branchName || 'Unidade Ariquemes',
         customer_name: orderData.customerName || 'Cliente',
         customer_phone: orderData.customerPhone || '',
-        delivery_address: orderData.deliveryAddress || {},
+        delivery_address: addr,
         items: orderData.items || [],
-        subtotal: orderData.subtotal || 0,
-        delivery_fee: orderData.deliveryFee || 0,
-        total: orderData.total || 0,
+        subtotal: Number(orderData.subtotal || 0),
+        delivery_fee: Number(orderData.deliveryFee || 0),
+        total: Number(orderData.total || 0),
         payment_method: orderData.paymentMethod || '',
-        change_for: orderData.changeFor || null,
+        change_for: changeVal,
         status: normalizeOrderStatus(orderData.orderStatus || orderData.status),
         notes: orderData.notes || '',
         created_at: orderData.createdAt || new Date().toISOString(),
@@ -373,13 +408,10 @@ export function subscribeToKitchenEvents({ onNewOrder, onOrderUpdate, onOrderDel
           (payload) => {
             if (isCleanedUp || !payload.new) return;
             if (onOrderUpdate) {
-              const normStatus = normalizeOrderStatus(payload.new.status);
-              onOrderUpdate(payload.new.id, {
-                status: normStatus,
-                orderStatus: normStatus,
-                notes: payload.new.notes,
-                updatedAt: payload.new.updated_at
-              });
+              const mapped = mapSupabaseRowToOrder(payload.new);
+              if (mapped) {
+                onOrderUpdate(payload.new.id, mapped);
+              }
             }
           }
         )

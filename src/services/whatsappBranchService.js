@@ -333,3 +333,12 @@ export async function sendEngineDirectMessage({ phone, message, orderId = null, 
 
   return { success: false, error: 'Motor WhatsApp não alcançado' };
 }
+
+// Auto-sincroniza a URL do motor e o status na inicialização para todos os navegadores
+if (typeof window !== 'undefined') {
+  setTimeout(() => {
+    syncCloudEngineUrlFromDatabase().finally(() => {
+      fetchEngineStatus('ariquemes').catch(() => {});
+    });
+  }, 1000);
+}
