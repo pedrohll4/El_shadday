@@ -9,7 +9,7 @@ import { supabase, isSupabaseConfigured } from './supabaseClient';
 const STORAGE_KEY = 'el_shadday_branch_whatsapp_sessions_v3';
 const CLOUD_URL_KEY = 'el_shadday_cloud_engine_url_v1';
 
-export const DEFAULT_CLOUD_URL = 'http://127.0.0.1:5001';
+export const DEFAULT_CLOUD_URL = 'https://el-shadday-whatsap.onrender.com';
 
 export function getCloudEngineUrl() {
   if (typeof window !== 'undefined') {
