@@ -758,6 +758,34 @@ export default function App() {
     }
   };
 
+  const handleUpdatePaymentMethod = async (orderId, paymentUpdates) => {
+    setAllOrders(prev => {
+      const updated = prev.map(o => {
+        if (o.orderId === orderId) {
+          return {
+            ...o,
+            ...paymentUpdates,
+            paymentMethod: paymentUpdates.paymentMethod !== undefined ? paymentUpdates.paymentMethod : o.paymentMethod,
+            paymentStatus: paymentUpdates.paymentStatus !== undefined ? paymentUpdates.paymentStatus : o.paymentStatus,
+            changeFor: paymentUpdates.changeFor !== undefined ? paymentUpdates.changeFor : o.changeFor,
+            cashChange: paymentUpdates.cashChange !== undefined ? paymentUpdates.cashChange : o.cashChange
+          };
+        }
+        return o;
+      });
+      try {
+        localStorage.setItem('el_shadday_all_orders', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+
+    try {
+      await dispatchOrderUpdateToKitchen(orderId, paymentUpdates);
+    } catch (err) {
+      console.error('Error updating payment method:', err);
+    }
+  };
+
   const handleCancelOrder = async (orderId, reason = '') => {
     setAllOrders(prev => {
       const updated = prev.map(o => o.orderId === orderId ? { 
@@ -930,6 +958,7 @@ export default function App() {
           orders={allOrders}
           onUpdateOrderStatus={handleUpdateOrderStatus}
           onUpdatePaymentStatus={handleUpdatePaymentStatus}
+          onUpdatePaymentMethod={handleUpdatePaymentMethod}
           onCancelOrder={handleCancelOrder}
           onDeleteOrder={handleDeleteOrder}
           onClearAllOrders={handleClearAllOrders}

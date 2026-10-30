@@ -10,7 +10,7 @@ import {
   Utensils, ToggleLeft, ToggleRight, Save, Layers, CheckSquare,
   Pizza, ArrowUpRight, Info, CreditCard, Play, Film,
   Building2, Users, Crown, Sliders, BarChart3, Star, QrCode,
-  Settings2, Smartphone
+  Settings2, Smartphone, Banknote, Shuffle
 } from 'lucide-react';
 import { 
   RESTAURANT_INFO, 
@@ -80,6 +80,7 @@ export function AdminDashboard({
   orders = [], 
   onUpdateOrderStatus, 
   onUpdatePaymentStatus, 
+  onUpdatePaymentMethod,
   onCancelOrder,
   onDeleteOrder,
   onClearAllOrders,
@@ -229,6 +230,17 @@ export function AdminDashboard({
   // Cancel Order Modal State
   const [cancelModalOrder, setCancelModalOrder] = useState(null);
   const [cancelReason, setCancelReason] = useState('');
+
+  // Change Payment / Cash Change Modal State (KDS / Cozinha)
+  const [changePaymentModalOrder, setChangePaymentModalOrder] = useState(null);
+  const [editPaymentType, setEditPaymentType] = useState('pix'); // 'pix' | 'dinheiro' | 'credito' | 'debito' | 'misto'
+  const [editCashChange, setEditCashChange] = useState('');
+  const [editPaymentStatus, setEditPaymentStatus] = useState('PENDENTE_COBRANCA'); // 'PENDENTE_COBRANCA' | 'PAGO_APROVADO'
+  const [editSplitMethod1, setEditSplitMethod1] = useState('pix');
+  const [editSplitAmount1, setEditSplitAmount1] = useState('');
+  const [editSplitMethod2, setEditSplitMethod2] = useState('credito');
+  const [editSplitChange1, setEditSplitChange1] = useState('');
+  const [editSplitChange2, setEditSplitChange2] = useState('');
 
   // PDV (Point of Sale) State
   const [pdvCategory, setPdvCategory] = useState(CATEGORIES[0]?.id || 'combos');
@@ -1885,6 +1897,107 @@ export function AdminDashboard({
     setCancelReason('');
   };
 
+  // Change Payment / Cash Change Handlers (KDS / Cozinha)
+  const handleOpenChangePaymentModal = (order) => {
+    setChangePaymentModalOrder(order);
+    const methodStr = (order.paymentMethod || '').toLowerCase();
+    
+    // Auto-detect current payment method
+    if (methodStr.includes('misto') || methodStr.includes('2 formas')) {
+      setEditPaymentType('misto');
+      setEditSplitAmount1(order.total ? (order.total / 2).toFixed(2) : '');
+    } else if (methodStr.includes('dinheiro')) {
+      setEditPaymentType('dinheiro');
+      setEditCashChange(order.changeFor || order.cashChange ? String(order.changeFor || order.cashChange) : '');
+    } else if (methodStr.includes('crédito') || methodStr.includes('credito')) {
+      setEditPaymentType('credito');
+    } else if (methodStr.includes('débito') || methodStr.includes('debito')) {
+      setEditPaymentType('debito');
+    } else {
+      setEditPaymentType('pix');
+    }
+
+    setEditPaymentStatus(order.paymentStatus || 'PENDENTE_COBRANCA');
+    setEditCashChange(order.changeFor || order.cashChange ? String(order.changeFor || order.cashChange) : '');
+    setEditSplitMethod1('pix');
+    setEditSplitAmount1(order.total ? (order.total / 2).toFixed(2) : '');
+    setEditSplitMethod2('credito');
+    setEditSplitChange1('');
+    setEditSplitChange2('');
+  };
+
+  const handleSavePaymentChange = () => {
+    if (!changePaymentModalOrder) return;
+    const order = changePaymentModalOrder;
+    const orderTotal = Number(order.total) || 0;
+
+    let newMethodText = 'PIX';
+    let finalChangeFor = null;
+
+    if (editPaymentType === 'pix') {
+      newMethodText = 'PIX Instantâneo';
+    } else if (editPaymentType === 'credito') {
+      newMethodText = 'Cartão de Crédito (Levar Maquininha)';
+    } else if (editPaymentType === 'debito') {
+      newMethodText = 'Cartão de Débito (Levar Maquininha)';
+    } else if (editPaymentType === 'dinheiro') {
+      const cleanChange = editCashChange.trim().replace('R$', '').replace(',', '.').trim();
+      const numChange = parseFloat(cleanChange);
+      if (!isNaN(numChange) && numChange > 0) {
+        finalChangeFor = numChange;
+        const trocoDevolver = numChange > orderTotal ? (numChange - orderTotal).toFixed(2).replace('.', ',') : '0,00';
+        newMethodText = `Dinheiro (Troco p/ R$ ${numChange.toFixed(2).replace('.', ',')} • Devolver R$ ${trocoDevolver})`;
+      } else {
+        newMethodText = 'Dinheiro (Sem troco / Valor exato)';
+      }
+    } else if (editPaymentType === 'misto') {
+      const getMethodLabel = (m) => {
+        if (m === 'pix') return 'PIX';
+        if (m === 'credito') return 'Cartão Crédito';
+        if (m === 'debito') return 'Cartão Débito';
+        if (m === 'dinheiro') return 'Dinheiro';
+        return m;
+      };
+
+      const val1 = parseFloat(String(editSplitAmount1).replace(',', '.')) || (orderTotal / 2);
+      const val2 = Math.max(0, orderTotal - val1);
+
+      let t1 = '';
+      if (editSplitMethod1 === 'dinheiro' && editSplitChange1) {
+        const cleanT1 = parseFloat(String(editSplitChange1).replace(',', '.'));
+        if (!isNaN(cleanT1)) {
+          finalChangeFor = cleanT1;
+          t1 = ` - troco p/ R$ ${cleanT1.toFixed(2).replace('.', ',')}`;
+        }
+      }
+      let t2 = '';
+      if (editSplitMethod2 === 'dinheiro' && editSplitChange2) {
+        const cleanT2 = parseFloat(String(editSplitChange2).replace(',', '.'));
+        if (!isNaN(cleanT2)) {
+          finalChangeFor = cleanT2;
+          t2 = ` - troco p/ R$ ${cleanT2.toFixed(2).replace('.', ',')}`;
+        }
+      }
+
+      newMethodText = `Misto: R$ ${val1.toFixed(2).replace('.', ',')} (${getMethodLabel(editSplitMethod1)}${t1}) + R$ ${val2.toFixed(2).replace('.', ',')} (${getMethodLabel(editSplitMethod2)}${t2})`;
+    }
+
+    const updates = {
+      paymentMethod: newMethodText,
+      paymentStatus: editPaymentStatus,
+      changeFor: finalChangeFor,
+      cashChange: finalChangeFor
+    };
+
+    if (onUpdatePaymentMethod) {
+      onUpdatePaymentMethod(order.orderId, updates);
+    } else if (onUpdatePaymentStatus) {
+      onUpdatePaymentStatus(order.orderId, editPaymentStatus);
+    }
+
+    setChangePaymentModalOrder(null);
+  };
+
   // PDV Helpers
   const pdvFilteredProducts = useMemo(() => {
     let list = productsList.filter(p => p.isAvailable !== false);
@@ -2946,8 +3059,34 @@ export function AdminDashboard({
                                   )}
                                 </div>
                               )}
-                              <div className="text-[10px] text-slate-400 mt-1">
-                                {order.paymentMethod}
+                              <div className="mt-1.5 p-1.5 rounded-lg bg-dark-950/70 border border-dark-800 text-[11px] space-y-1">
+                                <div className="flex items-center justify-between gap-1.5">
+                                  <span className="font-bold text-slate-200 flex items-center gap-1 truncate" title={order.paymentMethod || 'A Definir'}>
+                                    <CreditCard className="w-3 h-3 text-brand-gold flex-shrink-0" />
+                                    <span className="truncate">{order.paymentMethod || 'A Definir'}</span>
+                                  </span>
+                                  {!isCancelled && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenChangePaymentModal(order)}
+                                      className="px-2 py-0.5 rounded bg-brand-gold/15 hover:bg-brand-gold/25 border border-brand-gold/40 text-[10px] font-black text-brand-gold flex items-center gap-1 transition-all cursor-pointer flex-shrink-0"
+                                      title="Alterar forma de pagamento ou troco"
+                                    >
+                                      <Edit2 className="w-2.5 h-2.5" />
+                                      <span>Alterar</span>
+                                    </button>
+                                  )}
+                                </div>
+                                {(order.changeFor || order.cashChange) && (
+                                  <div className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20 flex items-center justify-between flex-wrap gap-1">
+                                    <span>💵 Troco p/: R$ {Number(order.changeFor || order.cashChange).toFixed(2).replace('.', ',')}</span>
+                                    {order.total && Number(order.changeFor || order.cashChange) > Number(order.total) && (
+                                      <span className="text-emerald-300 font-black">
+                                        Devolver: R$ {(Number(order.changeFor || order.cashChange) - Number(order.total)).toFixed(2).replace('.', ',')}
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -6431,6 +6570,344 @@ export function AdminDashboard({
                 className="w-full py-2 rounded-xl bg-dark-850 hover:bg-dark-800 text-slate-400 font-semibold text-xs cursor-pointer mt-1"
               >
                 Voltar / Não fazer nada
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* MODAL: CHANGE PAYMENT & CASH CHANGE MODAL (KDS / COZINHA)      */}
+      {/* ============================================================== */}
+      {changePaymentModalOrder && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-dark-950/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 animate-fade-in">
+          <div className="relative w-full max-w-lg bg-dark-900 border border-brand-gold/40 rounded-3xl shadow-2xl p-5 sm:p-6 space-y-4">
+            
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-dark-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-brand-gold/20 text-brand-gold flex items-center justify-center border border-brand-gold/30">
+                  <Banknote className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-white">
+                    Alterar Forma de Pagamento & Troco
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    Pedido #{changePaymentModalOrder.orderId} • {changePaymentModalOrder.customerName}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setChangePaymentModalOrder(null)}
+                className="w-8 h-8 rounded-full bg-dark-800 text-slate-400 hover:text-white flex items-center justify-center cursor-pointer transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Current Order Summary */}
+            <div className="bg-dark-950/90 p-3.5 rounded-2xl border border-dark-800 flex items-center justify-between flex-wrap gap-2">
+              <div>
+                <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">
+                  Total do Pedido:
+                </span>
+                <span className="text-lg font-black text-brand-gold font-mono">
+                  R$ {Number(changePaymentModalOrder.total || 0).toFixed(2).replace('.', ',')}
+                </span>
+              </div>
+              <div className="text-right">
+                <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">
+                  Forma Atual:
+                </span>
+                <span className="text-xs font-bold text-slate-200">
+                  {changePaymentModalOrder.paymentMethod || 'A Definir'}
+                </span>
+              </div>
+            </div>
+
+            {/* Select New Payment Method */}
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-300 block">
+                Selecione a Nova Forma de Pagamento:
+              </label>
+
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
+                {[
+                  { id: 'dinheiro', label: 'Dinheiro', icon: Banknote },
+                  { id: 'pix', label: 'PIX', icon: QrCode },
+                  { id: 'credito', label: 'Crédito', icon: CreditCard },
+                  { id: 'debito', label: 'Débito', icon: CreditCard },
+                  { id: 'misto', label: '2 Formas', icon: Shuffle }
+                ].map(opt => {
+                  const Icon = opt.icon;
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => setEditPaymentType(opt.id)}
+                      className={`p-2 rounded-xl border text-xs font-bold flex flex-col items-center gap-1 transition-all cursor-pointer ${
+                        editPaymentType === opt.id
+                          ? 'bg-brand-gold text-dark-950 border-brand-gold shadow-glow-gold'
+                          : 'bg-dark-950 text-slate-300 border-dark-800 hover:border-dark-700'
+                      }`}
+                    >
+                      <Icon className="w-4 h-4" />
+                      <span>{opt.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Dinheiro & Troco Inputs */}
+            {editPaymentType === 'dinheiro' && (() => {
+              const orderTotal = Number(changePaymentModalOrder.total || 0);
+              const cleanChange = parseFloat(String(editCashChange).replace('R$', '').replace(',', '.').trim()) || 0;
+              const trocoDevolver = cleanChange > orderTotal ? (cleanChange - orderTotal) : 0;
+              return (
+                <div className="bg-dark-950/80 p-3.5 rounded-2xl border border-dark-800 space-y-3">
+                  <div>
+                    <label className="text-xs font-bold text-slate-200 block mb-1">
+                      Precisa de troco para quanto? (Valor pago pelo cliente)
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">R$</span>
+                      <input
+                        type="text"
+                        placeholder="Ex: 50,00 (ou deixe em branco se não precisar)"
+                        value={editCashChange}
+                        onChange={(e) => setEditCashChange(e.target.value)}
+                        className="w-full pl-9 pr-3 py-2 rounded-xl bg-dark-900 border border-dark-750 text-white text-xs font-bold focus:outline-none focus:border-brand-gold"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Quick Shortcut Buttons for common bill values */}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[10px] text-slate-400 font-semibold">Atalhos:</span>
+                    <button
+                      type="button"
+                      onClick={() => setEditCashChange('')}
+                      className="px-2 py-0.5 rounded-lg bg-dark-800 hover:bg-dark-750 text-[10px] font-bold text-slate-300 border border-dark-700 cursor-pointer"
+                    >
+                      Sem Troco
+                    </button>
+                    {[20, 50, 100, 200].map(val => (
+                      <button
+                        key={val}
+                        type="button"
+                        onClick={() => setEditCashChange(val.toString())}
+                        className="px-2 py-0.5 rounded-lg bg-dark-800 hover:bg-dark-750 text-[10px] font-bold text-slate-300 border border-dark-700 cursor-pointer"
+                      >
+                        R$ {val},00
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Live Troco Feedback */}
+                  {cleanChange > 0 && (
+                    <div className={`p-2.5 rounded-xl border text-xs flex items-center justify-between font-bold ${
+                      cleanChange >= orderTotal
+                        ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+                        : 'bg-red-500/10 border-red-500/30 text-red-300'
+                    }`}>
+                      <span>
+                        {cleanChange >= orderTotal
+                          ? '💵 Troco a devolver para o cliente:'
+                          : '⚠️ Valor entregue é menor que o total!'}
+                      </span>
+                      <span className="font-mono text-sm font-black">
+                        {cleanChange >= orderTotal
+                          ? `R$ ${trocoDevolver.toFixed(2).replace('.', ',')}`
+                          : `Falta R$ ${(orderTotal - cleanChange).toFixed(2).replace('.', ',')}`}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* Misto (2 Formas) Inputs */}
+            {editPaymentType === 'misto' && (() => {
+              const orderTotal = Number(changePaymentModalOrder.total || 0);
+              const val1 = parseFloat(String(editSplitAmount1).replace(',', '.')) || (orderTotal / 2);
+              const val2 = Math.max(0, orderTotal - val1);
+              return (
+                <div className="bg-dark-950/80 p-3.5 rounded-2xl border border-dark-800 space-y-3">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <Shuffle className="w-3.5 h-3.5 text-brand-gold" />
+                      <span>Configurar 2 Formas:</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setEditSplitAmount1((orderTotal / 2).toFixed(2))}
+                      className="text-[10px] font-black px-2 py-1 rounded-lg bg-brand-gold/15 hover:bg-brand-gold/25 border border-brand-gold/40 text-brand-gold cursor-pointer"
+                    >
+                      50% / 50% (R$ {(orderTotal / 2).toFixed(2).replace('.', ',')} cada)
+                    </button>
+                  </div>
+
+                  {/* 1ª Forma */}
+                  <div className="p-2.5 rounded-xl bg-dark-900 border border-dark-800 space-y-2">
+                    <div className="flex items-center justify-between flex-wrap gap-1">
+                      <span className="text-xs font-bold text-slate-200">1ª Forma:</span>
+                      <div className="flex items-center gap-1">
+                        {[
+                          { id: 'pix', label: 'PIX' },
+                          { id: 'credito', label: 'Crédito' },
+                          { id: 'debito', label: 'Débito' },
+                          { id: 'dinheiro', label: 'Dinheiro' }
+                        ].map(opt => (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            onClick={() => setEditSplitMethod1(opt.id)}
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer ${
+                              editSplitMethod1 === opt.id
+                                ? 'bg-brand-gold text-dark-950'
+                                : 'bg-dark-950 text-slate-400 hover:text-white border border-dark-800'
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <label className="text-[11px] font-semibold text-slate-400 flex-shrink-0">
+                        Valor 1ª forma:
+                      </label>
+                      <div className="relative flex-1">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">R$</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          placeholder={(orderTotal / 2).toFixed(2)}
+                          value={editSplitAmount1}
+                          onChange={(e) => setEditSplitAmount1(e.target.value)}
+                          className="w-full pl-8 pr-2.5 py-1.5 rounded-lg bg-dark-950 border border-dark-750 text-white text-xs font-bold focus:border-brand-gold focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    {editSplitMethod1 === 'dinheiro' && (
+                      <input
+                        type="text"
+                        placeholder="Troco para quanto na 1ª forma? (Ex: 50)"
+                        value={editSplitChange1}
+                        onChange={(e) => setEditSplitChange1(e.target.value)}
+                        className="w-full px-2.5 py-1.5 rounded-lg bg-dark-950 border border-dark-750 text-white text-xs placeholder-slate-500 focus:border-brand-gold focus:outline-none"
+                      />
+                    )}
+                  </div>
+
+                  {/* 2ª Forma */}
+                  <div className="p-2.5 rounded-xl bg-dark-900 border border-dark-800 space-y-2">
+                    <div className="flex items-center justify-between flex-wrap gap-1">
+                      <span className="text-xs font-bold text-slate-200">2ª Forma:</span>
+                      <div className="flex items-center gap-1">
+                        {[
+                          { id: 'credito', label: 'Crédito' },
+                          { id: 'debito', label: 'Débito' },
+                          { id: 'pix', label: 'PIX' },
+                          { id: 'dinheiro', label: 'Dinheiro' }
+                        ].map(opt => (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            onClick={() => setEditSplitMethod2(opt.id)}
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer ${
+                              editSplitMethod2 === opt.id
+                                ? 'bg-brand-gold text-dark-950'
+                                : 'bg-dark-950 text-slate-400 hover:text-white border border-dark-800'
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between p-2 rounded-lg bg-dark-950 border border-dark-850">
+                      <span className="text-[11px] font-semibold text-slate-400">
+                        Valor restante da 2ª forma:
+                      </span>
+                      <span className="text-xs font-black text-brand-gold font-mono">
+                        R$ {val2.toFixed(2).replace('.', ',')}
+                      </span>
+                    </div>
+
+                    {editSplitMethod2 === 'dinheiro' && (
+                      <input
+                        type="text"
+                        placeholder="Troco para quanto na 2ª forma? (Ex: 50)"
+                        value={editSplitChange2}
+                        onChange={(e) => setEditSplitChange2(e.target.value)}
+                        className="w-full px-2.5 py-1.5 rounded-lg bg-dark-950 border border-dark-750 text-white text-xs placeholder-slate-500 focus:border-brand-gold focus:outline-none"
+                      />
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Payment Status Selection */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-300 block">
+                Status do Pagamento:
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditPaymentStatus('PENDENTE_COBRANCA')}
+                  className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-all ${
+                    editPaymentStatus === 'PENDENTE_COBRANCA'
+                      ? 'bg-amber-500/20 border-amber-500/50 text-amber-300'
+                      : 'bg-dark-950 border-dark-800 text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Cobrar na Entrega</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setEditPaymentStatus('PAGO_APROVADO')}
+                  className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-all ${
+                    editPaymentStatus === 'PAGO_APROVADO'
+                      ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300'
+                      : 'bg-dark-950 border-dark-800 text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Já Pago / Aprovado</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="space-y-2 pt-2 border-t border-dark-800">
+              <button
+                type="button"
+                onClick={handleSavePaymentChange}
+                className="w-full py-3 rounded-xl bg-gradient-to-r from-brand-gold to-amber-500 hover:from-amber-400 hover:to-brand-gold text-dark-950 font-black text-sm flex items-center justify-center gap-2 cursor-pointer shadow-lg active:scale-98 transition-all"
+              >
+                <Save className="w-4 h-4" />
+                <span>Salvar Nova Forma de Pagamento</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setChangePaymentModalOrder(null)}
+                className="w-full py-2 rounded-xl bg-dark-850 hover:bg-dark-800 text-slate-400 font-semibold text-xs cursor-pointer transition-colors"
+              >
+                Cancelar
               </button>
             </div>
 

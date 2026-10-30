@@ -211,6 +211,9 @@ export async function dispatchOrderUpdateToKitchen(orderId, updates) {
       if (normStatus) updateData.status = normStatus;
       if (updates.notes !== undefined) updateData.notes = updates.notes;
       if (updates.paymentStatus) updateData.payment_status = updates.paymentStatus;
+      if (updates.paymentMethod !== undefined) updateData.payment_method = updates.paymentMethod;
+      if (updates.changeFor !== undefined) updateData.change_for = updates.changeFor ? Number(String(updates.changeFor).replace(',', '.')) : null;
+      if (updates.cashChange !== undefined) updateData.change_for = updates.cashChange ? Number(String(updates.cashChange).replace(',', '.')) : null;
 
       await supabase.from('orders').update(updateData).eq('id', orderId);
       console.log('✅ Status atualizado no Supabase:', orderId, enrichedUpdates);

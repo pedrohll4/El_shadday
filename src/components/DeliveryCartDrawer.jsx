@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { 
   X, ShoppingBag, Trash2, Plus, Minus, MapPin, 
   ArrowRight, AlertCircle, ShieldCheck, Copy, Check, 
-  CreditCard, Banknote, QrCode, MessageCircle, Sparkles, Building2
+  CreditCard, Banknote, QrCode, MessageCircle, Sparkles, Building2,
+  Shuffle
 } from 'lucide-react';
 import { ARIQUEMES_DISTRICTS, RESTAURANT_INFO, getStoredRestaurantInfo, calculateCardMachineFee, getCardMachineNoticeText } from '../data/menuData';
 import { dispatchOrderToKitchen } from '../services/ordersSyncService';
@@ -43,9 +44,14 @@ export function DeliveryCartDrawer({
   const [reference, setReference] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState('pix'); // 'pix' | 'cartao' | 'dinheiro'
+  const [paymentMethod, setPaymentMethod] = useState('pix'); // 'pix' | 'cartao' | 'dinheiro' | 'misto'
   const [cardOption, setCardOption] = useState('credito'); // 'credito' | 'debito'
   const [cashChange, setCashChange] = useState('');
+  const [splitMethod1, setSplitMethod1] = useState('pix'); // 'pix' | 'credito' | 'debito' | 'dinheiro'
+  const [splitAmount1, setSplitAmount1] = useState('');
+  const [splitMethod2, setSplitMethod2] = useState('credito'); // 'pix' | 'credito' | 'debito' | 'dinheiro'
+  const [splitChange1, setSplitChange1] = useState('');
+  const [splitChange2, setSplitChange2] = useState('');
   const [orderNotes, setOrderNotes] = useState('');
   const [copiedPix, setCopiedPix] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -58,8 +64,13 @@ export function DeliveryCartDrawer({
 
   const cardSettings = storeInfo?.cardMachineSettings || RESTAURANT_INFO.cardMachineSettings;
   const isCardFeeActive = cardSettings?.active !== false;
+  const isSplitWithCard = paymentMethod === 'misto' && (splitMethod1 === 'credito' || splitMethod1 === 'debito' || splitMethod2 === 'credito' || splitMethod2 === 'debito');
+  const splitCardType = (splitMethod1 === 'debito' || splitMethod2 === 'debito') ? 'debito' : 'credito';
+  
   const cardFee = (paymentMethod === 'cartao' && isCardFeeActive && cardSettings?.autoAddToTotal)
     ? calculateCardMachineFee(subtotal, cardSettings, cardOption)
+    : (isSplitWithCard && isCardFeeActive && cardSettings?.autoAddToTotal)
+    ? calculateCardMachineFee(subtotal, cardSettings, splitCardType)
     : 0;
   const total = subtotal + deliveryFee + cardFee;
 
@@ -141,6 +152,18 @@ export function DeliveryCartDrawer({
 
     // Payment method text
     let paymentText = 'PIX';
+    let formattedPaymentMethod = 'PIX Instantâneo';
+    let resolvedChangeFor = null;
+    let resolvedPaymentStatus = 'PENDENTE_COBRANCA';
+
+    const getSplitLabel = (m) => {
+      if (m === 'pix') return 'PIX';
+      if (m === 'credito') return 'Cartão de Crédito';
+      if (m === 'debito') return 'Cartão de Débito';
+      if (m === 'dinheiro') return 'Dinheiro';
+      return m;
+    };
+
     if (paymentMethod === 'cartao') {
       const cardTypeLabel = cardOption === 'debito' ? 'Débito' : 'Crédito';
       paymentText = `Cartão de ${cardTypeLabel} (Levar maquininha)`;
@@ -153,8 +176,42 @@ export function DeliveryCartDrawer({
           paymentText += `\n   ↳ ⚠️ *Aviso Taxa:* ${noticeMsg.replace(/⚠️\s*/g, '').trim()}`;
         }
       }
+      formattedPaymentMethod = `Cartão de ${cardTypeLabel}${cardFee > 0 ? ` (Taxa +R$ ${cardFee.toFixed(2).replace('.', ',')})` : ''}`;
+      resolvedPaymentStatus = 'PENDENTE_COBRANCA';
     } else if (paymentMethod === 'dinheiro') {
       paymentText = `Dinheiro ${cashChange ? `(Troco para R$ ${cashChange})` : '(Sem troco)'}`;
+      formattedPaymentMethod = `Dinheiro ${cashChange ? `(Troco p/ R$ ${cashChange})` : ''}`;
+      resolvedChangeFor = cashChange ? Number(String(cashChange).replace(',', '.')) : null;
+      resolvedPaymentStatus = 'PENDENTE_COBRANCA';
+    } else if (paymentMethod === 'pix') {
+      paymentText = 'PIX';
+      formattedPaymentMethod = 'PIX Instantâneo';
+      resolvedPaymentStatus = 'PAGO_APROVADO';
+    } else if (paymentMethod === 'misto') {
+      const rawVal1 = parseFloat(String(splitAmount1).replace(',', '.')) || (total / 2);
+      const val1 = Math.min(Math.max(0.01, rawVal1), total - 0.01);
+      const val2 = Math.max(0, total - val1);
+
+      const m1Label = getSplitLabel(splitMethod1);
+      const m2Label = getSplitLabel(splitMethod2);
+      const troco1Text = (splitMethod1 === 'dinheiro' && splitChange1) ? ` (Troco p/ R$ ${splitChange1})` : '';
+      const troco2Text = (splitMethod2 === 'dinheiro' && splitChange2) ? ` (Troco p/ R$ ${splitChange2})` : '';
+
+      paymentText = `2 Formas de Pagamento (Misto):\n   ↳ 1ª: R$ ${val1.toFixed(2).replace('.', ',')} no ${m1Label}${troco1Text}\n   ↳ 2ª: R$ ${val2.toFixed(2).replace('.', ',')} no ${m2Label}${troco2Text}`;
+      if (cardFee > 0) {
+        paymentText += `\n   ↳ 💳 *Taxa Maquininha:* + R$ ${cardFee.toFixed(2).replace('.', ',')}`;
+      }
+      if (splitMethod1 === 'credito' || splitMethod1 === 'debito' || splitMethod2 === 'credito' || splitMethod2 === 'debito') {
+        paymentText += `\n   ↳ 💳 *Maquininha:* Levar maquininha para parte em cartão`;
+      }
+
+      formattedPaymentMethod = `Misto: R$ ${val1.toFixed(2).replace('.', ',')} (${m1Label}${troco1Text}) + R$ ${val2.toFixed(2).replace('.', ',')} (${m2Label}${troco2Text})`;
+      if (splitMethod1 === 'dinheiro' && splitChange1) {
+        resolvedChangeFor = Number(String(splitChange1).replace(',', '.'));
+      } else if (splitMethod2 === 'dinheiro' && splitChange2) {
+        resolvedChangeFor = Number(String(splitChange2).replace(',', '.'));
+      }
+      resolvedPaymentStatus = (splitMethod1 === 'pix' && splitMethod2 === 'pix') ? 'PAGO_APROVADO' : 'PENDENTE_COBRANCA';
     }
 
     // Delivery text
@@ -174,6 +231,7 @@ ${reference.trim() ? `📌 *Referência:* ${reference.trim()}\n` : ''}🛵 *Taxa
 
     // Full WhatsApp Message
     const branchDisplayName = activeBranch?.displayName || activeBranch?.name || 'Ariquemes - RO';
+    const hasPixPayment = paymentMethod === 'pix' || (paymentMethod === 'misto' && (splitMethod1 === 'pix' || splitMethod2 === 'pix'));
     const whatsappMessage = 
 `🍕 *NOVO PEDIDO - EL SHADDAY DELIVERY*
 🆔 *Pedido:* #${orderId}
@@ -191,7 +249,7 @@ ${orderNotes.trim() ? `\n📝 *Observações do Pedido:*\n${orderNotes.trim()}\n
 ${cardFee > 0 ? `💳 *Taxa Maquininha (${cardOption === 'debito' ? 'Débito' : 'Crédito'}):* R$ ${cardFee.toFixed(2).replace('.', ',')}\n` : ''}🛵 *Taxa de Entrega:* ${deliveryFee > 0 ? `R$ ${deliveryFee.toFixed(2).replace('.', ',')}` : 'Grátis'}
 💳 *TOTAL A PAGAR: R$ ${total.toFixed(2).replace('.', ',')}*
 💵 *Forma de Pagamento:* ${paymentText}
-${paymentMethod === 'pix' ? `\n⚠️ *COMPROVANTE DO PIX:* Segue em anexo nesta conversa!\n(Chave Pix utilizada: ${pixKey})` : ''}
+${hasPixPayment ? `\n⚠️ *COMPROVANTE DO PIX:* Segue em anexo nesta conversa!\n(Chave Pix utilizada: ${pixKey})` : ''}
 ----------------------------------------
 Pedido gerado via Cardápio Digital El Shadday.`;
 
@@ -225,14 +283,10 @@ Pedido gerado via Cardápio Digital El Shadday.`;
       deliveryFee,
       cardFee,
       total,
-      paymentMethod: paymentMethod === 'pix' 
-        ? 'PIX Instantâneo' 
-        : paymentMethod === 'cartao' 
-        ? `Cartão de ${cardOption === 'debito' ? 'Débito' : 'Crédito'}${cardFee > 0 ? ` (Taxa +R$ ${cardFee.toFixed(2).replace('.', ',')})` : ''}`
-        : `Dinheiro ${cashChange ? `(Troco p/ R$ ${cashChange})` : ''}`,
-      paymentStatus: paymentMethod === 'pix' ? 'PAGO_APROVADO' : 'PENDENTE_COBRANCA',
-      changeFor: cashChange ? Number(cashChange) : null,
-      cashChange: cashChange ? Number(cashChange) : null,
+      paymentMethod: formattedPaymentMethod,
+      paymentStatus: resolvedPaymentStatus,
+      changeFor: resolvedChangeFor,
+      cashChange: resolvedChangeFor,
       orderStatus: 'RECEBIDO_COZINHA',
       status: 'RECEBIDO_COZINHA',
       pixKey,
@@ -619,7 +673,7 @@ Pedido gerado via Cardápio Digital El Shadday.`;
                   3. Forma de Pagamento
                 </span>
 
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   <button
                     type="button"
                     onClick={() => setPaymentMethod('pix')}
@@ -657,6 +711,24 @@ Pedido gerado via Cardápio Digital El Shadday.`;
                   >
                     <Banknote className="w-4 h-4" />
                     <span>Dinheiro</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPaymentMethod('misto');
+                      if (!splitAmount1) {
+                        setSplitAmount1((total / 2).toFixed(2));
+                      }
+                    }}
+                    className={`p-2.5 rounded-xl border text-xs font-bold flex flex-col items-center gap-1 transition-all cursor-pointer ${
+                      paymentMethod === 'misto'
+                        ? 'bg-brand-gold text-dark-950 border-brand-gold shadow-glow-gold'
+                        : 'bg-dark-950 text-slate-300 border-dark-800 hover:border-dark-700'
+                    }`}
+                  >
+                    <Shuffle className="w-4 h-4" />
+                    <span>2 Formas</span>
                   </button>
                 </div>
 
@@ -773,6 +845,190 @@ Pedido gerado via Cardápio Digital El Shadday.`;
                   </div>
                 )}
 
+                {/* 2 Formas (Misto / Dividir) Box */}
+                {paymentMethod === 'misto' && (() => {
+                  const val1 = parseFloat(String(splitAmount1).replace(',', '.')) || (total / 2);
+                  const val2 = Math.max(0, total - val1);
+                  return (
+                    <div className="bg-dark-950/80 p-3.5 rounded-2xl border border-brand-gold/40 space-y-3.5 animate-fade-in">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                          <Shuffle className="w-3.5 h-3.5 text-brand-gold" />
+                          <span>Dividir em 2 Formas de Pagamento</span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setSplitAmount1((total / 2).toFixed(2))}
+                          className="text-[10px] font-black px-2 py-1 rounded-lg bg-brand-gold/15 hover:bg-brand-gold/25 border border-brand-gold/40 text-brand-gold flex items-center gap-1 transition-all cursor-pointer"
+                        >
+                          <Sparkles className="w-3 h-3" />
+                          <span>50% Metade (R$ {(total / 2).toFixed(2).replace('.', ',')} cada)</span>
+                        </button>
+                      </div>
+
+                      {/* 1ª Forma */}
+                      <div className="p-3 rounded-xl bg-dark-900 border border-dark-800 space-y-2">
+                        <div className="flex items-center justify-between flex-wrap gap-1.5">
+                          <span className="text-xs font-bold text-slate-200">
+                            1ª Forma:
+                          </span>
+                          <div className="flex items-center gap-1">
+                            {[
+                              { id: 'pix', label: 'PIX' },
+                              { id: 'credito', label: 'Crédito' },
+                              { id: 'debito', label: 'Débito' },
+                              { id: 'dinheiro', label: 'Dinheiro' }
+                            ].map(opt => (
+                              <button
+                                key={opt.id}
+                                type="button"
+                                onClick={() => setSplitMethod1(opt.id)}
+                                className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-all cursor-pointer ${
+                                  splitMethod1 === opt.id
+                                    ? 'bg-brand-gold text-dark-950'
+                                    : 'bg-dark-950 text-slate-400 hover:text-white border border-dark-800'
+                                }`}
+                              >
+                                {opt.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <label className="text-[11px] font-semibold text-slate-400 flex-shrink-0">
+                            Valor 1ª forma:
+                          </label>
+                          <div className="relative flex-1">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">R$</span>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0.01"
+                              max={total}
+                              placeholder={(total / 2).toFixed(2)}
+                              value={splitAmount1}
+                              onChange={(e) => setSplitAmount1(e.target.value)}
+                              className="w-full pl-9 pr-3 py-1.5 rounded-lg bg-dark-950 border border-dark-800 text-white text-xs font-bold focus:border-brand-gold focus:outline-none"
+                            />
+                          </div>
+                        </div>
+
+                        {splitMethod1 === 'dinheiro' && (
+                          <div className="pt-1">
+                            <label className="block text-[10px] font-semibold text-slate-400 mb-1">
+                              Precisa de troco na 1ª forma? (Dinheiro)
+                            </label>
+                            <input
+                              type="text"
+                              placeholder="Ex: Troco para R$ 50,00"
+                              value={splitChange1}
+                              onChange={(e) => setSplitChange1(e.target.value)}
+                              className="w-full px-2.5 py-1.5 rounded-lg bg-dark-950 border border-dark-800 text-white text-xs placeholder-slate-500 focus:border-brand-gold focus:outline-none"
+                            />
+                          </div>
+                        )}
+                      </div>
+
+                      {/* 2ª Forma */}
+                      <div className="p-3 rounded-xl bg-dark-900 border border-dark-800 space-y-2">
+                        <div className="flex items-center justify-between flex-wrap gap-1.5">
+                          <span className="text-xs font-bold text-slate-200">
+                            2ª Forma:
+                          </span>
+                          <div className="flex items-center gap-1">
+                            {[
+                              { id: 'credito', label: 'Crédito' },
+                              { id: 'debito', label: 'Débito' },
+                              { id: 'pix', label: 'PIX' },
+                              { id: 'dinheiro', label: 'Dinheiro' }
+                            ].map(opt => (
+                              <button
+                                key={opt.id}
+                                type="button"
+                                onClick={() => setSplitMethod2(opt.id)}
+                                className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-all cursor-pointer ${
+                                  splitMethod2 === opt.id
+                                    ? 'bg-brand-gold text-dark-950'
+                                    : 'bg-dark-950 text-slate-400 hover:text-white border border-dark-800'
+                                }`}
+                              >
+                                {opt.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between p-2 rounded-lg bg-dark-950 border border-dark-850">
+                          <span className="text-[11px] font-semibold text-slate-400">
+                            Valor restante da 2ª forma:
+                          </span>
+                          <span className="text-xs font-black text-brand-gold font-mono">
+                            R$ {val2.toFixed(2).replace('.', ',')}
+                          </span>
+                        </div>
+
+                        {splitMethod2 === 'dinheiro' && (
+                          <div className="pt-1">
+                            <label className="block text-[10px] font-semibold text-slate-400 mb-1">
+                              Precisa de troco na 2ª forma? (Dinheiro)
+                            </label>
+                            <input
+                              type="text"
+                              placeholder="Ex: Troco para R$ 50,00"
+                              value={splitChange2}
+                              onChange={(e) => setSplitChange2(e.target.value)}
+                              className="w-full px-2.5 py-1.5 rounded-lg bg-dark-950 border border-dark-800 text-white text-xs placeholder-slate-500 focus:border-brand-gold focus:outline-none"
+                            />
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Pix Key Box if either split option is Pix */}
+                      {(splitMethod1 === 'pix' || splitMethod2 === 'pix') && (
+                        <div className="bg-gradient-to-r from-amber-500/10 to-brand-gold/15 p-3 rounded-xl border border-brand-gold/40 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-bold text-white flex items-center gap-1.5">
+                              <QrCode className="w-3.5 h-3.5 text-brand-gold" />
+                              <span>Chave PIX (Celular):</span>
+                            </span>
+                            <button
+                              type="button"
+                              onClick={handleCopyPix}
+                              className="text-[11px] font-extrabold text-brand-gold flex items-center gap-1 cursor-pointer hover:underline"
+                            >
+                              {copiedPix ? (
+                                <>
+                                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                  <span className="text-emerald-400">Chave Copiada!</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="w-3.5 h-3.5" />
+                                  <span>Copiar Chave</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                          <div className="bg-dark-950 p-2 rounded-lg font-mono text-center text-xs font-bold text-brand-gold border border-dark-800">
+                            {pixKey}
+                          </div>
+                          <p className="text-[10px] text-slate-300 leading-tight">
+                            💡 Faça o PIX referente a sua parte e envie o comprovante no WhatsApp!
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Card notice if either is card */}
+                      {(splitMethod1 === 'credito' || splitMethod1 === 'debito' || splitMethod2 === 'credito' || splitMethod2 === 'debito') && (
+                        <p className="text-[10px] text-slate-400 leading-tight bg-dark-900/60 p-2 rounded-lg border border-dark-850">
+                          💳 O entregador levará a máquina de cartão para receber a parte do cartão na entrega.
+                        </p>
+                      )}
+                    </div>
+                  );
+                })()}
+
               </div>
 
             </div>
@@ -798,11 +1054,11 @@ Pedido gerado via Cardápio Digital El Shadday.`;
                 </span>
               </div>
 
-              {paymentMethod === 'cartao' && cardFee > 0 && (
+              {(paymentMethod === 'cartao' || isSplitWithCard) && cardFee > 0 && (
                 <div className="flex items-center justify-between text-amber-300 font-semibold">
                   <span className="flex items-center gap-1">
                     <CreditCard className="w-3.5 h-3.5" />
-                    Taxa da Maquininha ({cardOption === 'debito' ? 'Débito' : 'Crédito'}):
+                    Taxa da Maquininha:
                   </span>
                   <span className="font-bold">+ R$ {cardFee.toFixed(2).replace('.', ',')}</span>
                 </div>
