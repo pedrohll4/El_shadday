@@ -1,17 +1,19 @@
 import { getStoredBranches } from '../data/branchesData';
 import { getBranchWhatsApp, sendEngineDirectMessage } from './whatsappBranchService';
+import { getGreenApiConfig, sendGreenApiMessage } from './greenApiService';
 
 const STORAGE_SETTINGS_KEY = 'el_shadday_whatsapp_settings_v1';
 
 export const DEFAULT_WHATSAPP_SETTINGS = {
   autoNotify: true,          // Disparo automático ao mudar status no KDS
+  notifyOnClick: true,       // Opção 2: Abre WhatsApp instantâneo no clique se Green API não estiver ativa
   notifyOnReceive: true,     // Ao criar/receber o pedido
   notifyOnPrep: true,        // Ao mover para forno / preparo
   notifyOnDelivery: true,    // Ao despachar para entrega
   notifyOnReadyCounter: true,// Ao marcar pronto no balcão
   notifyOnComplete: true,    // Ao marcar como concluído
   notifyOnCancel: true,      // Ao cancelar o pedido
-  openDirectly: false        // Disparos 100% silenciosos em segundo plano (sem abrir abas)
+  openDirectly: false        // Disparos 100% silenciosos quando API está configurada
 };
 
 export function getWhatsAppSettings() {
@@ -203,6 +205,30 @@ Em caso de dúvidas, estamos à disposição por aqui!`
 }
 
 /**
+ * Disparo Imediato no Clique (Opção 2)
+ * Roda de forma 100% síncrona dentro do evento de clique para que o Brave e Chrome NUNCA bloqueiem como popup!
+ */
+export function openWhatsAppInstantLink({ order, statusType, branch, reason = '' }) {
+  if (!order) return null;
+  const rawPhone = order.customerPhone;
+  const cleanPhone = cleanPhoneNumber(rawPhone);
+  if (!cleanPhone) return null;
+
+  const resolvedBranch = branch || getBranchForOrder(order);
+  const message = buildStatusMessage({ order, statusType, branch: resolvedBranch, reason });
+  const encoded = encodeURIComponent(message);
+  const whatsappUrl = `https://wa.me/${cleanPhone}?text=${encoded}`;
+
+  try {
+    const win = window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
+    return { success: true, url: whatsappUrl, windowOpened: !!win };
+  } catch (err) {
+    console.error('[WhatsApp] Erro ao abrir link instantâneo:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+/**
  * Dispara a notificação via WhatsApp (por API ou abrindo WhatsApp Web / app)
  */
 export async function sendCustomerWhatsAppNotification({
@@ -237,20 +263,36 @@ export async function sendCustomerWhatsAppNotification({
 
   let apiSuccess = false;
 
-  // 1. TENTA ENVIAR VIA MOTOR GRATUITO LOCAL / SUPABASE BRIDGE (100% Silencioso)
-  try {
-    const directResult = await sendEngineDirectMessage({
-      phone: cleanPhone,
-      message,
-      orderId: order.orderId,
-      status: statusType
-    });
-    if (directResult.success) {
-      apiSuccess = true;
-      console.log('✅ [WhatsApp] Notificação disparada silenciosamente para', cleanPhone);
+  // 1. TENTA ENVIAR VIA GREEN API (Nuvem / Vercel 100% Silencioso)
+  const greenConfig = getGreenApiConfig();
+  if (greenConfig.idInstance && greenConfig.apiTokenInstance && greenConfig.enabled !== false) {
+    try {
+      const greenResult = await sendGreenApiMessage({ phone: cleanPhone, message });
+      if (greenResult.success) {
+        apiSuccess = true;
+        console.log('✅ [WhatsApp] Notificação disparada silenciosamente via Green API para', cleanPhone);
+      }
+    } catch (err) {
+      console.warn('[WhatsApp] Falha ao enviar via Green API:', err);
     }
-  } catch (err) {
-    console.warn('[WhatsApp] Falha ao enviar via motor direto:', err);
+  }
+
+  // 2. TENTA ENVIAR VIA MOTOR GRATUITO LOCAL / SUPABASE BRIDGE
+  if (!apiSuccess) {
+    try {
+      const directResult = await sendEngineDirectMessage({
+        phone: cleanPhone,
+        message,
+        orderId: order.orderId,
+        status: statusType
+      });
+      if (directResult.success) {
+        apiSuccess = true;
+        console.log('✅ [WhatsApp] Notificação disparada silenciosamente para', cleanPhone);
+      }
+    } catch (err) {
+      console.warn('[WhatsApp] Falha ao enviar via motor direto:', err);
+    }
   }
 
   // 2. TENTA ENVIAR VIA WEBHOOK / API EXTERNA SE CONFIGURADA

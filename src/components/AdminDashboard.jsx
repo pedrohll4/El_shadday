@@ -64,8 +64,10 @@ import {
   buildStatusMessage, 
   getWhatsAppSettings, 
   saveWhatsAppSettings,
-  cleanPhoneNumber 
+  cleanPhoneNumber,
+  openWhatsAppInstantLink
 } from '../services/whatsappNotificationService';
+import { getGreenApiConfig } from '../services/greenApiService';
 import { normalizeOrderStatus } from '../services/ordersSyncService';
 
 export function AdminDashboard({ 
@@ -1608,14 +1610,28 @@ export function AdminDashboard({
   const handleUpdateStatusAndTab = (order, newStatus, customReason = '') => {
     if (!order || !newStatus) return;
 
-    // 1. Update order status in app state / DB
-    onUpdateOrderStatus(order.orderId, newStatus);
-
-    // 2. Dispatch WhatsApp notification
     let notifyType = newStatus;
     if (newStatus === 'CONCLUIDO' && order.deliveryType === 'balcao') {
       notifyType = 'PRONTO_BALCAO';
     }
+
+    // Opção 2: Se Green API não estiver ativa, abre o WhatsApp no tick síncrono do clique (livre de bloqueio do Brave)
+    const greenCfg = getGreenApiConfig();
+    const isGreenApiActive = Boolean(greenCfg?.idInstance && greenCfg?.apiTokenInstance && greenCfg?.enabled !== false && greenCfg?.status === 'authorized');
+    if (!isGreenApiActive && whatsAppSettings?.autoNotify && whatsAppSettings?.notifyOnClick !== false) {
+      const branchObj = branchesList.find(b => b.id === (order.branchId || currentBranch?.id)) || currentBranch;
+      openWhatsAppInstantLink({
+        order,
+        statusType: notifyType,
+        branch: branchObj,
+        reason: customReason
+      });
+    }
+
+    // 1. Update order status in app state / DB
+    onUpdateOrderStatus(order.orderId, newStatus);
+
+    // 2. Dispatch background WhatsApp notification (Green API / local engine)
     handleTriggerCustomerWhatsApp(order, notifyType, customReason);
 
     // 3. Highlight this specific order card
