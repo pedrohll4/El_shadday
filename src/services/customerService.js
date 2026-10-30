@@ -127,12 +127,14 @@ export function saveAllCustomers(customersList) {
 
 /**
  * Grava ou atualiza um perfil de cliente a partir de um pedido (checkout ou balcão)
+ * 100% IDEMPOTENTE: rastreia IDs únicos de pedidos para nunca multiplicar contagem ou valor
  */
 export function recordCustomerFromOrder(order) {
   if (!order) return null;
 
   const rawName = (order.customerName || order.customer_name || '').trim();
   const rawPhone = (order.customerPhone || order.customer_phone || '').trim();
+  const orderId = String(order.orderId || order.id || '').trim();
 
   // Se não tem nem nome nem telefone legível, ignora
   if (!rawName && !rawPhone) return null;
@@ -141,7 +143,8 @@ export function recordCustomerFromOrder(order) {
   if (!key) return null;
 
   const currentList = getAllCustomers();
-  const existingIndex = currentList.findIndex(c => c.key === key || (rawPhone && c.cleanPhone === rawPhone.replace(/\D/g, '')));
+  const cleanPhone = rawPhone.replace(/\D/g, '');
+  const existingIndex = currentList.findIndex(c => c.key === key || (cleanPhone.length >= 8 && c.cleanPhone === cleanPhone));
 
   // Extração dos dados de endereço
   const addr = (typeof order.deliveryAddress === 'object' && order.deliveryAddress !== null)
@@ -163,7 +166,6 @@ export function recordCustomerFromOrder(order) {
   );
   const districtId = matchedDistrict ? matchedDistrict.id : (isBalcao ? 'balcao' : 'setor-03');
 
-  const cleanPhone = rawPhone.replace(/\D/g, '');
   const orderTotal = Number(order.total || 0);
   const orderDate = order.createdAt || new Date().toISOString();
 
@@ -171,6 +173,13 @@ export function recordCustomerFromOrder(order) {
 
   if (existingIndex >= 0) {
     const existing = currentList[existingIndex];
+    const orderIds = Array.isArray(existing.orderIds) ? [...existing.orderIds] : (existing.lastOrderId ? [existing.lastOrderId] : []);
+    const isNewOrder = orderId && !orderIds.includes(orderId);
+    
+    if (isNewOrder) {
+      orderIds.push(orderId);
+    }
+
     customerProfile = {
       ...existing,
       name: rawName || existing.name,
@@ -184,10 +193,12 @@ export function recordCustomerFromOrder(order) {
       ...(complement ? { complement } : {}),
       ...(reference ? { reference } : {}),
       deliveryType: deliveryType || existing.deliveryType || 'delivery',
-      ordersCount: (existing.ordersCount || 1) + 1,
-      totalSpent: Number((existing.totalSpent || 0) + orderTotal),
+      orderIds: orderIds,
+      // Contagem baseada estritamente no tamanho do array de pedidos únicos
+      ordersCount: Math.max(1, orderIds.length),
+      totalSpent: isNewOrder ? Number((existing.totalSpent || 0) + orderTotal) : (existing.totalSpent || orderTotal),
       lastOrderAt: orderDate,
-      lastOrderId: order.orderId || order.id || existing.lastOrderId,
+      lastOrderId: orderId || existing.lastOrderId,
       updatedAt: new Date().toISOString()
     };
     currentList[existingIndex] = customerProfile;
@@ -207,11 +218,12 @@ export function recordCustomerFromOrder(order) {
       complement,
       reference,
       deliveryType,
+      orderIds: orderId ? [orderId] : [],
       ordersCount: 1,
       totalSpent: orderTotal,
       firstOrderAt: orderDate,
       lastOrderAt: orderDate,
-      lastOrderId: order.orderId || order.id,
+      lastOrderId: orderId,
       notes: order.notes || '',
       updatedAt: new Date().toISOString()
     };
@@ -224,24 +236,26 @@ export function recordCustomerFromOrder(order) {
 
 /**
  * Reconstrói o catálogo de clientes a partir do histórico completo de pedidos
- * Pode ser executado na inicialização para já preencher com todos os clientes anteriores!
+ * 100% DETERMINÍSTICO E EXATO: agrupa pedidos reais sem acumular em loop
  */
 export function backfillCustomersFromOrders(orders = []) {
   if (!Array.isArray(orders) || orders.length === 0) return getAllCustomers();
 
-  const customersMap = new Map();
-
-  // Primeiro carrega o que já existe
-  const existingList = getAllCustomers();
-  for (const c of existingList) {
-    if (c.key) customersMap.set(c.key, c);
-    if (c.cleanPhone && c.cleanPhone.length >= 8) {
-      customersMap.set('tel_' + c.cleanPhone, c);
+  // 1. Deduplica a lista de pedidos por orderId
+  const uniqueOrdersMap = new Map();
+  for (const o of orders) {
+    const id = o.orderId || o.id;
+    if (id && !uniqueOrdersMap.has(id)) {
+      uniqueOrdersMap.set(id, o);
     }
   }
+  const uniqueOrders = Array.from(uniqueOrdersMap.values());
 
-  // Ordena do mais antigo para o mais novo para calcular a evolução correta
-  const sortedOrders = orders.slice().sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
+  // 2. Agrupa pedidos diretamente por cliente
+  const customersMap = new Map();
+
+  // Ordena do mais antigo para o mais novo
+  const sortedOrders = uniqueOrders.slice().sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
 
   for (const order of sortedOrders) {
     const rawName = (order.customerName || order.customer_name || '').trim();
@@ -252,6 +266,10 @@ export function backfillCustomersFromOrders(orders = []) {
     if (!key) continue;
 
     const cleanPhone = rawPhone.replace(/\D/g, '');
+    const orderId = String(order.orderId || order.id || '');
+    const orderTotal = Number(order.total || 0);
+    const orderDate = order.createdAt || new Date().toISOString();
+
     const addr = (typeof order.deliveryAddress === 'object' && order.deliveryAddress !== null)
       ? order.deliveryAddress
       : {};
@@ -270,34 +288,37 @@ export function backfillCustomersFromOrders(orders = []) {
     );
     const districtId = matchedDistrict ? matchedDistrict.id : (isBalcao ? 'balcao' : 'setor-03');
 
-    const orderTotal = Number(order.total || 0);
-    const orderDate = order.createdAt || new Date().toISOString();
+    let profile = customersMap.get(key) || (cleanPhone.length >= 8 ? customersMap.get('tel_' + cleanPhone) : null);
 
-    const existing = customersMap.get(key) || (cleanPhone ? customersMap.get('tel_' + cleanPhone) : null);
-
-    if (existing) {
-      const updated = {
-        ...existing,
-        name: rawName || existing.name,
-        phone: rawPhone || existing.phone,
-        phoneFormatted: formatCustomerPhone(rawPhone || existing.phone),
-        cleanPhone: cleanPhone || existing.cleanPhone,
-        ...(street ? { street, address: street } : {}),
-        ...(number ? { number } : {}),
-        ...(districtName ? { district: districtName, districtId } : {}),
-        ...(complement ? { complement } : {}),
-        ...(reference ? { reference } : {}),
-        deliveryType: deliveryType || existing.deliveryType || 'delivery',
-        ordersCount: (existing.ordersCount || 1) + 1,
-        totalSpent: Number((existing.totalSpent || 0) + orderTotal),
-        lastOrderAt: orderDate,
-        lastOrderId: order.orderId || order.id || existing.lastOrderId,
-        updatedAt: new Date().toISOString()
-      };
-      customersMap.set(key, updated);
-      if (cleanPhone) customersMap.set('tel_' + cleanPhone, updated);
+    if (profile) {
+      // Se este pedido ainda não foi computado para este cliente, adiciona
+      if (orderId && !profile.orderIds.includes(orderId)) {
+        profile.orderIds.push(orderId);
+        profile.totalSpent = Number((profile.totalSpent + orderTotal).toFixed(2));
+        profile.ordersCount = profile.orderIds.length;
+      }
+      // Atualiza com dados mais recentes se este pedido for mais novo
+      if (new Date(orderDate) >= new Date(profile.lastOrderAt || 0)) {
+        profile.lastOrderAt = orderDate;
+        profile.lastOrderId = orderId;
+        if (rawName) profile.name = rawName;
+        if (rawPhone) {
+          profile.phone = rawPhone;
+          profile.phoneFormatted = formatCustomerPhone(rawPhone);
+          profile.cleanPhone = cleanPhone;
+        }
+        if (street) profile.street = profile.address = street;
+        if (number) profile.number = number;
+        if (districtName) {
+          profile.district = districtName;
+          profile.districtId = districtId;
+        }
+        if (complement) profile.complement = complement;
+        if (reference) profile.reference = reference;
+        profile.deliveryType = deliveryType;
+      }
     } else {
-      const created = {
+      profile = {
         id: 'cust_' + Math.random().toString(36).substring(2, 10),
         key,
         name: rawName || 'Cliente',
@@ -312,24 +333,27 @@ export function backfillCustomersFromOrders(orders = []) {
         complement,
         reference,
         deliveryType,
+        orderIds: orderId ? [orderId] : [],
         ordersCount: 1,
-        totalSpent: orderTotal,
+        totalSpent: Number(orderTotal.toFixed(2)),
         firstOrderAt: orderDate,
         lastOrderAt: orderDate,
-        lastOrderId: order.orderId || order.id,
+        lastOrderId: orderId,
         notes: order.notes || '',
         updatedAt: new Date().toISOString()
       };
-      customersMap.set(key, created);
-      if (cleanPhone) customersMap.set('tel_' + cleanPhone, created);
+      customersMap.set(key, profile);
+      if (cleanPhone.length >= 8) {
+        customersMap.set('tel_' + cleanPhone, profile);
+      }
     }
   }
 
-  // Deduplica e salva lista única
-  const uniqueList = Array.from(new Set(Array.from(customersMap.values())));
-  uniqueList.sort((a, b) => (b.ordersCount || 1) - (a.ordersCount || 1));
-  saveAllCustomers(uniqueList);
-  return uniqueList;
+  // Deduplica perfis por id e ordena por frequência
+  const uniqueProfiles = Array.from(new Set(Array.from(customersMap.values())));
+  uniqueProfiles.sort((a, b) => (b.ordersCount || 1) - (a.ordersCount || 1));
+  saveAllCustomers(uniqueProfiles);
+  return uniqueProfiles;
 }
 
 /**

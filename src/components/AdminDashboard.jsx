@@ -1940,10 +1940,14 @@ export function AdminDashboard({
     });
   };
 
-  // Sincroniza histórico de clientes a partir dos pedidos
+  // Sincroniza histórico de clientes a partir dos pedidos (apenas quando a lista de pedidos realmente mudar)
+  const prevOrdersHashRef = useRef('');
   useEffect(() => {
-    if (Array.isArray(orders) && orders.length > 0) {
-      backfillCustomersFromOrders(orders);
+    const list = Array.isArray(orders) ? orders : [];
+    const hash = list.map(o => o.orderId || o.id).sort().join(',');
+    if (hash && hash !== prevOrdersHashRef.current) {
+      prevOrdersHashRef.current = hash;
+      backfillCustomersFromOrders(list);
     }
   }, [orders]);
 
