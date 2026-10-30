@@ -66,6 +66,7 @@ import {
   saveWhatsAppSettings,
   cleanPhoneNumber 
 } from '../services/whatsappNotificationService';
+import { normalizeOrderStatus } from '../services/ordersSyncService';
 
 export function AdminDashboard({ 
   orders = [], 
@@ -168,6 +169,30 @@ export function AdminDashboard({
   const [searchQuery, setSearchQuery] = useState('');
   const [now, setNow] = useState(Date.now());
   const [newOrderAlert, setNewOrderAlert] = useState(null);
+
+  // Auto Follow Tab on Status Change & Highlight State
+  const [autoFollowTab, setAutoFollowTab] = useState(() => {
+    try {
+      const saved = localStorage.getItem('el_shadday_kds_auto_follow_tab');
+      return saved !== null ? JSON.parse(saved) : true;
+    } catch (e) {
+      return true;
+    }
+  });
+  const [highlightedOrderId, setHighlightedOrderId] = useState(null);
+  const [statusChangeToast, setStatusChangeToast] = useState(null); // { orderId, newStatus, tabLabel }
+  const highlightTimeoutRef = useRef(null);
+  const toastTimeoutRef = useRef(null);
+
+  const toggleAutoFollowTab = () => {
+    setAutoFollowTab(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem('el_shadday_kds_auto_follow_tab', JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+  };
 
   // Audio chimes
   const audioCtxRef = useRef(null);
@@ -1367,32 +1392,33 @@ export function AdminDashboard({
   // Check if order is delayed (active and older than 35 minutes)
   const isOrderDelayed = (order) => {
     if (!order) return false;
-    if (order.orderStatus === 'CONCLUIDO' || order.orderStatus === 'CANCELADO') return false;
+    const st = normalizeOrderStatus(order);
+    if (st === 'CONCLUIDO' || st === 'CANCELADO') return false;
     const elapsed = getElapsedMinutes(order.createdAt);
     return elapsed >= 35; // 35+ minutes threshold for warning
   };
 
   // Metrics calculations (Excluding cancelled orders!)
   const activeOrdersList = useMemo(() => {
-    return scopedOrders.filter(o => o && o.orderStatus !== 'CANCELADO');
+    return scopedOrders.filter(o => o && normalizeOrderStatus(o) !== 'CANCELADO');
   }, [scopedOrders]);
 
   const totalRevenue = useMemo(() => {
     return activeOrdersList
-      .filter(o => o && (o.paymentStatus === 'PAGO_APROVADO' || o.orderStatus === 'CONCLUIDO'))
+      .filter(o => o && (o.paymentStatus === 'PAGO_APROVADO' || normalizeOrderStatus(o) === 'CONCLUIDO'))
       .reduce((acc, o) => acc + (Number(o.total) || 0), 0);
   }, [activeOrdersList]);
 
   const pendingCount = useMemo(() => {
-    return activeOrdersList.filter(o => o.orderStatus === 'RECEBIDO_COZINHA').length;
+    return activeOrdersList.filter(o => normalizeOrderStatus(o) === 'RECEBIDO_COZINHA').length;
   }, [activeOrdersList]);
 
   const inPrepCount = useMemo(() => {
-    return activeOrdersList.filter(o => o.orderStatus === 'EM_PREPARO').length;
+    return activeOrdersList.filter(o => normalizeOrderStatus(o) === 'EM_PREPARO').length;
   }, [activeOrdersList]);
 
   const inDeliveryCount = useMemo(() => {
-    return activeOrdersList.filter(o => o.orderStatus === 'SAIU_ENTREGA').length;
+    return activeOrdersList.filter(o => normalizeOrderStatus(o) === 'SAIU_ENTREGA').length;
   }, [activeOrdersList]);
 
   const delayedCount = useMemo(() => {
@@ -1400,17 +1426,18 @@ export function AdminDashboard({
   }, [activeOrdersList, now]);
 
   const completedCount = useMemo(() => {
-    return activeOrdersList.filter(o => o.orderStatus === 'CONCLUIDO').length;
+    return activeOrdersList.filter(o => normalizeOrderStatus(o) === 'CONCLUIDO').length;
   }, [activeOrdersList]);
 
   const cancelledCount = useMemo(() => {
-    return scopedOrders.filter(o => o.orderStatus === 'CANCELADO').length;
+    return scopedOrders.filter(o => normalizeOrderStatus(o) === 'CANCELADO').length;
   }, [scopedOrders]);
 
   // Filtered orders list for KDS
   const filteredOrders = useMemo(() => {
     return scopedOrders.filter(order => {
-      const isCancelled = order.orderStatus === 'CANCELADO';
+      const orderSt = normalizeOrderStatus(order);
+      const isCancelled = orderSt === 'CANCELADO';
 
       // Specific filter tabs
       if (selectedFilter === 'cancelados') {
@@ -1421,10 +1448,10 @@ export function AdminDashboard({
       }
 
       if (selectedFilter === 'atrasados' && !isOrderDelayed(order)) return false;
-      if (selectedFilter === 'pendentes' && order.orderStatus !== 'RECEBIDO_COZINHA') return false;
-      if (selectedFilter === 'preparo' && order.orderStatus !== 'EM_PREPARO') return false;
-      if (selectedFilter === 'entrega' && order.orderStatus !== 'SAIU_ENTREGA') return false;
-      if (selectedFilter === 'concluidos' && order.orderStatus !== 'CONCLUIDO') return false;
+      if (selectedFilter === 'pendentes' && orderSt !== 'RECEBIDO_COZINHA') return false;
+      if (selectedFilter === 'preparo' && orderSt !== 'EM_PREPARO') return false;
+      if (selectedFilter === 'entrega' && orderSt !== 'SAIU_ENTREGA') return false;
+      if (selectedFilter === 'concluidos' && orderSt !== 'CONCLUIDO') return false;
       if (selectedFilter === 'nao_pagos' && (order.paymentStatus === 'PAGO_APROVADO' || isCancelled)) return false;
 
       // Search query
@@ -1577,6 +1604,51 @@ export function AdminDashboard({
     setWhatsappModalData(null);
   };
 
+  // Update order status with automatic tab switching and WhatsApp notification
+  const handleUpdateStatusAndTab = (order, newStatus, customReason = '') => {
+    if (!order || !newStatus) return;
+
+    // 1. Update order status in app state / DB
+    onUpdateOrderStatus(order.orderId, newStatus);
+
+    // 2. Dispatch WhatsApp notification
+    let notifyType = newStatus;
+    if (newStatus === 'CONCLUIDO' && order.deliveryType === 'balcao') {
+      notifyType = 'PRONTO_BALCAO';
+    }
+    handleTriggerCustomerWhatsApp(order, notifyType, customReason);
+
+    // 3. Highlight this specific order card
+    setHighlightedOrderId(order.orderId);
+    if (highlightTimeoutRef.current) clearTimeout(highlightTimeoutRef.current);
+    highlightTimeoutRef.current = setTimeout(() => {
+      setHighlightedOrderId(null);
+    }, 2800);
+
+    // 4. Automatically switch to the destination tab if enabled
+    const STATUS_MAP = {
+      RECEBIDO_COZINHA: { tab: 'pendentes', label: 'Pendentes' },
+      EM_PREPARO: { tab: 'preparo', label: 'No Forno' },
+      SAIU_ENTREGA: { tab: 'entrega', label: 'Saiu p/ Entrega' },
+      CONCLUIDO: { tab: 'concluidos', label: 'Prontos / Entregues' },
+      CANCELADO: { tab: 'cancelados', label: 'Cancelados' }
+    };
+
+    const targetInfo = STATUS_MAP[newStatus];
+    if (autoFollowTab && targetInfo) {
+      setSelectedFilter(targetInfo.tab);
+      setStatusChangeToast({
+        orderId: order.orderId,
+        newStatus,
+        tabLabel: targetInfo.label
+      });
+      if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+      toastTimeoutRef.current = setTimeout(() => {
+        setStatusChangeToast(null);
+      }, 3500);
+    }
+  };
+
   // Cancel / Delete Order Execution
   const handleConfirmCancel = () => {
     if (!cancelModalOrder) return;
@@ -1587,6 +1659,26 @@ export function AdminDashboard({
       onUpdateOrderStatus(cancelModalOrder.orderId, 'CANCELADO');
     }
     handleTriggerCustomerWhatsApp(orderToCancel, 'CANCELADO', cancelReason);
+
+    if (autoFollowTab) {
+      setSelectedFilter('cancelados');
+      setHighlightedOrderId(cancelModalOrder.orderId);
+      if (highlightTimeoutRef.current) clearTimeout(highlightTimeoutRef.current);
+      highlightTimeoutRef.current = setTimeout(() => {
+        setHighlightedOrderId(null);
+      }, 2800);
+
+      setStatusChangeToast({
+        orderId: cancelModalOrder.orderId,
+        newStatus: 'CANCELADO',
+        tabLabel: 'Cancelados'
+      });
+      if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+      toastTimeoutRef.current = setTimeout(() => {
+        setStatusChangeToast(null);
+      }, 3500);
+    }
+
     setCancelModalOrder(null);
     setCancelReason('');
   };
@@ -2354,16 +2446,32 @@ export function AdminDashboard({
                   </button>
                 </div>
 
-                {/* Search input */}
-                <div className="relative w-full sm:w-64">
-                  <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                  <input
-                    type="text"
-                    placeholder="Buscar por Nº, Nome ou Bairro..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-dark-950 border border-dark-750 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-brand-gold"
-                  />
+                {/* Right controls: Auto-Aba Toggle & Search input */}
+                <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                  <button
+                    type="button"
+                    onClick={toggleAutoFollowTab}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 border ${
+                      autoFollowTab 
+                        ? 'bg-brand-gold/15 text-brand-gold border-brand-gold/40 hover:bg-brand-gold/25' 
+                        : 'bg-dark-850 text-slate-400 border-dark-750 hover:bg-dark-800'
+                    }`}
+                    title="Quando ativado, a tela abre automaticamente a aba do novo status do pedido sempre que você avançar ou mudar seu status"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${autoFollowTab ? 'text-brand-gold' : 'text-slate-400'}`} />
+                    <span>Auto-Mudar Aba: <strong>{autoFollowTab ? 'ATIVO' : 'OFF'}</strong></span>
+                  </button>
+
+                  <div className="relative w-full sm:w-60">
+                    <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type="text"
+                      placeholder="Buscar por Nº, Nome ou Bairro..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-dark-950 border border-dark-750 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-brand-gold"
+                    />
+                  </div>
                 </div>
 
               </div>
@@ -2371,6 +2479,25 @@ export function AdminDashboard({
 
             {/* Orders Feed */}
             <div className="space-y-4">
+
+              {/* Status Change Toast Banner */}
+              {statusChangeToast && (
+                <div className="p-3 rounded-2xl bg-brand-gold/15 border border-brand-gold/40 text-brand-gold text-xs font-bold flex items-center justify-between gap-3 animate-fade-in shadow-lg">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-brand-gold animate-bounce" />
+                    <span>
+                      Pedido <strong>#{statusChangeToast.orderId}</strong> movido para a aba <strong>{statusChangeToast.tabLabel}</strong>!
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setStatusChangeToast(null)}
+                    className="text-slate-400 hover:text-white p-1 rounded-lg cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
               <div className="flex items-center justify-between text-xs text-slate-400 px-1">
                 <span>Mostrando <strong>{filteredOrders.length}</strong> pedidos</span>
                 <div className="flex items-center gap-3">
@@ -2414,18 +2541,22 @@ export function AdminDashboard({
                   {filteredOrders.map((order) => {
                     const elapsedMin = getElapsedMinutes(order.createdAt);
                     const isDelayed = isOrderDelayed(order);
-                    const isCancelled = order.orderStatus === 'CANCELADO';
+                    const currentStatus = normalizeOrderStatus(order);
+                    const isCancelled = currentStatus === 'CANCELADO';
                     const isPaid = order.paymentStatus === 'PAGO_APROVADO';
+                    const isHighlighted = highlightedOrderId === order.orderId;
 
                     return (
                       <div
                         key={order.orderId}
-                        className={`rounded-2xl border p-4 sm:p-5 flex flex-col justify-between transition-all shadow-md ${
-                          isCancelled
+                        className={`rounded-2xl border p-4 sm:p-5 flex flex-col justify-between transition-all duration-300 shadow-md ${
+                          isHighlighted
+                            ? 'bg-brand-gold/15 border-brand-gold ring-2 ring-brand-gold shadow-glow-gold scale-[1.01]'
+                            : isCancelled
                             ? 'bg-red-950/15 border-red-900/50 opacity-80'
                             : isDelayed
                             ? 'bg-red-950/20 border-red-500/60 ring-1 ring-red-500/40'
-                            : order.orderStatus === 'CONCLUIDO'
+                            : currentStatus === 'CONCLUIDO'
                             ? 'bg-dark-900/60 border-dark-800 opacity-75'
                             : 'bg-dark-900 border-dark-800 hover:border-brand-gold/50'
                         }`}
@@ -2438,6 +2569,46 @@ export function AdminDashboard({
                                 <span className="font-display font-black text-lg text-white">
                                   #{order.orderId}
                                 </span>
+
+                                {/* Status Selector Pill in Header */}
+                                {!isCancelled ? (
+                                  <div className="relative inline-flex items-center">
+                                    <select
+                                      value={currentStatus}
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        if (val === 'CANCELADO') {
+                                          setCancelModalOrder(order);
+                                          setCancelReason('');
+                                        } else {
+                                          handleUpdateStatusAndTab(order, val);
+                                        }
+                                      }}
+                                      className={`text-[10px] font-black rounded-lg px-2 py-0.5 border cursor-pointer transition-all focus:outline-none focus:ring-1 ${
+                                        currentStatus === 'RECEBIDO_COZINHA'
+                                          ? 'bg-amber-500/20 border-amber-500/40 text-amber-300 hover:bg-amber-500/30'
+                                          : currentStatus === 'EM_PREPARO'
+                                          ? 'bg-brand-gold/25 border-brand-gold/50 text-brand-gold hover:bg-brand-gold/35'
+                                          : currentStatus === 'SAIU_ENTREGA'
+                                          ? 'bg-blue-500/20 border-blue-500/40 text-blue-300 hover:bg-blue-500/30'
+                                          : 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/30'
+                                      }`}
+                                      title="Alterar status deste pedido e mover para a aba correspondente"
+                                    >
+                                      <option value="RECEBIDO_COZINHA" className="bg-dark-950 text-amber-300">🟡 Na Fila (Pendente)</option>
+                                      <option value="EM_PREPARO" className="bg-dark-950 text-brand-gold">🔥 No Forno (Preparo)</option>
+                                      {order.deliveryType === 'balcao' ? (
+                                        <option value="CONCLUIDO" className="bg-dark-950 text-emerald-300">📦 Pronto no Balcão</option>
+                                      ) : (
+                                        <>
+                                          <option value="SAIU_ENTREGA" className="bg-dark-950 text-blue-300">🛵 Saiu p/ Entrega</option>
+                                          <option value="CONCLUIDO" className="bg-dark-950 text-emerald-300">✅ Entregue (Finalizado)</option>
+                                        </>
+                                      )}
+                                      <option value="CANCELADO" className="bg-dark-950 text-red-400">❌ Cancelar Pedido...</option>
+                                    </select>
+                                  </div>
+                                ) : null}
 
                                 {/* Cancelled badge */}
                                 {isCancelled && (
@@ -2528,6 +2699,112 @@ export function AdminDashboard({
                             )}
                           </div>
 
+                          {/* Interactive Status Flow Stepper / Pipeline */}
+                          {!isCancelled ? (
+                            <div className="bg-dark-950/90 p-2 sm:p-2.5 rounded-xl border border-dark-850 my-2 space-y-1.5">
+                              <div className="flex items-center justify-between text-[10px] font-bold text-slate-400 px-0.5">
+                                <span className="flex items-center gap-1 text-slate-300">
+                                  <Sliders className="w-3 h-3 text-brand-gold" />
+                                  <span>FLUXO DO PEDIDO (CLIQUE P/ MUDAR):</span>
+                                </span>
+                                <span className="text-[10px] text-brand-goldLight font-bold">
+                                  {currentStatus === 'RECEBIDO_COZINHA' && '🟡 1. Na Fila'}
+                                  {currentStatus === 'EM_PREPARO' && '🔥 2. No Forno'}
+                                  {currentStatus === 'SAIU_ENTREGA' && '🛵 3. Em Rota'}
+                                  {currentStatus === 'CONCLUIDO' && (order.deliveryType === 'balcao' ? '📦 3. No Balcão' : '✅ 4. Concluído')}
+                                </span>
+                              </div>
+
+                              <div className="grid grid-cols-4 gap-1 sm:gap-1.5">
+                                {/* 1. Pendente */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateStatusAndTab(order, 'RECEBIDO_COZINHA')}
+                                  className={`py-1.5 px-1 rounded-lg text-[11px] font-bold flex flex-col sm:flex-row items-center justify-center gap-1 transition-all cursor-pointer ${
+                                    currentStatus === 'RECEBIDO_COZINHA'
+                                      ? 'bg-amber-500 text-dark-950 font-black shadow-sm ring-1 ring-amber-400 scale-[1.02]'
+                                      : 'bg-dark-900 hover:bg-dark-850 text-slate-400 hover:text-amber-300 border border-dark-800'
+                                  }`}
+                                  title="Mover de volta para Pendente (Fila)"
+                                >
+                                  <Clock className="w-3 h-3 flex-shrink-0" />
+                                  <span className="truncate">1. Pendente</span>
+                                </button>
+
+                                {/* 2. No Forno */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateStatusAndTab(order, 'EM_PREPARO')}
+                                  className={`py-1.5 px-1 rounded-lg text-[11px] font-bold flex flex-col sm:flex-row items-center justify-center gap-1 transition-all cursor-pointer ${
+                                    currentStatus === 'EM_PREPARO'
+                                      ? 'bg-brand-gold text-dark-950 font-black shadow-sm ring-1 ring-amber-300 scale-[1.02]'
+                                      : 'bg-dark-900 hover:bg-dark-850 text-slate-400 hover:text-brand-gold border border-dark-800'
+                                  }`}
+                                  title="Mover para No Forno (Em Preparo)"
+                                >
+                                  <Flame className="w-3 h-3 flex-shrink-0" />
+                                  <span className="truncate">2. No Forno</span>
+                                </button>
+
+                                {/* 3. Saiu Entrega / Balcão */}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (order.deliveryType === 'balcao') {
+                                      handleUpdateStatusAndTab(order, 'CONCLUIDO');
+                                    } else {
+                                      handleUpdateStatusAndTab(order, 'SAIU_ENTREGA');
+                                    }
+                                  }}
+                                  className={`py-1.5 px-1 rounded-lg text-[11px] font-bold flex flex-col sm:flex-row items-center justify-center gap-1 transition-all cursor-pointer ${
+                                    currentStatus === 'SAIU_ENTREGA' || (order.deliveryType === 'balcao' && currentStatus === 'CONCLUIDO')
+                                      ? 'bg-blue-500 text-white font-black shadow-sm ring-1 ring-blue-400 scale-[1.02]'
+                                      : 'bg-dark-900 hover:bg-dark-850 text-slate-400 hover:text-blue-300 border border-dark-800'
+                                  }`}
+                                  title={order.deliveryType === 'balcao' ? 'Marcar Pronto no Balcão' : 'Mover para Saiu para Entrega'}
+                                >
+                                  {order.deliveryType === 'balcao' ? (
+                                    <Store className="w-3 h-3 flex-shrink-0" />
+                                  ) : (
+                                    <Bike className="w-3 h-3 flex-shrink-0" />
+                                  )}
+                                  <span className="truncate">{order.deliveryType === 'balcao' ? '3. Balcão' : '3. Entrega'}</span>
+                                </button>
+
+                                {/* 4. Concluído */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateStatusAndTab(order, 'CONCLUIDO')}
+                                  className={`py-1.5 px-1 rounded-lg text-[11px] font-bold flex flex-col sm:flex-row items-center justify-center gap-1 transition-all cursor-pointer ${
+                                    currentStatus === 'CONCLUIDO'
+                                      ? 'bg-emerald-500 text-dark-950 font-black shadow-sm ring-1 ring-emerald-400 scale-[1.02]'
+                                      : 'bg-dark-900 hover:bg-dark-850 text-slate-400 hover:text-emerald-300 border border-dark-800'
+                                  }`}
+                                  title="Marcar como Concluído / Finalizado"
+                                >
+                                  <CheckCircle2 className="w-3 h-3 flex-shrink-0" />
+                                  <span className="truncate">4. Concluído</span>
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="bg-red-950/40 p-2.5 rounded-xl border border-red-500/40 my-2 flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-2 text-red-400 text-xs font-bold">
+                                <XCircle className="w-4 h-4 flex-shrink-0" />
+                                <span>Pedido Cancelado: {order.cancelReason || 'Sem motivo'}</span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateStatusAndTab(order, 'RECEBIDO_COZINHA')}
+                                className="px-2.5 py-1 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-white text-[11px] font-bold border border-red-400/40 cursor-pointer flex items-center gap-1 transition-colors"
+                                title="Reativar pedido cancelado e mover de volta para a fila da cozinha"
+                              >
+                                <RotateCcw className="w-3 h-3" />
+                                <span>Reativar Pedido</span>
+                              </button>
+                            </div>
+                          )}
+
                           {/* Items List (Kitchen preparation list) */}
                           <div className="bg-dark-950 p-3 rounded-xl border border-dark-850 space-y-2 mt-1">
                             <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
@@ -2608,12 +2885,41 @@ export function AdminDashboard({
                           {/* Right: Status Flow & Cancel Button */}
                           <div className="flex items-center gap-1.5 flex-wrap">
                             
-                            {!isCancelled && order.orderStatus === 'RECEBIDO_COZINHA' && (
+                            {/* Direct Dropdown Status Selector */}
+                            {!isCancelled && (
+                              <div className="relative inline-flex items-center">
+                                <select
+                                  value={currentStatus}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    if (val === 'CANCELADO') {
+                                      setCancelModalOrder(order);
+                                      setCancelReason('');
+                                    } else {
+                                      handleUpdateStatusAndTab(order, val);
+                                    }
+                                  }}
+                                  className="px-2.5 py-1.5 rounded-xl bg-dark-800 hover:bg-dark-750 text-slate-200 border border-dark-700 text-xs font-bold cursor-pointer transition-colors focus:outline-none focus:border-brand-gold"
+                                  title="Alterar status do pedido diretamente"
+                                >
+                                  <option value="RECEBIDO_COZINHA">🟡 1. Mover p/ Pendente</option>
+                                  <option value="EM_PREPARO">🔥 2. Mover p/ No Forno</option>
+                                  {order.deliveryType === 'balcao' ? (
+                                    <option value="CONCLUIDO">📦 3. Mover p/ Pronto Balcão</option>
+                                  ) : (
+                                    <>
+                                      <option value="SAIU_ENTREGA">🛵 3. Mover p/ Saiu Entrega</option>
+                                      <option value="CONCLUIDO">✅ 4. Mover p/ Entregue</option>
+                                    </>
+                                  )}
+                                  <option value="CANCELADO">❌ Cancelar Pedido...</option>
+                                </select>
+                              </div>
+                            )}
+
+                            {!isCancelled && currentStatus === 'RECEBIDO_COZINHA' && (
                               <button
-                                onClick={() => {
-                                  onUpdateOrderStatus(order.orderId, 'EM_PREPARO');
-                                  handleTriggerCustomerWhatsApp(order, 'EM_PREPARO');
-                                }}
+                                onClick={() => handleUpdateStatusAndTab(order, 'EM_PREPARO')}
                                 className="px-3 py-1.5 rounded-xl bg-brand-gold hover:bg-amber-400 text-dark-950 font-bold text-xs flex items-center gap-1 shadow-glow-gold transition-all cursor-pointer"
                               >
                                 <Flame className="w-3.5 h-3.5" />
@@ -2621,15 +2927,13 @@ export function AdminDashboard({
                               </button>
                             )}
 
-                            {!isCancelled && order.orderStatus === 'EM_PREPARO' && (
+                            {!isCancelled && currentStatus === 'EM_PREPARO' && (
                               <button
                                 onClick={() => {
                                   if (order.deliveryType === 'balcao') {
-                                    onUpdateOrderStatus(order.orderId, 'CONCLUIDO');
-                                    handleTriggerCustomerWhatsApp(order, 'PRONTO_BALCAO');
+                                    handleUpdateStatusAndTab(order, 'CONCLUIDO');
                                   } else {
-                                    onUpdateOrderStatus(order.orderId, 'SAIU_ENTREGA');
-                                    handleTriggerCustomerWhatsApp(order, 'SAIU_ENTREGA');
+                                    handleUpdateStatusAndTab(order, 'SAIU_ENTREGA');
                                   }
                                 }}
                                 className="px-3 py-1.5 rounded-xl bg-blue-500 hover:bg-blue-400 text-white font-bold text-xs flex items-center gap-1 shadow-md transition-all cursor-pointer"
@@ -2648,12 +2952,9 @@ export function AdminDashboard({
                               </button>
                             )}
 
-                            {!isCancelled && order.orderStatus === 'SAIU_ENTREGA' && (
+                            {!isCancelled && currentStatus === 'SAIU_ENTREGA' && (
                               <button
-                                onClick={() => {
-                                  onUpdateOrderStatus(order.orderId, 'CONCLUIDO');
-                                  handleTriggerCustomerWhatsApp(order, 'CONCLUIDO');
-                                }}
+                                onClick={() => handleUpdateStatusAndTab(order, 'CONCLUIDO')}
                                 className="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-dark-950 font-bold text-xs flex items-center gap-1 shadow-md transition-all cursor-pointer"
                               >
                                 <CheckCircle2 className="w-3.5 h-3.5" />
@@ -2661,11 +2962,21 @@ export function AdminDashboard({
                               </button>
                             )}
 
-                            {!isCancelled && order.orderStatus === 'CONCLUIDO' && (
-                              <span className="text-xs font-bold text-emerald-400 flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500/10">
-                                <Check className="w-3.5 h-3.5 stroke-[3]" />
-                                <span>Concluído</span>
-                              </span>
+                            {!isCancelled && currentStatus === 'CONCLUIDO' && (
+                              <div className="flex items-center gap-1">
+                                <span className="text-xs font-bold text-emerald-400 flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500/10">
+                                  <Check className="w-3.5 h-3.5 stroke-[3]" />
+                                  <span>Concluído</span>
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateStatusAndTab(order, 'EM_PREPARO')}
+                                  className="text-[11px] text-slate-400 hover:text-brand-gold underline px-1 py-0.5 cursor-pointer"
+                                  title="Reabrir pedido e voltar para No Forno se precisar refazer"
+                                >
+                                  Reabrir
+                                </button>
+                              </div>
                             )}
 
                             {/* CANCEL / DELETE BUTTON */}

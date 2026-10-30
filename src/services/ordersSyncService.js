@@ -14,8 +14,26 @@ const localChannel = typeof window !== 'undefined' && window.BroadcastChannel
   ? new window.BroadcastChannel('el_shadday_orders_channel') 
   : null;
 
+/**
+ * Standardize order status across all layers
+ */
+export function normalizeOrderStatus(orderOrStatus) {
+  if (!orderOrStatus) return 'RECEBIDO_COZINHA';
+  const raw = typeof orderOrStatus === 'string'
+    ? orderOrStatus
+    : (orderOrStatus.orderStatus || orderOrStatus.status || orderOrStatus.order_status || '');
+  const s = String(raw).toUpperCase().trim();
+
+  if (s === 'CANCELADO' || s === 'CANCELED' || s === 'CANCELLED') return 'CANCELADO';
+  if (s === 'CONCLUIDO' || s === 'CONCLUÍDO' || s === 'FINALIZADO' || s === 'ENTREGUE' || s === 'PRONTO' || s === 'DONE' || s === 'COMPLETED') return 'CONCLUIDO';
+  if (s === 'SAIU_ENTREGA' || s === 'ENTREGA' || s === 'EM_ENTREGA' || s === 'DESPACHADO' || s === 'DELIVERY' || s === 'ROTA') return 'SAIU_ENTREGA';
+  if (s === 'EM_PREPARO' || s === 'PREPARO' || s === 'NO_FORNO' || s === 'FORNO' || s === 'PREPARING') return 'EM_PREPARO';
+  return 'RECEBIDO_COZINHA';
+}
+
 function mapSupabaseRowToOrder(row) {
   if (!row) return null;
+  const normalized = normalizeOrderStatus(row.status || row.order_status);
   return {
     orderId: row.id,
     branchId: row.branch_id || 'ariquemes',
@@ -23,13 +41,16 @@ function mapSupabaseRowToOrder(row) {
     customerName: row.customer_name,
     customerPhone: row.customer_phone,
     deliveryAddress: row.delivery_address,
+    deliveryType: row.delivery_type || (row.delivery_address?.isPickup ? 'balcao' : (row.district === 'Balcão' ? 'balcao' : 'delivery')),
     items: row.items || [],
     subtotal: Number(row.subtotal || 0),
     deliveryFee: Number(row.delivery_fee || 0),
     total: Number(row.total || 0),
     paymentMethod: row.payment_method,
+    paymentStatus: row.payment_status || (row.payment_method && row.payment_method.toLowerCase().includes('pix') ? 'PAGO_APROVADO' : 'PENDENTE_COBRANCA'),
     changeFor: row.change_for,
-    status: row.status,
+    status: normalized,
+    orderStatus: normalized,
     notes: row.notes,
     createdAt: row.created_at,
     updatedAt: row.updated_at
@@ -63,7 +84,7 @@ export async function dispatchOrderToKitchen(orderData) {
         total: orderData.total || 0,
         payment_method: orderData.paymentMethod || '',
         change_for: orderData.changeFor || null,
-        status: orderData.status || 'RECEBIDO',
+        status: normalizeOrderStatus(orderData.orderStatus || orderData.status),
         notes: orderData.notes || '',
         created_at: orderData.createdAt || new Date().toISOString(),
         updated_at: new Date().toISOString()
@@ -80,7 +101,11 @@ export async function dispatchOrderToKitchen(orderData) {
 
   // 3. Publish to Cloud Pub/Sub (Cross-device Internet Sync fallback)
   try {
-    const payload = JSON.stringify(orderData);
+    const payload = JSON.stringify({
+      ...orderData,
+      status: normalizeOrderStatus(orderData.orderStatus || orderData.status),
+      orderStatus: normalizeOrderStatus(orderData.orderStatus || orderData.status)
+    });
     await fetch(NTFY_BASE_URL, {
       method: 'POST',
       headers: {
@@ -102,7 +127,11 @@ export async function dispatchOrderToKitchen(orderData) {
     await fetch('/api/orders', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(orderData),
+      body: JSON.stringify({
+        ...orderData,
+        status: normalizeOrderStatus(orderData.orderStatus || orderData.status),
+        orderStatus: normalizeOrderStatus(orderData.orderStatus || orderData.status)
+      }),
       keepalive: true
     });
   } catch (err) {
@@ -114,10 +143,19 @@ export async function dispatchOrderToKitchen(orderData) {
  * Broadcast an order status update (e.g. EM_PREPARO, CONCLUIDO)
  */
 export async function dispatchOrderUpdateToKitchen(orderId, updates) {
+  const normStatus = updates.orderStatus || updates.status 
+    ? normalizeOrderStatus(updates.orderStatus || updates.status) 
+    : undefined;
+
+  const enrichedUpdates = {
+    ...updates,
+    ...(normStatus ? { orderStatus: normStatus, status: normStatus } : {})
+  };
+
   const updatePayload = {
     type: 'ORDER_UPDATE',
     orderId,
-    updates,
+    updates: enrichedUpdates,
     updatedAt: new Date().toISOString()
   };
 
@@ -134,11 +172,12 @@ export async function dispatchOrderUpdateToKitchen(orderId, updates) {
       const updateData = {
         updated_at: new Date().toISOString()
       };
-      if (updates.status) updateData.status = updates.status;
+      if (normStatus) updateData.status = normStatus;
       if (updates.notes !== undefined) updateData.notes = updates.notes;
+      if (updates.paymentStatus) updateData.payment_status = updates.paymentStatus;
 
       await supabase.from('orders').update(updateData).eq('id', orderId);
-      console.log('✅ Status atualizado no Supabase:', orderId, updates);
+      console.log('✅ Status atualizado no Supabase:', orderId, enrichedUpdates);
     } catch (err) {
       console.warn('⚠️ Erro ao atualizar status no Supabase:', err);
     }
@@ -334,8 +373,10 @@ export function subscribeToKitchenEvents({ onNewOrder, onOrderUpdate, onOrderDel
           (payload) => {
             if (isCleanedUp || !payload.new) return;
             if (onOrderUpdate) {
+              const normStatus = normalizeOrderStatus(payload.new.status);
               onOrderUpdate(payload.new.id, {
-                status: payload.new.status,
+                status: normStatus,
+                orderStatus: normStatus,
                 notes: payload.new.notes,
                 updatedAt: payload.new.updated_at
               });
