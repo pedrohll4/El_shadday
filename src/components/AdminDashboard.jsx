@@ -1470,63 +1470,197 @@ export function AdminDashboard({
     });
   }, [scopedOrders, selectedFilter, searchQuery, now]);
 
-  // Print ticket helper
+  // Print ticket helper (imprime comanda térmica compacta sem abrir nova guia no navegador)
   const handlePrintOrder = (order) => {
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
+    if (!order) return;
 
-    printWindow.document.write(`
+    // Remove qualquer iframe de impressão anterior se houver
+    const oldIframe = document.getElementById('comanda-print-frame');
+    if (oldIframe) {
+      try { oldIframe.remove(); } catch (e) {}
+    }
+
+    const iframe = document.createElement('iframe');
+    iframe.id = 'comanda-print-frame';
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    iframe.style.visibility = 'hidden';
+    document.body.appendChild(iframe);
+
+    // Resolução segura de endereço e dados (sem jamais exibir "undefined")
+    const customerName = order.customerName || order.customer_name || 'Cliente';
+    const customerPhone = order.customerPhone || order.customer_phone || '';
+    const isBalcao = order.deliveryType === 'balcao' || order.deliveryType === 'retirada' || order.district === 'Balcão';
+    const address = order.deliveryAddress?.address || order.address || '';
+    const number = order.deliveryAddress?.number || order.number || '';
+    const district = order.deliveryAddress?.district || order.district || '';
+    const complement = order.deliveryAddress?.complement || order.complement || '';
+    const reference = order.deliveryAddress?.reference || order.reference || '';
+    const orderNotes = order.notes || '';
+    const formattedDate = order.createdAt ? new Date(order.createdAt).toLocaleString('pt-BR') : new Date().toLocaleString('pt-BR');
+    const paymentMethod = order.paymentMethod || 'A Definir';
+    const isPaid = order.paymentStatus === 'PAGO_APROVADO';
+
+    const branch = branchesList.find(b => b.id === (order.branchId || currentBranch?.id)) || currentBranch;
+    const branchName = branch?.displayName || branch?.name || 'EL SHADDAY DELIVERY';
+    const branchPhone = branch?.phoneFormatted || branch?.whatsappFormatted || '(69) 99222-8682';
+
+    const htmlContent = `
+      <!DOCTYPE html>
       <html>
         <head>
+          <meta charset="utf-8" />
           <title>Comanda #${order.orderId} - El Shadday</title>
           <style>
-            body { font-family: monospace; font-size: 13px; max-width: 320px; padding: 10px; margin: 0 auto; }
-            h2, h3 { text-align: center; margin: 5px 0; }
-            hr { border: none; border-top: 1px dashed #000; margin: 10px 0; }
-            .item { margin-bottom: 8px; }
-            .bold { font-weight: bold; }
+            @page {
+              size: auto;
+              margin: 0mm;
+            }
+            * {
+              box-sizing: border-box;
+              margin: 0;
+              padding: 0;
+            }
+            body {
+              font-family: 'Courier New', Courier, monospace;
+              font-size: 11px;
+              line-height: 1.25;
+              color: #000;
+              background: #fff;
+              width: 100%;
+              max-width: 280px;
+              padding: 4mm 3mm;
+              margin: 0 auto;
+            }
+            .center { text-align: center; }
             .right { text-align: right; }
+            .bold { font-weight: bold; }
+            .title { font-size: 13px; letter-spacing: -0.3px; margin-bottom: 2px; }
+            .comanda-id { font-size: 14px; margin: 2px 0; }
+            .divider { border-top: 1px dashed #000; margin: 5px 0; }
+            .item-row { margin-bottom: 4px; }
+            .item-header { display: flex; justify-content: space-between; font-weight: bold; font-size: 11.5px; }
+            .item-sub { padding-left: 8px; font-size: 10px; color: #111; }
+            .total-row { display: flex; justify-content: space-between; font-size: 13.5px; font-weight: bold; margin: 3px 0; }
+            .info-row { margin: 2px 0; font-size: 11px; }
+            .cancel-badge { color: red; font-weight: bold; font-size: 13px; text-align: center; padding: 2px 0; }
+            .obs-box { border: 1px solid #000; padding: 3px; margin: 4px 0; font-weight: bold; font-size: 10.5px; }
           </style>
         </head>
         <body>
-          <h2>EL SHADDAY DELIVERY</h2>
-          <h3>COMANDA #${order.orderId}</h3>
-          <div>Data: ${new Date(order.createdAt).toLocaleString('pt-BR')}</div>
-          ${order.orderStatus === 'CANCELADO' ? '<div style="color:red;font-weight:bold;font-size:16px;text-align:center;">*** PEDIDO CANCELADO ***</div>' : ''}
-          <hr />
-          <div><span class="bold">Cliente:</span> ${order.customerName}</div>
-          ${order.customerPhone ? `<div><span class="bold">WhatsApp:</span> ${order.customerPhone}</div>` : ''}
-          <div><span class="bold">Tipo:</span> ${order.deliveryType === 'delivery' ? 'ENTREGA' : 'RETIRADA NO BALCÃO'}</div>
-          ${order.deliveryType === 'delivery' ? `
-            <div><span class="bold">Bairro:</span> ${order.district}</div>
-            <div><span class="bold">End:</span> ${order.address}${order.number ? `, Nº ${order.number}` : ''}</div>
-            ${order.reference ? `<div><span class="bold">Ref:</span> ${order.reference}</div>` : ''}
+          <div class="center bold title">${branchName.toUpperCase()}</div>
+          <div class="center bold comanda-id">*** COMANDA #${order.orderId} ***</div>
+          <div class="center" style="font-size: 10px;">Data: ${formattedDate}</div>
+
+          ${order.orderStatus === 'CANCELADO' ? '<div class="cancel-badge">*** PEDIDO CANCELADO ***</div>' : ''}
+
+          <div class="divider"></div>
+
+          <div class="info-row"><span class="bold">CLIENTE:</span> ${customerName}</div>
+          ${customerPhone ? `<div class="info-row"><span class="bold">WHATSAPP:</span> ${customerPhone}</div>` : ''}
+          <div class="info-row"><span class="bold">TIPO:</span> ${isBalcao ? 'RETIRADA NO BALCÃO' : 'ENTREGA EM DOMICÍLIO'}</div>
+
+          ${!isBalcao ? `
+            ${district ? `<div class="info-row"><span class="bold">BAIRRO:</span> ${district}</div>` : ''}
+            ${address ? `<div class="info-row"><span class="bold">END:</span> ${address}${number ? `, Nº ${number}` : ''}</div>` : ''}
+            ${complement ? `<div class="info-row"><span class="bold">COMPL:</span> ${complement}</div>` : ''}
+            ${reference ? `<div class="info-row"><span class="bold">REF:</span> ${reference}</div>` : ''}
+          ` : '<div class="info-row bold" style="background:#000;color:#fff;text-align:center;padding:1px;margin:2px 0;">RETIRADA NO LOCAL (BALCÃO)</div>'}
+
+          <div class="divider"></div>
+          <div class="bold" style="margin-bottom: 3px;">ITENS DO PEDIDO:</div>
+
+          ${(order.items || []).map(it => {
+            const itemTotal = Number(it.price || it.unitPrice || 0) * Number(it.quantity || 1);
+            let details = [];
+            if (it.pizzaSelections && it.pizzaSelections.length > 0) {
+              const sab = it.pizzaSelections.map(p => p.flavors?.join('/')).filter(Boolean).join(' + ');
+              if (sab) details.push(`Sabores: ${sab}`);
+            } else if (it.flavors && it.flavors.length > 0) {
+              details.push(`Sabores: ${it.flavors.join('/')}`);
+            }
+            if (it.salgadasDetails) {
+              const salg = Object.entries(it.salgadasDetails).map(([k,v]) => `${v}x ${k}`).join(', ');
+              if (salg) details.push(`Salgadas: ${salg}`);
+            }
+            if (it.docesDetails) {
+              const doc = Object.entries(it.docesDetails).map(([k,v]) => `${v}x ${k}`).join(', ');
+              if (doc) details.push(`Doces: ${doc}`);
+            }
+            if (it.notes) details.push(`Obs: ${it.notes}`);
+
+            return `
+              <div class="item-row">
+                <div class="item-header">
+                  <span>${it.quantity}x ${it.name}</span>
+                  ${itemTotal > 0 ? `<span>R$ ${itemTotal.toFixed(2)}</span>` : ''}
+                </div>
+                ${details.map(d => `<div class="item-sub">• ${d}</div>`).join('')}
+              </div>
+            `;
+          }).join('')}
+
+          ${orderNotes ? `
+            <div class="obs-box">OBS DO PEDIDO: ${orderNotes}</div>
           ` : ''}
-          <hr />
-          <div class="bold">ITENS DO PEDIDO:</div>
-          ${(order.items || []).map(it => `
-            <div class="item">
-              <div class="bold">${it.quantity}x ${it.name}</div>
-              ${it.isCustomBox && it.salgadasDetails ? `<div>- Salg: ${Object.entries(it.salgadasDetails).map(([k,v]) => `${v}x ${k}`).join(', ')}</div>` : ''}
-              ${it.isCustomBox && it.docesDetails ? `<div>- Doces: ${Object.entries(it.docesDetails).map(([k,v]) => `${v}x ${k}`).join(', ')}</div>` : ''}
-              ${it.notes ? `<div>- OBS: ${it.notes}</div>` : ''}
+
+          <div class="divider"></div>
+
+          <div style="display:flex; justify-content:space-between; margin:1px 0; font-size:11px;">
+            <span>Subtotal:</span>
+            <span>R$ ${Number(order.subtotal || 0).toFixed(2)}</span>
+          </div>
+          ${!isBalcao ? `
+            <div style="display:flex; justify-content:space-between; margin:1px 0; font-size:11px;">
+              <span>Taxa Entrega:</span>
+              <span>R$ ${Number(order.deliveryFee || 0).toFixed(2)}</span>
             </div>
-          `).join('')}
-          <hr />
-          <div>Subtotal: R$ ${(order.subtotal || 0).toFixed(2)}</div>
-          <div>Taxa Entrega: R$ ${(order.deliveryFee || 0).toFixed(2)}</div>
-          <div class="bold" style="font-size: 15px;">TOTAL: R$ ${(order.total || 0).toFixed(2)}</div>
-          <hr />
-          <div><span class="bold">Pagamento:</span> ${order.paymentMethod}</div>
-          <div><span class="bold">Status:</span> ${order.paymentStatus === 'PAGO_APROVADO' ? 'PAGO' : 'A RECEBER NA ENTREGA'}</div>
-          <hr />
-          <div style="text-align: center; font-size: 11px;">Ariquemes - RO • (69) 99222-8682</div>
+          ` : ''}
+          <div class="total-row">
+            <span>TOTAL:</span>
+            <span>R$ ${Number(order.total || 0).toFixed(2)}</span>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="info-row"><span class="bold">PAGAMENTO:</span> ${paymentMethod.toUpperCase()}</div>
+          <div class="info-row">
+            <span class="bold">STATUS:</span> 
+            ${isPaid ? 'PAGO (Pix / Cartão)' : '⚠️ COBRAR NA ENTREGA'}
+          </div>
+          ${order.changeFor && Number(order.changeFor) > Number(order.total || 0) ? `
+            <div class="info-row bold" style="background:#f4f4f4;padding:2px;">
+              TROCO PARA: R$ ${Number(order.changeFor).toFixed(2)} (Levar R$ ${(Number(order.changeFor) - Number(order.total || 0)).toFixed(2)})
+            </div>
+          ` : ''}
+
+          <div class="divider"></div>
+          <div class="center" style="font-size: 10px;">${branchPhone}</div>
+          <div class="center" style="font-size: 9px; margin-top: 2px;">Obrigado pela preferência!</div>
         </body>
       </html>
-    `);
-    printWindow.document.close();
-    printWindow.focus();
-    printWindow.print();
+    `;
+
+    const doc = iframe.contentWindow.document;
+    doc.open();
+    doc.write(htmlContent);
+    doc.close();
+
+    setTimeout(() => {
+      try {
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+      } catch (err) {
+        console.error('Erro ao imprimir via iframe:', err);
+      }
+      setTimeout(() => {
+        try { iframe.remove(); } catch (e) {}
+      }, 3000);
+    }, 150);
   };
 
   // Disparo automático de WhatsApp para o cliente da filial do pedido
