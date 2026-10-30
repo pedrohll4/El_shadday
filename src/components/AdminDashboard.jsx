@@ -69,6 +69,12 @@ import {
 } from '../services/whatsappNotificationService';
 import { isCloudBaileysActive, fetchEngineStatus } from '../services/whatsappBranchService';
 import { normalizeOrderStatus } from '../services/ordersSyncService';
+import { 
+  searchCustomers, 
+  recordCustomerFromOrder, 
+  backfillCustomersFromOrders, 
+  getAllCustomers 
+} from '../services/customerService';
 
 export function AdminDashboard({ 
   orders = [], 
@@ -241,6 +247,13 @@ export function AdminDashboard({
   const [pdvOrderNotes, setPdvOrderNotes] = useState('');
   const [pdvSuccessOrder, setPdvSuccessOrder] = useState(null);
   const [pdvValidationError, setPdvValidationError] = useState('');
+
+  // Customer Profile Autocomplete State (PDV)
+  const [customerSuggestions, setCustomerSuggestions] = useState([]);
+  const [isCustomerSuggestionsOpen, setIsCustomerSuggestionsOpen] = useState(false);
+  const [activeAutoCompletedCustomer, setActiveAutoCompletedCustomer] = useState(null);
+  const [isCustomerDirectoryOpen, setIsCustomerDirectoryOpen] = useState(false);
+  const [customerDirectorySearch, setCustomerDirectorySearch] = useState('');
 
   // Buffet Gallery Management States
   const [galleryList, setGalleryList] = useState(() => getStoredBuffetGallery());
@@ -1927,6 +1940,69 @@ export function AdminDashboard({
     });
   };
 
+  // Sincroniza histórico de clientes a partir dos pedidos
+  useEffect(() => {
+    if (Array.isArray(orders) && orders.length > 0) {
+      backfillCustomersFromOrders(orders);
+    }
+  }, [orders]);
+
+  // Handlers para Autocomplete de Cliente no PDV
+  const handleCustomerNameChange = (e) => {
+    const val = e.target.value;
+    setPdvCustomerName(val);
+    if (activeAutoCompletedCustomer && val !== activeAutoCompletedCustomer.name) {
+      setActiveAutoCompletedCustomer(null);
+    }
+    if (val.trim().length >= 2) {
+      const matches = searchCustomers(val);
+      setCustomerSuggestions(matches);
+      setIsCustomerSuggestionsOpen(matches.length > 0);
+    } else {
+      setCustomerSuggestions([]);
+      setIsCustomerSuggestionsOpen(false);
+    }
+  };
+
+  const handleCustomerPhoneChange = (e) => {
+    const val = e.target.value;
+    setPdvCustomerPhone(val);
+    if (activeAutoCompletedCustomer && val !== activeAutoCompletedCustomer.phone) {
+      setActiveAutoCompletedCustomer(null);
+    }
+    if (val.trim().length >= 2) {
+      const matches = searchCustomers(val);
+      setCustomerSuggestions(matches);
+      setIsCustomerSuggestionsOpen(matches.length > 0);
+    } else {
+      setCustomerSuggestions([]);
+      setIsCustomerSuggestionsOpen(false);
+    }
+  };
+
+  const handleSelectCustomer = (cust) => {
+    if (!cust) return;
+    setPdvCustomerName(cust.name || '');
+    setPdvCustomerPhone(cust.phoneFormatted || cust.phone || '');
+    if (cust.deliveryType === 'delivery') {
+      setPdvDeliveryType('delivery');
+      if (cust.district || cust.districtId) {
+        const found = ARIQUEMES_DISTRICTS.find(d => 
+          d.id === cust.districtId || 
+          d.name.toLowerCase() === (cust.district || '').toLowerCase()
+        );
+        if (found) setPdvDistrict(found);
+      }
+      setPdvAddress(cust.street || cust.address || '');
+      setPdvNumber(cust.number || '');
+      setPdvReference(cust.reference || '');
+    } else {
+      setPdvDeliveryType('balcao');
+    }
+    setActiveAutoCompletedCustomer(cust);
+    setIsCustomerSuggestionsOpen(false);
+  };
+
   const handleRemovePDVItem = (id) => {
     setPdvCart(prev => prev.filter(i => i.id !== id));
   };
@@ -1968,6 +2044,14 @@ export function AdminDashboard({
       customerName: pdvCustomerName.trim(),
       customerPhone: pdvCustomerPhone.trim(),
       deliveryType: pdvDeliveryType,
+      deliveryAddress: {
+        street: pdvDeliveryType === 'delivery' ? pdvAddress.trim() : 'Rua Maceió, 2333 - Setor 03, Ariquemes - RO',
+        address: pdvDeliveryType === 'delivery' ? pdvAddress.trim() : 'Rua Maceió, 2333 - Setor 03, Ariquemes - RO',
+        number: pdvDeliveryType === 'delivery' ? pdvNumber.trim() : '',
+        district: pdvDeliveryType === 'delivery' ? pdvDistrict.name : 'Balcão',
+        reference: pdvDeliveryType === 'delivery' ? pdvReference.trim() : '',
+        isPickup: pdvDeliveryType === 'balcao'
+      },
       district: pdvDeliveryType === 'delivery' ? pdvDistrict.name : 'Balcão (Setor 03)',
       address: pdvDeliveryType === 'delivery' ? pdvAddress.trim() : 'Rua Maceió, 2333 - Setor 03, Ariquemes - RO',
       number: pdvDeliveryType === 'delivery' ? pdvNumber.trim() : '',
@@ -1982,6 +2066,10 @@ export function AdminDashboard({
       source: 'PDV_BALCAO',
       orderNotes: pdvOrderNotes.trim()
     };
+
+    try {
+      recordCustomerFromOrder(newOrder);
+    } catch (e) {}
 
     if (onCreateKitchenOrder) {
       onCreateKitchenOrder(newOrder);
@@ -2003,6 +2091,8 @@ export function AdminDashboard({
     setPdvReference('');
     setPdvCashChange('');
     setPdvOrderNotes('');
+    setActiveAutoCompletedCustomer(null);
+    setIsCustomerSuggestionsOpen(false);
   };
 
   return (
@@ -3207,14 +3297,29 @@ export function AdminDashboard({
                 </p>
               </div>
 
-              {pdvCart.length > 0 && (
-                <div className="flex items-center gap-3 self-end sm:self-auto">
-                  <span className="text-xs text-slate-400">Total Atual:</span>
-                  <span className="text-lg font-black text-brand-gold">
-                    R$ {pdvCartTotal.toFixed(2).replace('.', ',')}
-                  </span>
-                </div>
-              )}
+              <div className="flex flex-wrap items-center gap-2 self-end sm:self-auto">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCustomerDirectoryOpen(true);
+                    setCustomerDirectorySearch('');
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-dark-950 hover:bg-dark-800 text-brand-gold border border-brand-gold/30 text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
+                  title="Ver clientes cadastrados a partir dos pedidos"
+                >
+                  <Users className="w-3.5 h-3.5" />
+                  <span>Cadastros ({getAllCustomers().length})</span>
+                </button>
+
+                {pdvCart.length > 0 && (
+                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-dark-950 border border-dark-800">
+                    <span className="text-xs text-slate-400">Total:</span>
+                    <span className="text-sm font-black text-brand-gold">
+                      R$ {pdvCartTotal.toFixed(2).replace('.', ',')}
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Validation Banner if any */}
@@ -3428,27 +3533,170 @@ export function AdminDashboard({
                       Dados do Cliente:
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-[10px] text-slate-400 block mb-0.5">Nome do Cliente *</label>
-                        <input
-                          type="text"
-                          placeholder="Ex: Carlos Oliveira"
-                          value={pdvCustomerName}
-                          onChange={(e) => setPdvCustomerName(e.target.value)}
-                          className="w-full px-3 py-1.5 rounded-xl bg-dark-950 border border-dark-750 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-brand-gold"
-                        />
+                    <div className="relative">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div className="relative">
+                          <div className="flex items-center justify-between mb-0.5">
+                            <label className="text-[10px] text-slate-400 block">Nome do Cliente *</label>
+                            <span className="text-[9px] text-brand-gold font-medium flex items-center gap-0.5">
+                              <Sparkles className="w-2.5 h-2.5" /> Auto-completar
+                            </span>
+                          </div>
+                          <div className="relative">
+                            <input
+                              type="text"
+                              placeholder="Digite o nome..."
+                              value={pdvCustomerName}
+                              onChange={handleCustomerNameChange}
+                              onFocus={() => {
+                                if (pdvCustomerName.trim().length >= 2) {
+                                  const matches = searchCustomers(pdvCustomerName);
+                                  setCustomerSuggestions(matches);
+                                  setIsCustomerSuggestionsOpen(matches.length > 0);
+                                }
+                              }}
+                              className="w-full px-3 py-1.5 rounded-xl bg-dark-950 border border-dark-750 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-brand-gold pr-7"
+                            />
+                            {pdvCustomerName && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setPdvCustomerName('');
+                                  setCustomerSuggestions([]);
+                                  setIsCustomerSuggestionsOpen(false);
+                                  setActiveAutoCompletedCustomer(null);
+                                }}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="relative">
+                          <div className="flex items-center justify-between mb-0.5">
+                            <label className="text-[10px] text-slate-400 block">WhatsApp / Celular</label>
+                            <span className="text-[9px] text-slate-500">Busca por número</span>
+                          </div>
+                          <div className="relative">
+                            <input
+                              type="text"
+                              placeholder="(69) 99999-9999"
+                              value={pdvCustomerPhone}
+                              onChange={handleCustomerPhoneChange}
+                              onFocus={() => {
+                                if (pdvCustomerPhone.trim().length >= 2) {
+                                  const matches = searchCustomers(pdvCustomerPhone);
+                                  setCustomerSuggestions(matches);
+                                  setIsCustomerSuggestionsOpen(matches.length > 0);
+                                }
+                              }}
+                              className="w-full px-3 py-1.5 rounded-xl bg-dark-950 border border-dark-750 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-brand-gold pr-7"
+                            />
+                            {pdvCustomerPhone && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setPdvCustomerPhone('');
+                                  setCustomerSuggestions([]);
+                                  setIsCustomerSuggestionsOpen(false);
+                                  setActiveAutoCompletedCustomer(null);
+                                }}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                      <div>
-                        <label className="text-[10px] text-slate-400 block mb-0.5">WhatsApp / Celular</label>
-                        <input
-                          type="text"
-                          placeholder="(69) 99999-9999"
-                          value={pdvCustomerPhone}
-                          onChange={(e) => setPdvCustomerPhone(e.target.value)}
-                          className="w-full px-3 py-1.5 rounded-xl bg-dark-950 border border-dark-750 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-brand-gold"
-                        />
-                      </div>
+
+                      {/* Dropdown de Sugestões de Clientes Cadastrados */}
+                      {isCustomerSuggestionsOpen && customerSuggestions.length > 0 && (
+                        <div className="relative z-50">
+                          <div 
+                            className="fixed inset-0" 
+                            onClick={() => setIsCustomerSuggestionsOpen(false)} 
+                          />
+                          <div className="absolute top-1 left-0 right-0 bg-dark-900 border border-brand-gold/50 rounded-xl shadow-2xl overflow-hidden z-50 divide-y divide-dark-800">
+                            <div className="p-2 bg-dark-950 flex items-center justify-between text-[11px] text-slate-400">
+                              <span className="font-bold text-white flex items-center gap-1.5">
+                                <Users className="w-3.5 h-3.5 text-brand-gold" />
+                                Clientes Encontrados ({customerSuggestions.length})
+                              </span>
+                              <span className="text-[10px] text-brand-gold">Clique para preencher tudo</span>
+                            </div>
+                            <div className="max-h-56 overflow-y-auto">
+                              {customerSuggestions.map((cust) => (
+                                <button
+                                  key={cust.id || cust.key}
+                                  type="button"
+                                  onClick={() => handleSelectCustomer(cust)}
+                                  className="w-full p-2.5 text-left hover:bg-brand-gold/10 transition-colors flex items-center justify-between gap-2 group cursor-pointer"
+                                >
+                                  <div className="flex items-center gap-2.5 min-w-0">
+                                    <div className="w-7 h-7 rounded-full bg-brand-gold/20 text-brand-gold font-black text-xs flex items-center justify-center shrink-0 border border-brand-gold/30">
+                                      {(cust.name || 'C').charAt(0).toUpperCase()}
+                                    </div>
+                                    <div className="min-w-0">
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="font-bold text-xs text-white group-hover:text-brand-gold transition-colors truncate">
+                                          {cust.name}
+                                        </span>
+                                        <span className="px-1.5 py-0.2 rounded-full bg-dark-800 text-brand-gold text-[9px] font-bold border border-brand-gold/20 shrink-0">
+                                          {cust.ordersCount || 1} {(cust.ordersCount || 1) === 1 ? 'pedido' : 'pedidos'}
+                                        </span>
+                                      </div>
+                                      <div className="text-[11px] text-slate-400 flex items-center gap-2 truncate">
+                                        {cust.phoneFormatted || cust.phone ? (
+                                          <span className="text-slate-300 font-mono text-[10px]">
+                                            {cust.phoneFormatted || cust.phone}
+                                          </span>
+                                        ) : null}
+                                        {(cust.street || cust.address) ? (
+                                          <span>• 📍 {cust.district || ''} - {cust.street || cust.address}{cust.number ? `, Nº ${cust.number}` : ''}</span>
+                                        ) : (
+                                          <span>• 🛍️ Preferência Balcão</span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <span className="inline-block px-2 py-0.5 rounded bg-brand-gold/20 text-brand-gold text-[10px] font-bold group-hover:bg-brand-gold group-hover:text-dark-950 transition-colors shrink-0">
+                                    Preencher ↵
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Badge de Cliente Vinculado */}
+                      {activeAutoCompletedCustomer && (
+                        <div className="mt-2 p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                            <span className="truncate">
+                              Perfil vinculado: <b>{activeAutoCompletedCustomer.name}</b> • {activeAutoCompletedCustomer.ordersCount || 1} pedidos anteriores
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveAutoCompletedCustomer(null);
+                              setPdvCustomerName('');
+                              setPdvCustomerPhone('');
+                              setPdvAddress('');
+                              setPdvNumber('');
+                              setPdvReference('');
+                            }}
+                            className="text-[10px] text-slate-400 hover:text-white underline shrink-0 cursor-pointer"
+                          >
+                            Limpar
+                          </button>
+                        </div>
+                      )}
                     </div>
 
                     {/* Delivery Type Selector */}
@@ -6683,6 +6931,119 @@ export function AdminDashboard({
             setPdvPizzaToCustomize(null);
           }}
         />
+      )}
+
+      {/* ============================================================== */}
+      {/* MODAL: DIRETÓRIO DE CLIENTES / HISTÓRICO                       */}
+      {/* ============================================================== */}
+      {isCustomerDirectoryOpen && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-dark-950/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 animate-fade-in">
+          <div className="relative w-full max-w-2xl bg-dark-900 border border-dark-800 rounded-3xl shadow-2xl p-5 space-y-4">
+            <div className="flex items-center justify-between border-b border-dark-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-brand-gold/20 text-brand-gold flex items-center justify-center border border-brand-gold/30">
+                  <Users className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-white">
+                    Perfis de Clientes Cadastrados
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    Gerados automaticamente através dos pedidos anteriores
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsCustomerDirectoryOpen(false)}
+                className="w-8 h-8 rounded-xl bg-dark-800 hover:bg-dark-750 text-slate-400 hover:text-white flex items-center justify-center cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Search */}
+            <div className="relative">
+              <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Buscar cliente por nome, telefone ou bairro..."
+                value={customerDirectorySearch}
+                onChange={(e) => setCustomerDirectorySearch(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 rounded-xl bg-dark-950 border border-dark-750 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-brand-gold"
+              />
+            </div>
+
+            {/* List */}
+            <div className="max-h-96 overflow-y-auto space-y-2 pr-1">
+              {(() => {
+                const list = customerDirectorySearch.trim().length >= 2 
+                  ? searchCustomers(customerDirectorySearch, 40) 
+                  : getAllCustomers();
+                
+                if (list.length === 0) {
+                  return (
+                    <div className="p-8 text-center text-slate-500 text-xs">
+                      Nenhum perfil de cliente encontrado.
+                    </div>
+                  );
+                }
+
+                return list.map((cust) => (
+                  <div
+                    key={cust.id || cust.key}
+                    className="p-3 rounded-2xl bg-dark-950 border border-dark-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 hover:border-dark-700 transition-colors"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-9 h-9 rounded-full bg-brand-gold/15 text-brand-gold font-black text-sm flex items-center justify-center shrink-0 border border-brand-gold/30">
+                        {(cust.name || 'C').charAt(0).toUpperCase()}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-sm text-white truncate">
+                            {cust.name}
+                          </span>
+                          <span className="px-2 py-0.5 rounded-full bg-brand-gold/15 text-brand-gold text-[10px] font-black border border-brand-gold/30 shrink-0">
+                            {cust.ordersCount || 1} {(cust.ordersCount || 1) === 1 ? 'pedido' : 'pedidos'}
+                          </span>
+                          {cust.totalSpent > 0 && (
+                            <span className="text-[10px] text-slate-400">
+                              (R$ {Number(cust.totalSpent).toFixed(2).replace('.', ',')})
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-slate-400 flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
+                          {cust.phoneFormatted || cust.phone ? (
+                            <span className="text-slate-300 font-mono">
+                              📱 {cust.phoneFormatted || cust.phone}
+                            </span>
+                          ) : null}
+                          {(cust.street || cust.address) ? (
+                            <span>📍 {cust.district ? `${cust.district} - ` : ''}{cust.street || cust.address}{cust.number ? `, Nº ${cust.number}` : ''}</span>
+                          ) : (
+                            <span>🛍️ Retirada Balcão</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleSelectCustomer(cust);
+                        setIsCustomerDirectoryOpen(false);
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-brand-gold hover:bg-brand-yellow text-dark-950 font-black text-xs flex items-center justify-center gap-1.5 transition-all shadow-md cursor-pointer shrink-0 self-end sm:self-auto"
+                    >
+                      <span>Lançar Pedido</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ));
+              })()}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* FLOATING WHATSAPP SENT NOTIFICATION TOAST */}

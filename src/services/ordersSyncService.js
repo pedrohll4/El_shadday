@@ -5,6 +5,7 @@
  */
 
 import { supabase, isSupabaseConfigured } from './supabaseClient';
+import { recordCustomerFromOrder } from './customerService';
 
 const SYNC_TOPIC = 'el-shadday-kds-ariquemes-v2';
 const NTFY_BASE_URL = `https://ntfy.sh/${SYNC_TOPIC}`;
@@ -399,6 +400,11 @@ export function subscribeToKitchenEvents({ onNewOrder, onOrderUpdate, onOrderDel
           (payload) => {
             if (isCleanedUp || !payload.new) return;
             const mapped = mapSupabaseRowToOrder(payload.new);
+            if (mapped) {
+              try {
+                recordCustomerFromOrder(mapped);
+              } catch (e) {}
+            }
             if (onNewOrder && mapped) onNewOrder(mapped);
           }
         )

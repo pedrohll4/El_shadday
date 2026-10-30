@@ -7,6 +7,7 @@ import {
 import { ARIQUEMES_DISTRICTS, RESTAURANT_INFO, getStoredRestaurantInfo, calculateCardMachineFee, getCardMachineNoticeText } from '../data/menuData';
 import { dispatchOrderToKitchen } from '../services/ordersSyncService';
 import { cleanPhoneNumber } from '../services/whatsappNotificationService';
+import { recordCustomerFromOrder } from '../services/customerService';
 
 export function DeliveryCartDrawer({ 
   isOpen, 
@@ -234,6 +235,7 @@ Pedido gerado via Cardápio Digital El Shadday.`;
 
     // Save order in local history
     try {
+      recordCustomerFromOrder(orderData);
       const history = JSON.parse(localStorage.getItem('el_shadday_orders_history') || '[]');
       localStorage.setItem('el_shadday_orders_history', JSON.stringify([orderData, ...history]));
     } catch (e) {}

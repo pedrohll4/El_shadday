@@ -48,6 +48,11 @@ import {
   fetchCloudConfigHistory, 
   subscribeToConfigEvents 
 } from './services/configSyncService';
+import { 
+  recordCustomerFromOrder, 
+  backfillCustomersFromOrders, 
+  syncCustomersFromCloud 
+} from './services/customerService';
 import { ShoppingBag, ArrowRight, Sparkles, ChevronRight, Phone, Search, ChefHat, Camera } from 'lucide-react';
 
 const getInitialOrders = () => {
@@ -408,7 +413,11 @@ export default function App() {
     // 1. Initial load from Cloud history (authoritative orders from Supabase)
     const initSync = async () => {
       try {
+        syncCustomersFromCloud().catch(() => {});
         const cloudOrders = await fetchCloudOrdersHistory();
+        if (Array.isArray(cloudOrders) && cloudOrders.length > 0) {
+          backfillCustomersFromOrders(cloudOrders);
+        }
         if (Array.isArray(cloudOrders)) {
           if (isSupabaseConfigured) {
             setAllOrders(cloudOrders);
@@ -462,6 +471,9 @@ export default function App() {
     // 2. Subscribe to instant real-time events (SSE Cloud + BroadcastChannel local)
     const unsubscribe = subscribeToKitchenEvents({
       onNewOrder: (newOrder) => {
+        try {
+          recordCustomerFromOrder(newOrder);
+        } catch (e) {}
         setAllOrders(prev => {
           if (prev.some(o => o.orderId === newOrder.orderId)) {
             return prev;
@@ -651,6 +663,10 @@ export default function App() {
     setIsOrderSuccessOpen(true);
     setCartItems([]); // Clear cart upon successful order dispatch
 
+    try {
+      recordCustomerFromOrder(orderData);
+    } catch (e) {}
+
     // Save optimistically to allOrders for the kitchen display
     setAllOrders(prev => {
       if (prev.some(o => o.orderId === orderData.orderId)) return prev;
@@ -797,6 +813,10 @@ export default function App() {
   };
 
   const handleCreateKitchenOrder = async (newOrder) => {
+    try {
+      recordCustomerFromOrder(newOrder);
+    } catch (e) {}
+
     setAllOrders(prev => {
       const updated = [newOrder, ...prev.filter(o => o.orderId !== newOrder.orderId)];
       try {
