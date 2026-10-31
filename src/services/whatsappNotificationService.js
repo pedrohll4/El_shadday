@@ -110,6 +110,8 @@ function formatOrderItemsSummary(items = []) {
       if (sab) line += ` (${sab})`;
     } else if (it.flavors && it.flavors.length > 0) {
       line += ` (${it.flavors.join('/')})`;
+    } else if (it.boxOptionTitle) {
+      line += ` (${it.boxOptionTitle}${it.notes ? ` - Obs: ${it.notes}` : ''})`;
     } else if (it.isSortido || (it.name && it.name.toLowerCase().includes('sortid')) || (it.isBox && !it.salgadasDetails)) {
       line += ` (Sortido da Casa${it.semSuinos ? ' - Sem Suínos' : ''})`;
     } else if (it.isCustomBox && !it.isSortido && it.salgadasDetails) {

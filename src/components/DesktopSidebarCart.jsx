@@ -110,7 +110,11 @@ export function DesktopSidebarCart({
                       </p>
                     )}
 
-                    {item.isSortido ? (
+                    {item.boxOptionTitle ? (
+                      <p className="text-[10px] text-amber-300 mt-0.5 font-bold">
+                        ✨ {item.boxOptionTitle}
+                      </p>
+                    ) : item.isSortido ? (
                       <p className="text-[10px] text-amber-300 mt-0.5 font-medium">
                         🎲 Sortido da Casa
                       </p>

@@ -1,11 +1,9 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
-  X, Package, Check, Plus, Minus, Sparkles, Shuffle, 
-  AlertCircle, ShieldAlert, Info, Flame, ChevronRight 
+  X, Package, Check, Sparkles, ShieldAlert, AlertCircle, Info, ChevronRight, MessageSquare 
 } from 'lucide-react';
-import { PRODUCTS } from '../data/menuData';
 
-// Business Rules for Assorted Boxes (Caixas Somente Sortidas)
+// Tamanhos disponíveis das Caixas de Esfirras
 export const BOX_CONFIGS = [
   { 
     id: 'caixa-20-esfirras', 
@@ -15,10 +13,7 @@ export const BOX_CONFIGS = [
     doces: 5, 
     price: 35.00,
     creditPrice: 40.00,
-    maxPerSalgada: 3, 
-    maxPerDoce: 1, 
-    maxCarne: 3, // limitado pelo teto da caixa (3)
-    ruleText: 'Máx. 3 de cada salgada • 1 de cada doce'
+    image: "https://assets.olaclick.app/companies/products/images/800/4cfa4549-ad5f-4b4e-b539-468584a0eeba.png"
   },
   { 
     id: 'caixa-30-esfirras', 
@@ -28,10 +23,7 @@ export const BOX_CONFIGS = [
     doces: 8, 
     price: 45.00,
     creditPrice: 50.00,
-    maxPerSalgada: 4, 
-    maxPerDoce: 1, 
-    maxCarne: 4, // limitado pelo teto da caixa (4)
-    ruleText: 'Máx. 4 de cada salgada • 1 de cada doce'
+    image: "https://assets.olaclick.app/companies/products/images/800/d22ae090-8054-428b-8ba3-6f147ad985c8.png"
   },
   { 
     id: 'caixa-40-esfirras', 
@@ -41,10 +33,7 @@ export const BOX_CONFIGS = [
     doces: 7, 
     price: 55.00,
     creditPrice: 60.00,
-    maxPerSalgada: 5, 
-    maxPerDoce: 2, 
-    maxCarne: 5, // Limite explícito de 5 unidades de carne
-    ruleText: 'Máx. 5 de cada salgada (Carne máx. 5) • 2 de cada doce'
+    image: "https://assets.olaclick.app/companies/products/images/800/365a2072-4954-4c6a-a734-69a6cef0130a.png"
   },
   { 
     id: 'caixa-50-esfirras', 
@@ -54,10 +43,7 @@ export const BOX_CONFIGS = [
     doces: 10, 
     price: 70.00,
     creditPrice: 75.00,
-    maxPerSalgada: 10, 
-    maxPerDoce: 2, 
-    maxCarne: 5, // Limite explícito de 5 unidades de carne
-    ruleText: 'Máx. 10 de cada salgada (Carne máx. 5) • 2 de cada doce'
+    image: "https://assets.olaclick.app/companies/products/images/800/ad6d93be-acae-46e7-b062-9e796f376b8f.png"
   },
   { 
     id: 'combo-20esf-dydyo', 
@@ -67,10 +53,7 @@ export const BOX_CONFIGS = [
     doces: 5, 
     price: 44.99,
     creditPrice: 44.99,
-    maxPerSalgada: 3, 
-    maxPerDoce: 1, 
-    maxCarne: 3,
-    ruleText: '15 salgadas • 5 doces + Dydyo 2L'
+    image: "https://assets.olaclick.app/companies/products/images/800/4cfa4549-ad5f-4b4e-b539-468584a0eeba.png"
   },
   { 
     id: 'combo-30esf-dydyo', 
@@ -80,380 +63,143 @@ export const BOX_CONFIGS = [
     doces: 5, 
     price: 55.00,
     creditPrice: 55.00,
-    maxPerSalgada: 4, 
-    maxPerDoce: 1, 
-    maxCarne: 4,
-    ruleText: '25 salgadas • 5 doces + Dydyo 2L'
+    image: "https://assets.olaclick.app/companies/products/images/800/d22ae090-8054-428b-8ba3-6f147ad985c8.png"
   },
 ];
 
-// Helper: Check if a flavor contains pork
+// As 4 opções oficiais de Caixas de Esfirras Sortidas
+export const BOX_SORTIDO_OPTIONS = [
+  {
+    id: 'esfirras-sortidas-sem-doce',
+    name: 'esfirras sortidas sem doce',
+    displayTitle: 'Esfirras sortidas sem doce',
+    tag: '100% Salgadas',
+    icon: '🥟',
+    hasDoces: false,
+    semSuinos: false,
+    badgeColor: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
+    description: 'Caixa com sabores salgados sortidos tradicionais da casa (carne moída temperada, frango, queijo, calabresa, etc.). Não inclui esfirras doces.'
+  },
+  {
+    id: 'esfirras-sortidas-com-doce',
+    name: 'esfirras sortidas com doce',
+    displayTitle: 'Esfirras sortidas com doce',
+    tag: 'Salgadas + Doces',
+    icon: '✨',
+    hasDoces: true,
+    semSuinos: false,
+    badgeColor: 'bg-brand-gold/15 text-brand-gold border-brand-gold/30',
+    description: 'A clássica mistura da El Shadday: esfirras salgadas sortidas tradicionais + esfirras doces sortidas da casa.'
+  },
+  {
+    id: 'esfirras-sortidas-sem-suinos-sem-doce',
+    name: 'esfiras sortidas sem suinos sem doce',
+    displayTitle: 'Esfirras sortidas sem suínos sem doce',
+    tag: 'Sem Carne Suína • 100% Salgadas',
+    icon: '🥩',
+    hasDoces: false,
+    semSuinos: true,
+    badgeColor: 'bg-red-500/15 text-red-300 border-red-500/30',
+    description: '100% salgadas sortidas SEM carne suína (sem calabresa e sem bacon; preparadas com frango, carne bovina e queijos). Não inclui esfirras doces.'
+  },
+  {
+    id: 'esfirras-sortidas-sem-suinos-com-doce',
+    name: 'esfirras sortidas sem suinos com doce',
+    displayTitle: 'Esfirras sortidas sem suínos com doce',
+    tag: 'Sem Carne Suína • Com Doces',
+    icon: '🍫',
+    hasDoces: true,
+    semSuinos: true,
+    badgeColor: 'bg-purple-500/15 text-purple-300 border-purple-500/30',
+    description: 'Esfirras salgadas sortidas SEM carne suína (sem calabresa e sem bacon) + esfirras doces sortidas da casa.'
+  }
+];
+
+// Funções auxiliares mantidas para compatibilidade
 export const isPorkFlavor = (flavorName) => {
   const str = (flavorName || '').toLowerCase();
   return str.includes('calabresa') || str.includes('bacon');
 };
 
-// Helper: Check if a flavor is beef/carne
 export const isCarneFlavor = (flavorName) => {
   const str = (flavorName || '').toLowerCase();
   return str.includes('carne');
 };
 
-export function BoxBuilderModal({ isOpen, onClose, onAddBoxToCart, initialBox = null, products = [] }) {
+export function BoxBuilderModal({ isOpen, onClose, onAddBoxToCart, initialBox = null }) {
   const [selectedBox, setSelectedBox] = useState(BOX_CONFIGS[0]);
-  const [activeTab, setActiveTab] = useState('salgadas'); // 'salgadas' | 'doces'
-  const [semSuinos, setSemSuinos] = useState(false);
-  const [isSortido, setIsSortido] = useState(true);
-  const [salgadasSelections, setSalgadasSelections] = useState({});
-  const [docesSelections, setDocesSelections] = useState({});
-  const [feedbackNotice, setFeedbackNotice] = useState('');
+  const [selectedOptionId, setSelectedOptionId] = useState(BOX_SORTIDO_OPTIONS[0].id);
+  const [notes, setNotes] = useState('');
 
-  const activeProducts = useMemo(() => {
-    if (Array.isArray(products) && products.length > 0) return products;
-    return PRODUCTS;
-  }, [products]);
-
-  // RULE: Sabores Tradicionais da El Shadday para caixas sortidas
-  const salgadasList = useMemo(() => {
-    return activeProducts.filter(p => 
-      p.categoryId === 'esfirras-salgadas' && 
-      (p.price <= 3.00 || !p.badge?.toLowerCase().includes('gourmet')) &&
-      !p.name.toLowerCase().includes('gourmet') &&
-      !p.badge?.toLowerCase().includes('gourmet')
-    );
-  }, [activeProducts]);
-
-  const docesList = useMemo(() => {
-    return activeProducts.filter(p => 
-      p.categoryId === 'esfirras-doces' && 
-      (p.price <= 5.00 || !p.badge?.toLowerCase().includes('gourmet')) &&
-      !p.name.toLowerCase().includes('gourmet') &&
-      !p.badge?.toLowerCase().includes('gourmet')
-    );
-  }, [activeProducts]);
-
-  // Algoritmo gerador de sortido respeitando regras e sem carne suína
-  const generateAutoFill = (box = selectedBox, noPork = semSuinos) => {
-    const availableSalgadas = salgadasList.filter(f => !noPork || !isPorkFlavor(f.name));
-    if (availableSalgadas.length === 0) return { salgadas: {}, doces: {} };
-
-    const newSalgadas = {};
-    let salgToDistribute = box.salgadas;
-    let sIdx = 0;
-    let loops = 0;
-
-    while (salgToDistribute > 0 && loops < 250) {
-      loops++;
-      const flavor = availableSalgadas[sIdx % availableSalgadas.length];
-      const maxAllowed = noPork && isPorkFlavor(flavor.name)
-        ? 0
-        : isCarneFlavor(flavor.name)
-        ? box.maxCarne
-        : box.maxPerSalgada;
-      const current = newSalgadas[flavor.name] || 0;
-
-      if (current < maxAllowed) {
-        newSalgadas[flavor.name] = current + 1;
-        salgToDistribute--;
-      }
-      sIdx++;
-    }
-
-    const newDoces = {};
-    let docesToDistribute = box.doces;
-    let dIdx = 0;
-    loops = 0;
-
-    while (docesToDistribute > 0 && loops < 150) {
-      loops++;
-      const flavor = docesList[dIdx % docesList.length];
-      const maxAllowed = box.maxPerDoce;
-      const current = newDoces[flavor.name] || 0;
-
-      if (current < maxAllowed) {
-        newDoces[flavor.name] = current + 1;
-        docesToDistribute--;
-      }
-      dIdx++;
-    }
-
-    return { salgadas: newSalgadas, doces: newDoces };
-  };
-
-  // Sync initial box size and reset state when opening
+  // Sincroniza caixa inicial e redefine quando o modal abre
   useEffect(() => {
     if (isOpen) {
-      let currentB = BOX_CONFIGS[0];
       if (initialBox) {
         const match = BOX_CONFIGS.find(b => b.id === initialBox.id || b.total === initialBox.totalCount);
         if (match) {
-          currentB = match;
           setSelectedBox(match);
+        } else {
+          setSelectedBox(BOX_CONFIGS[0]);
         }
+      } else {
+        setSelectedBox(BOX_CONFIGS[0]);
       }
-      setIsSortido(true);
-      const { salgadas, doces } = generateAutoFill(currentB, semSuinos);
-      setSalgadasSelections(salgadas);
-      setDocesSelections(doces);
-      setFeedbackNotice('');
-      setActiveTab('salgadas');
+      setSelectedOptionId(BOX_SORTIDO_OPTIONS[0].id);
+      setNotes('');
     }
   }, [initialBox, isOpen]);
 
-  // Clean or refill when semSuinos changes
-  useEffect(() => {
-    if (isOpen) {
-      if (isSortido) {
-        const { salgadas, doces } = generateAutoFill(selectedBox, semSuinos);
-        setSalgadasSelections(salgadas);
-        setDocesSelections(doces);
-      } else if (semSuinos) {
-        setSalgadasSelections(prev => {
-          const next = { ...prev };
-          let removedCount = 0;
-          Object.keys(next).forEach(flavorName => {
-            if (isPorkFlavor(flavorName)) {
-              removedCount += next[flavorName];
-              delete next[flavorName];
-            }
-          });
-          if (removedCount > 0) {
-            setFeedbackNotice(`Opção Sem Suínos ativa: ${removedCount} esfirras com porco foram removidas.`);
-            setTimeout(() => setFeedbackNotice(''), 4000);
-          }
-          return next;
-        });
-      }
-    }
-  }, [semSuinos]);
-
   if (!isOpen) return null;
 
-  // Totals calculations
-  const totalSalgadasChosen = Object.values(salgadasSelections).reduce((a, b) => a + b, 0);
-  const totalDocesChosen = Object.values(docesSelections).reduce((a, b) => a + b, 0);
-
-  const remainingSalgadas = selectedBox.salgadas - totalSalgadasChosen;
-  const remainingDoces = selectedBox.doces - totalDocesChosen;
-
-  const handleBoxChange = (box) => {
-    setSelectedBox(box);
-    setFeedbackNotice('');
-    if (isSortido) {
-      const { salgadas, doces } = generateAutoFill(box, semSuinos);
-      setSalgadasSelections(salgadas);
-      setDocesSelections(doces);
-    } else {
-      setSalgadasSelections({});
-      setDocesSelections({});
-    }
-  };
-
-  const handleToggleSortidoMode = (sortido) => {
-    setIsSortido(sortido);
-    setFeedbackNotice('');
-    if (sortido) {
-      const { salgadas, doces } = generateAutoFill(selectedBox, semSuinos);
-      setSalgadasSelections(salgadas);
-      setDocesSelections(doces);
-      setFeedbackNotice('✨ Sortido da Casa ativado! A equipe selecionará os sabores mais frescos.');
-    } else {
-      setSalgadasSelections({});
-      setDocesSelections({});
-      setActiveTab('salgadas');
-      setFeedbackNotice('✍️ Escolha manual: Selecione as quantidades de cada sabor abaixo.');
-    }
-    setTimeout(() => setFeedbackNotice(''), 3500);
-  };
-
-  // Get maximum allowed count for a specific flavor under all business rules
-  const getMaxAllowedForFlavor = (flavor, type) => {
-    if (type === 'salgadas') {
-      if (semSuinos && isPorkFlavor(flavor.name)) {
-        return 0; // Pork disabled
-      }
-      if (isCarneFlavor(flavor.name)) {
-        return selectedBox.maxCarne; // Max 5 on 40/50, or 3 on 20, 4 on 30
-      }
-      return selectedBox.maxPerSalgada;
-    } else {
-      return selectedBox.maxPerDoce;
-    }
-  };
-
-  // Handle Increment/Decrement with strict validation
-  const handleUpdateCount = (flavor, type, delta) => {
-    setFeedbackNotice('');
-    setIsSortido(false);
-
-    if (type === 'salgadas') {
-      const current = salgadasSelections[flavor.name] || 0;
-      const next = current + delta;
-      if (next < 0) return;
-
-      if (delta > 0) {
-        if (semSuinos && isPorkFlavor(flavor.name)) {
-          setFeedbackNotice('Opção Sem Suínos está ativada. Desmarque para incluir este sabor.');
-          return;
-        }
-
-        if (totalSalgadasChosen >= selectedBox.salgadas) {
-          setFeedbackNotice(`Você já atingiu o limite de ${selectedBox.salgadas} esfirras salgadas desta caixa!`);
-          return;
-        }
-
-        const maxAllowed = getMaxAllowedForFlavor(flavor, 'salgadas');
-        if (current >= maxAllowed) {
-          if (isCarneFlavor(flavor.name)) {
-            setFeedbackNotice(`A esfirra de Carne tem limite máximo de ${selectedBox.maxCarne} unidades nesta caixa!`);
-          } else {
-            setFeedbackNotice(`Limite de ${maxAllowed} unidades para este sabor atingido (caixas são sortidas)!`);
-          }
-          return;
-        }
-      }
-
-      const updated = { ...salgadasSelections };
-      if (next === 0) {
-        delete updated[flavor.name];
-      } else {
-        updated[flavor.name] = next;
-      }
-      setSalgadasSelections(updated);
-
-      // Auto-switch to Doces if salgadas are completely filled
-      if (next > current && (totalSalgadasChosen + 1) >= selectedBox.salgadas && totalDocesChosen < selectedBox.doces) {
-        setTimeout(() => {
-          setActiveTab('doces');
-          setFeedbackNotice('Salgadas completas! Agora escolha suas esfirras doces.');
-          setTimeout(() => setFeedbackNotice(''), 3500);
-        }, 300);
-      }
-
-    } else {
-      // Doces
-      const current = docesSelections[flavor.name] || 0;
-      const next = current + delta;
-      if (next < 0) return;
-
-      if (delta > 0) {
-        if (totalDocesChosen >= selectedBox.doces) {
-          setFeedbackNotice(`Você já atingiu o limite de ${selectedBox.doces} esfirras doces desta caixa!`);
-          return;
-        }
-
-        const maxAllowed = selectedBox.maxPerDoce;
-        if (current >= maxAllowed) {
-          setFeedbackNotice(`Limite de ${maxAllowed} unidade(s) por doce na caixa de ${selectedBox.total}!`);
-          return;
-        }
-      }
-
-      const updated = { ...docesSelections };
-      if (next === 0) {
-        delete updated[flavor.name];
-      } else {
-        updated[flavor.name] = next;
-      }
-      setDocesSelections(updated);
-    }
-  };
-
-  // Card click handler: clicking anywhere on a flavor card adds +1 or shows why it cannot be added
-  const handleCardClick = (flavor, type) => {
-    const isPork = type === 'salgadas' && isPorkFlavor(flavor.name);
-    const isPorkBlocked = semSuinos && isPork;
-
-    if (isPorkBlocked) {
-      setFeedbackNotice('Opção Sem Suínos está ativada. Desmarque para incluir este sabor.');
-      return;
-    }
-
-    const current = type === 'salgadas' 
-      ? (salgadasSelections[flavor.name] || 0)
-      : (docesSelections[flavor.name] || 0);
-
-    const maxAllowed = getMaxAllowedForFlavor(flavor, type);
-    const isCategoryFull = type === 'salgadas'
-      ? remainingSalgadas <= 0
-      : remainingDoces <= 0;
-
-    if (isCategoryFull) {
-      if (type === 'salgadas') {
-        setFeedbackNotice(`Limite de ${selectedBox.salgadas} esfirras salgadas já atingido! Alterne para Doces.`);
-      } else {
-        setFeedbackNotice(`Limite de ${selectedBox.doces} esfirras doces já atingido!`);
-      }
-      return;
-    }
-
-    if (current >= maxAllowed) {
-      if (type === 'salgadas' && isCarneFlavor(flavor.name)) {
-        setFeedbackNotice(`A esfirra de Carne tem limite máximo de ${selectedBox.maxCarne} unidades nesta caixa!`);
-      } else {
-        setFeedbackNotice(`Limite de ${maxAllowed} unidade(s) para este sabor atingido (as caixas são sortidas)!`);
-      }
-      return;
-    }
-
-    // Add 1
-    handleUpdateCount(flavor, type, 1);
-  };
-
-  // Smart Assorted Pre-Fill adhering strictly to all business rules
-  const handleAutoFill = () => {
-    setFeedbackNotice('');
-    const { salgadas, doces } = generateAutoFill(selectedBox, semSuinos);
-    setSalgadasSelections(salgadas);
-    setDocesSelections(doces);
-    setIsSortido(true);
-    setFeedbackNotice('✨ Sortido da Casa ativado! A equipe selecionará os melhores sabores.');
-    setTimeout(() => setFeedbackNotice(''), 3500);
-  };
-
-  const isBoxComplete = remainingSalgadas === 0 && remainingDoces === 0;
+  const currentOption = BOX_SORTIDO_OPTIONS.find(o => o.id === selectedOptionId) || BOX_SORTIDO_OPTIONS[0];
 
   const handleConfirm = () => {
     const customItem = {
       id: `custom-box-${selectedBox.id}-${Date.now()}`,
       name: `${selectedBox.name} Sortida`,
       price: selectedBox.price,
+      creditPrice: selectedBox.creditPrice,
       isCustomBox: true,
-      isSortido: isSortido,
+      isBox: true,
+      isSortido: true,
       totalCount: selectedBox.total,
-      semSuinos: semSuinos,
-      salgadasDetails: salgadasSelections, // Salvo para a cozinha / equipe interna
-      docesDetails: docesSelections,       // Salvo para a cozinha / equipe interna
-      image: "https://assets.olaclick.app/companies/products/images/800/4cfa4549-ad5f-4b4e-b539-468584a0eeba.png",
-      description: isSortido
-        ? `${selectedBox.salgadas} Salgadas e ${selectedBox.doces} Doces sortidas da casa.${semSuinos ? ' 🚫 OPÇÃO SEM SUÍNOS.' : ''}`
-        : `${selectedBox.salgadas} Salgadas e ${selectedBox.doces} Doces.${semSuinos ? ' 🚫 OPÇÃO SEM SUÍNOS.' : ''}`
+      boxOption: currentOption.id,
+      boxOptionTitle: currentOption.displayTitle,
+      hasDoces: currentOption.hasDoces,
+      semSuinos: currentOption.semSuinos,
+      salgadasCount: currentOption.hasDoces ? selectedBox.salgadas : selectedBox.total,
+      docesCount: currentOption.hasDoces ? selectedBox.doces : 0,
+      notes: notes.trim(),
+      image: selectedBox.image || "https://assets.olaclick.app/companies/products/images/800/4cfa4549-ad5f-4b4e-b539-468584a0eeba.png",
+      description: `${currentOption.displayTitle} (${currentOption.hasDoces ? `${selectedBox.salgadas} Salgadas + ${selectedBox.doces} Doces` : `${selectedBox.total} Salgadas`})${currentOption.semSuinos ? ' • 🚫 Sem carne suína' : ''}${notes.trim() ? ` • Obs: ${notes.trim()}` : ''}`
     };
+
     onAddBoxToCart(customItem);
     onClose();
   };
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden bg-dark-950/85 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in">
-      <div className="relative w-full max-w-2xl bg-dark-900 border-t sm:border border-brand-gold/40 rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col h-[95dvh] sm:h-auto sm:max-h-[90vh] overflow-hidden">
+      <div className="relative w-full max-w-xl bg-dark-900 border-t sm:border border-brand-gold/40 rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col max-h-[92dvh] sm:max-h-[85vh] overflow-hidden">
         
-        {/* Header (Fixed at top) */}
-        <div className="flex-shrink-0 p-3.5 sm:p-5 border-b border-dark-800 bg-gradient-to-r from-dark-950 to-dark-900 flex items-center justify-between">
-          <div className="flex items-center gap-2.5 sm:gap-3">
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-brand-gold/20 flex items-center justify-center text-brand-gold border border-brand-gold/30 flex-shrink-0">
+        {/* Header */}
+        <div className="flex-shrink-0 p-4 sm:p-5 border-b border-dark-800 bg-gradient-to-r from-dark-950 to-dark-900 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-brand-gold/20 flex items-center justify-center text-brand-gold border border-brand-gold/30 flex-shrink-0">
               <Package className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="font-display font-extrabold text-sm sm:text-lg text-white leading-tight">
-                Monte sua Caixa de Esfirras Sortidas
+              <h2 className="font-display font-extrabold text-base sm:text-lg text-white leading-tight">
+                Caixa de Esfirras Sortidas
               </h2>
               <p className="text-[11px] sm:text-xs text-brand-gold font-medium">
-                Pioneiros em caixas de esfirras em Ariquemes • Somente Sortidas
+                Pioneiros em Ariquemes • Massas frescas e artesanais todos os dias
               </p>
             </div>
           </div>
 
           <button
+            type="button"
             onClick={onClose}
             className="w-9 h-9 rounded-full bg-dark-800 hover:bg-dark-750 text-slate-400 hover:text-white flex items-center justify-center transition-colors cursor-pointer border border-dark-700 flex-shrink-0"
             aria-label="Fechar"
@@ -462,17 +208,18 @@ export function BoxBuilderModal({ isOpen, onClose, onAddBoxToCart, initialBox = 
           </button>
         </div>
 
-        {/* Scrollable Container: ALL content scrolls smoothly together */}
-        <div className="flex-1 overflow-y-auto overscroll-contain">
+        {/* Scrollable Content */}
+        <div className="flex-1 overflow-y-auto overscroll-contain p-4 sm:p-5 space-y-4">
           
-          {/* Box Size Selector Section */}
-          <div className="p-3 sm:p-4 bg-dark-950/70 border-b border-dark-800">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-2.5">
-              <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">
-                1. Selecione o Tamanho da Caixa:
+          {/* PASSO 1: Seleção do Tamanho da Caixa */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                <span className="w-4 h-4 rounded-full bg-brand-gold/20 text-brand-gold text-[10px] font-black flex items-center justify-center">1</span>
+                <span>Tamanho da Caixa:</span>
               </span>
               <span className="text-[11px] text-brand-gold font-bold">
-                {selectedBox.ruleText}
+                {selectedBox.total} Esfirras no total
               </span>
             </div>
 
@@ -483,414 +230,138 @@ export function BoxBuilderModal({ isOpen, onClose, onAddBoxToCart, initialBox = 
                   <button
                     key={box.id}
                     type="button"
-                    onClick={() => handleBoxChange(box)}
+                    onClick={() => setSelectedBox(box)}
                     className={`p-2.5 sm:p-3 rounded-2xl border text-center transition-all cursor-pointer ${
                       isSelected
                         ? 'bg-gradient-to-r from-brand-gold to-amber-400 text-dark-950 font-black border-brand-gold shadow-glow-gold scale-102'
-                        : 'bg-dark-900 hover:bg-dark-850 text-slate-300 border-dark-800 hover:border-dark-700'
+                        : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border-dark-800 hover:border-dark-700'
                     }`}
                   >
                     <div className="text-xs sm:text-sm font-extrabold">{box.total} Esfirras</div>
                     <div className="text-xs sm:text-sm font-black mt-0.5 opacity-95">
                       R$ {box.price.toFixed(2).replace('.', ',')}
                     </div>
-                    <div className={`text-[10px] mt-1 font-semibold ${isSelected ? 'text-dark-950/90' : 'text-slate-400'}`}>
-                      {box.salgadas} Salg / {box.doces} Doces
-                    </div>
                   </button>
                 );
               })}
             </div>
-
-            {/* Opção Sem Suínos (Toggle) */}
-            <div className="mt-2.5 p-2.5 rounded-xl bg-dark-900 border border-dark-800 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2 min-w-0">
-                <ShieldAlert className="w-4 h-4 text-brand-gold flex-shrink-0" />
-                <div className="min-w-0">
-                  <span className="text-xs font-bold text-white block truncate">
-                    Opção Sem Carne Suína?
-                  </span>
-                  <span className="text-[10px] text-slate-400 line-clamp-1">
-                    Substitui calabresa e bacon por frango, carne bovina e queijos.
-                  </span>
-                </div>
-              </div>
-
-              <label className="flex items-center gap-2 cursor-pointer select-none flex-shrink-0 px-2.5 py-1 rounded-lg bg-dark-850 border border-dark-750 hover:border-brand-gold/40 transition-colors">
-                <input
-                  type="checkbox"
-                  checked={semSuinos}
-                  onChange={(e) => setSemSuinos(e.target.checked)}
-                  className="w-4 h-4 rounded text-brand-gold accent-brand-gold cursor-pointer"
-                />
-                <span className={`text-[11px] font-black ${semSuinos ? 'text-brand-gold' : 'text-slate-400'}`}>
-                  {semSuinos ? 'SEM SUÍNOS ATIVO' : 'Permitir Suínos'}
-                </span>
-              </label>
-            </div>
-
-            {/* Escolha do Modo: Sortido da Casa vs Escolher Sabores */}
-            <div className="mt-2.5 p-2 rounded-2xl bg-dark-900 border border-dark-800">
-              <div className="text-[11px] font-bold text-slate-300 mb-2 px-1 flex items-center justify-between">
-                <span>Modo de Seleção dos Sabores:</span>
-                <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${isSortido ? 'bg-amber-500/20 text-brand-gold border border-brand-gold/30' : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'}`}>
-                  {isSortido ? '🎲 Sortido da Casa' : '✍️ Escolha Manual'}
-                </span>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleToggleSortidoMode(true)}
-                  className={`py-2 px-3 rounded-xl border flex items-center justify-center gap-2 text-xs font-bold transition-all cursor-pointer ${
-                    isSortido
-                      ? 'bg-gradient-to-r from-brand-gold to-amber-400 text-dark-950 border-brand-gold font-black shadow-md'
-                      : 'bg-dark-850 border-dark-750 text-slate-400 hover:text-white'
-                  }`}
-                >
-                  <Shuffle className="w-4 h-4" />
-                  <span>🎲 Sortido da Casa</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleToggleSortidoMode(false)}
-                  className={`py-2 px-3 rounded-xl border flex items-center justify-center gap-2 text-xs font-bold transition-all cursor-pointer ${
-                    !isSortido
-                      ? 'bg-gradient-to-r from-brand-gold to-amber-400 text-dark-950 border-brand-gold font-black shadow-md'
-                      : 'bg-dark-850 border-dark-750 text-slate-400 hover:text-white'
-                  }`}
-                >
-                  <span>✍️ Escolher Sabores</span>
-                </button>
-              </div>
-
-              {isSortido && (
-                <div className="mt-2 p-2 rounded-xl bg-amber-500/10 border border-brand-gold/30 text-amber-200 text-[11px] flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-amber-400 flex-shrink-0" />
-                  <span>
-                    <strong>Sortido Ativo:</strong> A El Shadday preparará os sabores mais frescos do forno. Sabores específicos serão preparados internamente pela equipe.
-                  </span>
-                </div>
-              )}
-            </div>
           </div>
 
-          {/* Sticky Counters & Category Tabs Header */}
-          <div className="sticky top-0 z-20 bg-dark-900/98 backdrop-blur-md border-b border-dark-800 shadow-md">
-            
-            {/* Live Counters and Auto-fill Button */}
-            <div className="px-3.5 sm:px-4 py-2.5 bg-dark-850/95 flex items-center justify-between gap-2 border-b border-dark-800/80">
-              <div className="flex items-center gap-2 sm:gap-3 text-xs font-semibold">
-                {/* Salgadas counter */}
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('salgadas')}
-                  className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border text-xs transition-all cursor-pointer ${
-                    activeTab === 'salgadas' ? 'ring-1 ring-brand-gold/60' : ''
-                  } ${
-                    remainingSalgadas === 0 
-                      ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400' 
-                      : 'bg-dark-900 border-dark-750 text-slate-300 hover:text-white'
-                  }`}
-                >
-                  <span>Salgadas:</span>
-                  <strong className="text-white font-bold">{totalSalgadasChosen} / {selectedBox.salgadas}</strong>
-                  {remainingSalgadas === 0 && <Check className="w-3.5 h-3.5 text-emerald-400 stroke-[3]" />}
-                </button>
-
-                {/* Doces counter */}
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('doces')}
-                  className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border text-xs transition-all cursor-pointer ${
-                    activeTab === 'doces' ? 'ring-1 ring-brand-gold/60' : ''
-                  } ${
-                    remainingDoces === 0 
-                      ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400' 
-                      : 'bg-dark-900 border-dark-750 text-slate-300 hover:text-white'
-                  }`}
-                >
-                  <span>Doces:</span>
-                  <strong className="text-white font-bold">{totalDocesChosen} / {selectedBox.doces}</strong>
-                  {remainingDoces === 0 && <Check className="w-3.5 h-3.5 text-emerald-400 stroke-[3]" />}
-                </button>
-              </div>
-
-              {/* Quick Auto-Fill Button */}
-              <button
-                type="button"
-                onClick={handleAutoFill}
-                className="flex items-center gap-1.5 text-[11px] sm:text-xs font-bold text-brand-gold hover:text-amber-300 bg-brand-gold/10 hover:bg-brand-gold/20 border border-brand-gold/30 px-2.5 sm:px-3 py-1.5 rounded-xl transition-all cursor-pointer active:scale-95 flex-shrink-0"
-                title="Preencher respeitando os limites sortidos da El Shadday"
-              >
-                <Shuffle className="w-3.5 h-3.5" />
-                <span>Sortido da Casa</span>
-              </button>
-            </div>
-
-            {/* Flavor Category Switcher */}
-            <div className="px-3.5 sm:px-4 pt-2 flex items-center justify-between">
-              <div className="flex gap-2 w-full sm:w-auto">
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('salgadas')}
-                  className={`flex-1 sm:flex-none pb-2.5 px-3 text-xs sm:text-sm font-bold border-b-2 transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                    activeTab === 'salgadas'
-                      ? 'border-brand-gold text-brand-gold'
-                      : 'border-transparent text-slate-400 hover:text-white'
-                  }`}
-                >
-                  <span>Salgadas Tradicionais</span>
-                  <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-dark-800 text-slate-400 font-semibold">
-                    {salgadasList.length}
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('doces')}
-                  className={`flex-1 sm:flex-none pb-2.5 px-3 text-xs sm:text-sm font-bold border-b-2 transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                    activeTab === 'doces'
-                      ? 'border-brand-gold text-brand-gold'
-                      : 'border-transparent text-slate-400 hover:text-white'
-                  }`}
-                >
-                  <span>Doces Tradicionais</span>
-                  <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-dark-800 text-slate-400 font-semibold">
-                    {docesList.length}
-                  </span>
-                </button>
-              </div>
-
-              <span className="text-[11px] text-slate-400 hidden sm:inline">
-                *Sabores especiais/gourmet não entram na caixa
+          {/* PASSO 2: As 4 Opções de Sortidas */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                <span className="w-4 h-4 rounded-full bg-brand-gold/20 text-brand-gold text-[10px] font-black flex items-center justify-center">2</span>
+                <span>Escolha como deseja o sortido:</span>
+              </span>
+              <span className="text-[11px] text-slate-400">
+                Selecione 1 opção
               </span>
             </div>
 
-            {/* Feedback / Rule Notice Alert */}
-            {feedbackNotice && (
-              <div className="px-4 py-2 bg-amber-500/15 border-t border-amber-500/30 text-amber-300 text-xs font-semibold flex items-center gap-2 animate-fade-in">
-                <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                <span className="flex-1">{feedbackNotice}</span>
-                <button
-                  type="button"
-                  onClick={() => setFeedbackNotice('')}
-                  className="text-amber-400 hover:text-white text-xs font-bold px-1"
-                >
-                  ✕
-                </button>
-              </div>
-            )}
+            <div className="space-y-2.5">
+              {BOX_SORTIDO_OPTIONS.map((opt) => {
+                const isSelected = selectedOptionId === opt.id;
+                const compositionText = opt.hasDoces 
+                  ? `${selectedBox.salgadas} Salgadas + ${selectedBox.doces} Doces`
+                  : `${selectedBox.total} Esfirras Salgadas`;
+
+                return (
+                  <div
+                    key={opt.id}
+                    onClick={() => setSelectedOptionId(opt.id)}
+                    className={`group relative p-3.5 rounded-2xl border transition-all cursor-pointer select-none ${
+                      isSelected
+                        ? 'bg-brand-gold/10 border-brand-gold shadow-md shadow-brand-gold/10 ring-1 ring-brand-gold/50'
+                        : 'bg-dark-850 hover:bg-dark-800 border-dark-800 hover:border-dark-750'
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      {/* Custom Radio Circle */}
+                      <div className={`w-5 h-5 rounded-full border-2 mt-0.5 flex items-center justify-center transition-colors flex-shrink-0 ${
+                        isSelected 
+                          ? 'border-brand-gold bg-brand-gold text-dark-950' 
+                          : 'border-dark-700 bg-dark-900 group-hover:border-slate-500'
+                      }`}>
+                        {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                      </div>
+
+                      {/* Info & Details */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm sm:text-base font-bold text-white capitalize">
+                            {opt.displayTitle}
+                          </span>
+                          
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold border ${opt.badgeColor}`}>
+                            {opt.tag}
+                          </span>
+                        </div>
+
+                        {/* Composition pill */}
+                        <div className="mt-1 flex items-center gap-2">
+                          <span className="text-[11px] font-extrabold text-brand-gold bg-dark-900 px-2 py-0.5 rounded-md border border-dark-800">
+                            {opt.icon} {compositionText}
+                          </span>
+                          {opt.semSuinos && (
+                            <span className="text-[10px] font-bold text-red-400 bg-red-950/40 px-1.5 py-0.5 rounded border border-red-500/30">
+                              Sem calabresa/bacon
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Description */}
+                        <p className="mt-1 text-xs text-slate-400 leading-relaxed">
+                          {opt.description}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
 
-          {/* Flavors List */}
-          <div className="p-3 sm:p-4 space-y-2.5 pb-6">
-            
-            {/* Friendly prompt if Salgadas is complete and user is on Salgadas tab */}
-            {activeTab === 'salgadas' && remainingSalgadas === 0 && remainingDoces > 0 && (
-              <div className="p-3 rounded-2xl bg-gradient-to-r from-emerald-500/15 to-dark-850 border border-emerald-500/30 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2 text-emerald-400 text-xs font-bold">
-                  <Check className="w-4 h-4 stroke-[3]" />
-                  <span>Salgadas completas ({selectedBox.salgadas}/{selectedBox.salgadas})!</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('doces')}
-                  className="px-3 py-1.5 rounded-xl bg-brand-gold hover:bg-amber-400 text-dark-950 font-black text-xs flex items-center gap-1 cursor-pointer transition-transform active:scale-95"
-                >
-                  <span>Escolher Doces ({remainingDoces})</span>
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            )}
-
-            {/* Friendly prompt if Doces is complete and user is on Doces tab but missing salgadas */}
-            {activeTab === 'doces' && remainingDoces === 0 && remainingSalgadas > 0 && (
-              <div className="p-3 rounded-2xl bg-gradient-to-r from-emerald-500/15 to-dark-850 border border-emerald-500/30 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2 text-emerald-400 text-xs font-bold">
-                  <Check className="w-4 h-4 stroke-[3]" />
-                  <span>Doces completas ({selectedBox.doces}/{selectedBox.doces})!</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('salgadas')}
-                  className="px-3 py-1.5 rounded-xl bg-brand-gold hover:bg-amber-400 text-dark-950 font-black text-xs flex items-center gap-1 cursor-pointer transition-transform active:scale-95"
-                >
-                  <span>Escolher Salgadas ({remainingSalgadas})</span>
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            )}
-
-            {/* Flavors Loop */}
-            {(activeTab === 'salgadas' ? salgadasList : docesList).map((flavor) => {
-              const isPork = activeTab === 'salgadas' && isPorkFlavor(flavor.name);
-              const isCarne = activeTab === 'salgadas' && isCarneFlavor(flavor.name);
-              const isPorkBlocked = semSuinos && isPork;
-
-              const count = activeTab === 'salgadas' 
-                ? (salgadasSelections[flavor.name] || 0)
-                : (docesSelections[flavor.name] || 0);
-
-              const maxAllowed = getMaxAllowedForFlavor(flavor, activeTab);
-              const isFlavorMaxReached = count >= maxAllowed;
-
-              const isCategoryFull = activeTab === 'salgadas'
-                ? remainingSalgadas <= 0
-                : remainingDoces <= 0;
-
-              const canAdd = !isPorkBlocked && !isCategoryFull && !isFlavorMaxReached;
-
-              return (
-                <div
-                  key={flavor.id}
-                  onClick={() => handleCardClick(flavor, activeTab)}
-                  className={`group relative flex items-center justify-between p-2.5 sm:p-3 rounded-2xl border transition-all cursor-pointer select-none ${
-                    isPorkBlocked 
-                      ? 'opacity-40 bg-dark-950 border-dark-850 cursor-not-allowed'
-                      : count > 0
-                      ? 'bg-brand-gold/10 border-brand-gold/70 shadow-md shadow-brand-gold/5'
-                      : 'bg-dark-850 hover:bg-dark-800 border-dark-800 hover:border-dark-700'
-                  }`}
-                >
-                  {/* Left: Image & Info */}
-                  <div className="flex items-center gap-3 min-w-0 pr-2">
-                    <div className="w-12 h-12 rounded-xl overflow-hidden bg-dark-950 flex-shrink-0 border border-dark-800">
-                      <img
-                        src={flavor.image}
-                        alt={flavor.name}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                        loading="lazy"
-                      />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <h4 className="text-xs sm:text-sm font-bold text-white truncate">
-                          {flavor.name}
-                        </h4>
-                        {isPork && (
-                          <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30">
-                            Suíno
-                          </span>
-                        )}
-                        {isCarne && (
-                          <span className="text-[9px] px-1.5 py-0.2 rounded bg-red-500/20 text-red-300 font-bold border border-red-500/30">
-                            Bovino (Máx {selectedBox.maxCarne})
-                          </span>
-                        )}
-                      </div>
-                      
-                      {/* Flavor Limit Badge */}
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-[10px] text-slate-400">
-                          {isPorkBlocked ? (
-                            <span className="text-red-400 font-bold">🚫 Bloqueado (Sem Suínos ativo)</span>
-                          ) : (
-                            <span>Limite: <strong className="text-slate-300">{maxAllowed} un</strong> nesta caixa</span>
-                          )}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Right: Counter Controls */}
-                  <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
-                    {count === 0 ? (
-                      /* Big Add Button when 0 */
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleCardClick(flavor, activeTab);
-                        }}
-                        disabled={!canAdd}
-                        className={`px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs font-bold flex items-center gap-1 transition-all ${
-                          !canAdd
-                            ? 'opacity-40 bg-dark-900 text-slate-500 cursor-not-allowed border border-dark-800'
-                            : 'bg-brand-gold hover:bg-amber-400 text-dark-950 font-black cursor-pointer active:scale-95 shadow-sm'
-                        }`}
-                        title={!canAdd ? (isFlavorMaxReached ? 'Limite deste sabor atingido' : 'Limite da caixa atingido') : 'Adicionar sabor'}
-                      >
-                        <Plus className="w-3.5 h-3.5 stroke-[3]" />
-                        <span>Adicionar</span>
-                      </button>
-                    ) : (
-                      /* Stepper with comfortable touch targets */
-                      <div className="flex items-center gap-1 bg-dark-950/80 p-1 rounded-xl border border-dark-750">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleUpdateCount(flavor, activeTab, -1);
-                          }}
-                          className="w-8 h-8 rounded-lg flex items-center justify-center transition-all bg-dark-800 hover:bg-dark-700 text-white cursor-pointer active:scale-95"
-                          aria-label="Diminuir"
-                        >
-                          <Minus className="w-3.5 h-3.5" />
-                        </button>
-
-                        <span className="w-7 text-center text-xs font-black text-brand-gold">
-                          {count}
-                        </span>
-
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleUpdateCount(flavor, activeTab, 1);
-                          }}
-                          disabled={!canAdd}
-                          className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${
-                            !canAdd
-                              ? 'opacity-30 bg-dark-900 text-slate-500 cursor-not-allowed'
-                              : 'bg-brand-gold hover:bg-amber-400 text-dark-950 cursor-pointer active:scale-95 font-bold'
-                          }`}
-                          title={!canAdd ? (isFlavorMaxReached ? 'Limite máximo atingido' : 'Limite da caixa atingido') : 'Adicionar mais 1'}
-                          aria-label="Aumentar"
-                        >
-                          <Plus className="w-3.5 h-3.5 stroke-[3]" />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                </div>
-              );
-            })}
+          {/* PASSO 3: Observações (Opcional) */}
+          <div>
+            <label className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5 mb-1.5">
+              <MessageSquare className="w-3.5 h-3.5 text-brand-gold" />
+              <span>Observações para a Cozinha (Opcional):</span>
+            </label>
+            <input
+              type="text"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Ex: Bem assadas, separar doces em caixinha menor, etc."
+              className="w-full bg-dark-950 border border-dark-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand-gold transition-colors"
+              maxLength={120}
+            />
           </div>
 
         </div>
 
-        {/* Footer Confirmation (Fixed at bottom, always fully visible!) */}
-        <div className="flex-shrink-0 p-3 sm:p-4 border-t border-dark-800 bg-dark-950 flex flex-col sm:flex-row items-center justify-between gap-2.5 sm:gap-4 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        {/* Footer */}
+        <div className="flex-shrink-0 p-4 border-t border-dark-800 bg-dark-950 flex flex-col sm:flex-row items-center justify-between gap-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <div className="flex items-center justify-between w-full sm:w-auto sm:flex-col sm:items-start">
             <div>
-              <span className="text-[11px] text-slate-400 block">Total da Caixa Sortida:</span>
+              <span className="text-[11px] text-slate-400 block">Total da Caixa:</span>
               <div className="text-xl sm:text-2xl font-black text-brand-gold leading-tight">
                 R$ {selectedBox.price.toFixed(2).replace('.', ',')}
               </div>
             </div>
 
-            <div className="text-right sm:text-left">
-              {isBoxComplete ? (
-                <div className="text-xs text-emerald-400 font-bold flex items-center gap-1 sm:mt-0.5">
-                  <Check className="w-3.5 h-3.5 stroke-[3]" />
-                  <span>Caixa pronta para o carrinho!</span>
-                </div>
-              ) : (
-                <div className="text-[11px] text-amber-400 flex items-center gap-1 sm:mt-0.5 font-medium">
-                  <AlertCircle className="w-3 h-3 flex-shrink-0" />
-                  <span>
-                    Faltam {remainingSalgadas} salg. e {remainingDoces} doces
-                  </span>
-                </div>
-              )}
-            </div>
+            {selectedBox.creditPrice && (
+              <span className="text-[10px] text-slate-500">
+                *No crédito: R$ {selectedBox.creditPrice.toFixed(2).replace('.', ',')}
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-2 w-full sm:w-auto">
             <button
               type="button"
               onClick={onClose}
-              className="px-3.5 py-2.5 rounded-xl bg-dark-850 hover:bg-dark-800 text-slate-300 font-semibold text-xs transition-colors cursor-pointer"
+              className="px-4 py-2.5 rounded-xl bg-dark-850 hover:bg-dark-800 text-slate-300 font-semibold text-xs transition-colors cursor-pointer"
             >
               Cancelar
             </button>
@@ -898,12 +369,7 @@ export function BoxBuilderModal({ isOpen, onClose, onAddBoxToCart, initialBox = 
             <button
               type="button"
               onClick={handleConfirm}
-              disabled={!isBoxComplete}
-              className={`flex-1 sm:flex-none px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all ${
-                isBoxComplete
-                  ? 'bg-gradient-to-r from-brand-gold to-amber-500 hover:from-amber-400 hover:to-brand-gold text-dark-950 shadow-glow-gold cursor-pointer hover:scale-102 active:scale-98'
-                  : 'bg-dark-800 text-slate-500 cursor-not-allowed'
-              }`}
+              className="flex-1 sm:flex-none px-6 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 bg-gradient-to-r from-brand-gold to-amber-500 hover:from-amber-400 hover:to-brand-gold text-dark-950 shadow-glow-gold cursor-pointer hover:scale-102 active:scale-98 transition-all"
             >
               <Check className="w-4 h-4 stroke-[3]" />
               <span>Adicionar Caixa ({selectedBox.total} un)</span>

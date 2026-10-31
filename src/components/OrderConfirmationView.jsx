@@ -33,7 +33,12 @@ export function OrderConfirmationView({ order, onBackToMenu }) {
     order.items.forEach((item, index) => {
       message += `\n${index + 1}. *${item.quantity}x ${item.name}* - R$ ${(item.price * item.quantity).toFixed(2).replace('.', ',')}\n`;
       if (item.isCustomBox) {
-        if (item.isSortido) {
+        if (item.boxOptionTitle) {
+          message += `   ✨ Opção: ${item.boxOptionTitle}\n`;
+          if (item.semSuinos) {
+            message += `   🚫 Opção Sem Carne Suína\n`;
+          }
+        } else if (item.isSortido) {
           message += `   🎲 Sabores: Sortido da Casa (selecionado pela equipe)\n`;
           if (item.semSuinos) {
             message += `   🚫 Opção Sem Carne Suína\n`;
@@ -252,21 +257,27 @@ export function OrderConfirmationView({ order, onBackToMenu }) {
                       {item.quantity}x {item.name}
                     </div>
                     {item.isCustomBox && (
-                      item.isSortido ? (
-                        <div className="text-[11px] text-brand-gold font-medium">
-                          🎲 Sortido da Casa (selecionado pela equipe){item.semSuinos ? ' • Sem suínos' : ''}
-                        </div>
-                      ) : (
-                        <div className="text-[11px] text-brand-goldLight space-y-0.5">
-                          {item.salgadasDetails && (
-                            <div>🥟 <strong>Salgadas:</strong> {Object.entries(item.salgadasDetails).map(([k, v]) => `${v}x ${k}`).join(', ')}</div>
-                          )}
-                          {item.docesDetails && (
-                            <div>🍫 <strong>Doces:</strong> {Object.entries(item.docesDetails).map(([k, v]) => `${v}x ${k}`).join(', ')}</div>
-                          )}
-                          {item.semSuinos && <div className="text-red-400 font-bold text-[10px]">🚫 Sem suínos</div>}
-                        </div>
-                      )
+                      <div className="space-y-0.5">
+                        {item.boxOptionTitle ? (
+                          <div className="text-[11px] text-amber-300 font-bold">
+                            ✨ {item.boxOptionTitle}
+                          </div>
+                        ) : item.isSortido ? (
+                          <div className="text-[11px] text-brand-gold font-medium">
+                            🎲 Sortido da Casa (selecionado pela equipe){item.semSuinos ? ' • Sem suínos' : ''}
+                          </div>
+                        ) : (
+                          <div className="text-[11px] text-brand-goldLight space-y-0.5">
+                            {item.salgadasDetails && (
+                              <div>🥟 <strong>Salgadas:</strong> {Object.entries(item.salgadasDetails).map(([k, v]) => `${v}x ${k}`).join(', ')}</div>
+                            )}
+                            {item.docesDetails && (
+                              <div>🍫 <strong>Doces:</strong> {Object.entries(item.docesDetails).map(([k, v]) => `${v}x ${k}`).join(', ')}</div>
+                            )}
+                          </div>
+                        )}
+                        {item.semSuinos && <div className="text-red-400 font-bold text-[10px]">🚫 Sem suínos</div>}
+                      </div>
                     )}
                     {item.notes && (
                       <div className="text-[11px] text-slate-400 italic">

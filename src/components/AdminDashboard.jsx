@@ -1642,6 +1642,9 @@ export function AdminDashboard({
             } else if (it.flavors && it.flavors.length > 0) {
               details.push(`Sabores: ${it.flavors.join('/')}`);
             }
+            if (it.boxOptionTitle) {
+              details.push(`Opção: ${it.boxOptionTitle}`);
+            }
             if (it.salgadasDetails) {
               const salg = Object.entries(it.salgadasDetails).map(([k,v]) => `${v}x ${k}`).join(', ');
               details.push(it.isSortido ? `[SORTIDO INTERNO] Salg: ${salg}` : `Salgadas: ${salg}`);
@@ -2106,7 +2109,11 @@ export function AdminDashboard({
       isBox: true,
       isSortido: customBox.isSortido,
       totalCount: customBox.totalCount,
+      boxOption: customBox.boxOption,
+      boxOptionTitle: customBox.boxOptionTitle,
+      hasDoces: customBox.hasDoces,
       semSuinos: customBox.semSuinos,
+      notes: customBox.notes,
       salgadasDetails: customBox.salgadasDetails,
       docesDetails: customBox.docesDetails,
       description: customBox.description
@@ -3359,7 +3366,12 @@ export function AdminDashboard({
                                   {/* Custom Box details */}
                                   {it.isCustomBox && (
                                     <div className="text-[11px] text-brand-goldLight pl-2 mt-0.5 space-y-0.5">
-                                      {it.isSortido && (
+                                      {it.boxOptionTitle ? (
+                                        <div className="text-[11px] font-bold text-amber-300 bg-dark-900 px-2 py-0.5 rounded border border-brand-gold/40 inline-flex items-center gap-1 mb-1">
+                                          <span>✨</span>
+                                          <span>{it.boxOptionTitle}</span>
+                                        </div>
+                                      ) : it.isSortido && (
                                         <div className="text-[10px] font-black text-amber-300 bg-amber-950/60 px-1.5 py-0.5 rounded border border-amber-500/40 inline-flex items-center gap-1 mb-1">
                                           <span>🎲</span>
                                           <span>SORTIDO DA CASA (PREPARO INTERNO COZINHA)</span>
