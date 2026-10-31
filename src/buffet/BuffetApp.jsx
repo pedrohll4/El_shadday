@@ -189,36 +189,52 @@ export function BuffetApp({ currentAppMode, onToggleAppMode, onNavigateToBuilder
           }
         });
 
-      // 2. Escuta alterações em tempo real na tabela buffet_gallery
-      supabase
-        .channel('realtime_buffet_gallery_buffetapp')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'buffet_gallery' }, () => {
-          supabase
-            .from('buffet_gallery')
-            .select('*')
-            .order('position', { ascending: true })
-            .then(({ data }) => {
-              if (Array.isArray(data)) {
-                const clean = data.filter(p => !isFakeGalleryItem(p));
-                setGalleryPhotos(clean);
-                saveStoredBuffetGallery(clean);
-              }
-            });
-        })
-        .subscribe();
+      let ch1 = null;
+      let ch2 = null;
 
-      // 3. Escuta alterações em tempo real na tabela company_settings
-      supabase
-        .channel('realtime_cs_gallery_buffetapp')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'company_settings' }, () => {
-          loadFromCompanySettings();
-        })
-        .subscribe();
+      try {
+        const existingChannels = typeof supabase.getChannels === 'function' ? supabase.getChannels() : [];
+        existingChannels.forEach(ch => {
+          if (ch?.topic?.includes('buffetapp')) {
+            try { supabase.removeChannel(ch); } catch (e) {}
+          }
+        });
+
+        // 2. Escuta alterações em tempo real na tabela buffet_gallery
+        ch1 = supabase
+          .channel(`realtime_buffet_gallery_buffetapp_${Date.now()}`)
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'buffet_gallery' }, () => {
+            supabase
+              .from('buffet_gallery')
+              .select('*')
+              .order('position', { ascending: true })
+              .then(({ data }) => {
+                if (Array.isArray(data)) {
+                  const clean = data.filter(p => !isFakeGalleryItem(p));
+                  setGalleryPhotos(clean);
+                  saveStoredBuffetGallery(clean);
+                }
+              });
+          })
+          .subscribe();
+
+        // 3. Escuta alterações em tempo real na tabela company_settings
+        ch2 = supabase
+          .channel(`realtime_cs_gallery_buffetapp_${Date.now()}`)
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'company_settings' }, () => {
+            loadFromCompanySettings();
+          })
+          .subscribe();
+      } catch (e) {
+        console.warn("Notice: could not connect Supabase realtime buffet channels:", e);
+      }
     }
 
     return () => {
       window.removeEventListener('storage', handleGallerySync);
       window.removeEventListener('buffet_gallery_updated', handleGallerySync);
+      if (ch1 && supabase) { try { supabase.removeChannel(ch1); } catch (e) {} }
+      if (ch2 && supabase) { try { supabase.removeChannel(ch2); } catch (e) {} }
     };
   }, []);
 

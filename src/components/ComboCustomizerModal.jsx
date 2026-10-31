@@ -1,11 +1,21 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   X, Flame, Check, Sparkles, AlertCircle, Copy, 
-  ChevronRight, ArrowRight, Pizza as PizzaIcon, CheckCircle2, Package, IceCream, ArrowLeft 
+  ChevronRight, ArrowRight, Pizza as PizzaIcon, CheckCircle2, 
+  Package, IceCream, ArrowLeft, Search, ArrowUpRight, Info 
 } from 'lucide-react';
-import { getStoredPizzaFlavors, OFFICIAL_ACAI_COMPLEMENTS, ACAI_COBERTURAS, DYDYO_FLAVORS } from '../data/menuData';
+import { 
+  getStoredPizzaFlavors, 
+  calculatePizzaPrice, 
+  calculatePizzaSurcharge, 
+  getFlavorSurchargeForPizza,
+  OFFICIAL_ACAI_COMPLEMENTS, 
+  ACAI_COBERTURAS, 
+  DYDYO_FLAVORS,
+  INITIAL_PIZZA_FLAVORS 
+} from '../data/menuData';
 
-// Helper to determine the pizza configuration for any combo
+// Helper to determine the pizza configuration for any combo with size & base price
 export function getComboPizzasConfig(product) {
   if (!product) return [];
 
@@ -13,42 +23,42 @@ export function getComboPizzasConfig(product) {
 
   if (id === 'combo-2-pizzas-gg') {
     return [
-      { id: 'p1', title: '1ª Pizza Gigante (12 fatias)', shortTitle: '1ª Pizza GG', maxFlavors: 3 },
-      { id: 'p2', title: '2ª Pizza Gigante (12 fatias)', shortTitle: '2ª Pizza GG', maxFlavors: 3 }
+      { id: 'p1', title: '1ª Pizza Gigante (12 fatias)', shortTitle: '1ª Pizza GG', maxFlavors: 3, size: 'gigante', basePrice: 50.00 },
+      { id: 'p2', title: '2ª Pizza Gigante (12 fatias)', shortTitle: '2ª Pizza GG', maxFlavors: 3, size: 'gigante', basePrice: 50.00 }
     ];
   }
 
   if (id === 'combo-2-pizzas-fm') {
     return [
-      { id: 'p1', title: '1ª Pizza Família (8 fatias)', shortTitle: '1ª Pizza FM', maxFlavors: 2 },
-      { id: 'p2', title: '2ª Pizza Família (8 fatias)', shortTitle: '2ª Pizza FM', maxFlavors: 2 }
+      { id: 'p1', title: '1ª Pizza Família (8 fatias)', shortTitle: '1ª Pizza FM', maxFlavors: 2, size: 'familia', basePrice: 40.00 },
+      { id: 'p2', title: '2ª Pizza Família (8 fatias)', shortTitle: '2ª Pizza FM', maxFlavors: 2, size: 'familia', basePrice: 40.00 }
     ];
   }
 
   if (id === 'combo-3-pizzas-gg') {
     return [
-      { id: 'p1', title: '1ª Pizza Gigante (12 fatias)', shortTitle: '1ª Pizza GG', maxFlavors: 3 },
-      { id: 'p2', title: '2ª Pizza Gigante (12 fatias)', shortTitle: '2ª Pizza GG', maxFlavors: 3 },
-      { id: 'p3', title: '3ª Pizza Gigante (12 fatias)', shortTitle: '3ª Pizza GG', maxFlavors: 3 }
+      { id: 'p1', title: '1ª Pizza Gigante (12 fatias)', shortTitle: '1ª Pizza GG', maxFlavors: 3, size: 'gigante', basePrice: 50.00 },
+      { id: 'p2', title: '2ª Pizza Gigante (12 fatias)', shortTitle: '2ª Pizza GG', maxFlavors: 3, size: 'gigante', basePrice: 50.00 },
+      { id: 'p3', title: '3ª Pizza Gigante (12 fatias)', shortTitle: '3ª Pizza GG', maxFlavors: 3, size: 'gigante', basePrice: 50.00 }
     ];
   }
 
   if (id === 'combo-1gg-1fm-10esf') {
     return [
-      { id: 'p1', title: '1ª Pizza Gigante (12 fatias)', shortTitle: '1ª Pizza GG', maxFlavors: 3 },
-      { id: 'p2', title: '2ª Pizza Família (8 fatias)', shortTitle: '2ª Pizza FM', maxFlavors: 2 }
+      { id: 'p1', title: '1ª Pizza Gigante (12 fatias)', shortTitle: '1ª Pizza GG', maxFlavors: 3, size: 'gigante', basePrice: 50.00 },
+      { id: 'p2', title: '2ª Pizza Família (8 fatias)', shortTitle: '2ª Pizza FM', maxFlavors: 2, size: 'familia', basePrice: 40.00 }
     ];
   }
 
   if (id === 'combo-1-fm-10esf' || id === 'combo-fm-acai' || id === 'combo-pizza-fm-p-dydyo') {
     return [
-      { id: 'p1', title: 'Pizza Família (8 fatias)', shortTitle: 'Pizza Família', maxFlavors: 2 }
+      { id: 'p1', title: 'Pizza Família (8 fatias)', shortTitle: 'Pizza Família', maxFlavors: 2, size: 'familia', basePrice: 40.00 }
     ];
   }
 
   if (id === 'combo-gg-acai' || id === 'combo-pizza-gg-p-dydyo' || id === 'combo-pizza-gg-dydyo') {
     return [
-      { id: 'p1', title: 'Pizza Gigante (12 fatias)', shortTitle: 'Pizza Gigante', maxFlavors: 3 }
+      { id: 'p1', title: 'Pizza Gigante (12 fatias)', shortTitle: 'Pizza Gigante', maxFlavors: 3, size: 'gigante', basePrice: 50.00 }
     ];
   }
 
@@ -56,23 +66,23 @@ export function getComboPizzasConfig(product) {
   const name = (product.name || '').toLowerCase();
   if (name.includes('3 pizza')) {
     return [
-      { id: 'p1', title: '1ª Pizza Gigante (12 fatias)', shortTitle: '1ª Pizza', maxFlavors: 3 },
-      { id: 'p2', title: '2ª Pizza Gigante (12 fatias)', shortTitle: '2ª Pizza', maxFlavors: 3 },
-      { id: 'p3', title: '3ª Pizza Gigante (12 fatias)', shortTitle: '3ª Pizza', maxFlavors: 3 }
+      { id: 'p1', title: '1ª Pizza Gigante (12 fatias)', shortTitle: '1ª Pizza', maxFlavors: 3, size: 'gigante', basePrice: 50.00 },
+      { id: 'p2', title: '2ª Pizza Gigante (12 fatias)', shortTitle: '2ª Pizza', maxFlavors: 3, size: 'gigante', basePrice: 50.00 },
+      { id: 'p3', title: '3ª Pizza Gigante (12 fatias)', shortTitle: '3ª Pizza', maxFlavors: 3, size: 'gigante', basePrice: 50.00 }
     ];
   }
 
   if (name.includes('2 pizza') || name.includes('duas pizza')) {
     const isGigante = name.includes('gigante');
     return [
-      { id: 'p1', title: isGigante ? '1ª Pizza Gigante (12 fatias)' : '1ª Pizza Família (8 fatias)', shortTitle: '1ª Pizza', maxFlavors: isGigante ? 3 : 2 },
-      { id: 'p2', title: isGigante ? '2ª Pizza Gigante (12 fatias)' : '2ª Pizza Família (8 fatias)', shortTitle: '2ª Pizza', maxFlavors: isGigante ? 3 : 2 }
+      { id: 'p1', title: isGigante ? '1ª Pizza Gigante (12 fatias)' : '1ª Pizza Família (8 fatias)', shortTitle: '1ª Pizza', maxFlavors: isGigante ? 3 : 2, size: isGigante ? 'gigante' : 'familia', basePrice: isGigante ? 50.00 : 40.00 },
+      { id: 'p2', title: isGigante ? '2ª Pizza Gigante (12 fatias)' : '2ª Pizza Família (8 fatias)', shortTitle: '2ª Pizza', maxFlavors: isGigante ? 3 : 2, size: isGigante ? 'gigante' : 'familia', basePrice: isGigante ? 50.00 : 40.00 }
     ];
   }
 
   const isGigante = name.includes('gigante');
   return [
-    { id: 'p1', title: isGigante ? 'Pizza Gigante (12 fatias)' : 'Pizza Família (8 fatias)', shortTitle: 'Pizza', maxFlavors: isGigante ? 3 : 2 }
+    { id: 'p1', title: isGigante ? 'Pizza Gigante (12 fatias)' : 'Pizza Família (8 fatias)', shortTitle: 'Pizza', maxFlavors: isGigante ? 3 : 2, size: isGigante ? 'gigante' : 'familia', basePrice: isGigante ? 50.00 : 40.00 }
   ];
 }
 
@@ -85,6 +95,8 @@ export function ComboCustomizerModal({
   const [activeStage, setActiveStage] = useState('pizzas'); // 'pizzas' | 'acai'
   const [activePizzaIndex, setActivePizzaIndex] = useState(0);
   const [pizzaSelections, setPizzaSelections] = useState({});
+  const [flavorSearch, setFlavorSearch] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('todos');
   const [selectedAcaiComplements, setSelectedAcaiComplements] = useState([]);
   const [selectedAcaiCobertura, setSelectedAcaiCobertura] = useState('Sem Cobertura');
   const [selectedDydyo, setSelectedDydyo] = useState('Dydyo Guaraná 2L');
@@ -123,10 +135,11 @@ export function ComboCustomizerModal({
   // Listen to pizza_flavors_updated
   useEffect(() => {
     const handleFlavorsUpdated = (e) => {
-      if (e?.detail && Array.isArray(e.detail)) {
+      if (e?.detail && Array.isArray(e.detail) && e.detail.length > 0) {
         setFlavorsList(e.detail);
       } else {
-        setFlavorsList(getStoredPizzaFlavors());
+        const stored = getStoredPizzaFlavors();
+        setFlavorsList(stored && stored.length > 0 ? stored : INITIAL_PIZZA_FLAVORS);
       }
     };
     window.addEventListener('pizza_flavors_updated', handleFlavorsUpdated);
@@ -138,7 +151,9 @@ export function ComboCustomizerModal({
   }, []);
 
   const availableFlavors = useMemo(() => {
-    return flavorsList.filter(f => f.isAvailable !== false);
+    const list = Array.isArray(flavorsList) && flavorsList.length > 0 ? flavorsList : INITIAL_PIZZA_FLAVORS;
+    const unpaused = list.filter(f => f.isAvailable !== false);
+    return unpaused.length > 0 ? unpaused : list;
   }, [flavorsList]);
 
   // Reset state on open
@@ -147,6 +162,8 @@ export function ComboCustomizerModal({
       setFlavorsList(getStoredPizzaFlavors());
       setActiveStage('pizzas');
       setActivePizzaIndex(0);
+      setFlavorSearch('');
+      setCategoryFilter('todos');
       setNotes('');
       setValidationError('');
       setSemSuinosEsfirras(false);
@@ -167,26 +184,71 @@ export function ComboCustomizerModal({
     }
   }, [isOpen, comboProduct]);
 
+  const currentPizza = pizzasConfig[activePizzaIndex] || pizzasConfig[0];
+  const currentFlavors = (currentPizza && pizzaSelections[currentPizza.id]) || [];
+
+  // Available categories ordered
+  const availableCategories = useMemo(() => {
+    const set = new Set(availableFlavors.map(f => f.category || 'salgadas'));
+    const order = ['salgadas', 'especiais', 'doces'];
+    const arr = Array.from(set);
+    return arr.sort((a, b) => {
+      const idxA = order.indexOf(a);
+      const idxB = order.indexOf(b);
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      return a.localeCompare(b);
+    });
+  }, [availableFlavors]);
+
+  // Filtered flavors based on search & category
+  const filteredFlavors = useMemo(() => {
+    return availableFlavors.filter(flavor => {
+      const matchesCategory = categoryFilter === 'todos' || (flavor.category || 'salgadas') === categoryFilter;
+      const q = flavorSearch.toLowerCase().trim();
+      const matchesSearch = !q || 
+        flavor.name.toLowerCase().includes(q) || 
+        (flavor.description && flavor.description.toLowerCase().includes(q));
+      return matchesCategory && matchesSearch;
+    });
+  }, [availableFlavors, categoryFilter, flavorSearch]);
+
+  // Calculate surcharges for all pizzas in combo
+  const pizzaSurcharges = useMemo(() => {
+    const map = {};
+    pizzasConfig.forEach(p => {
+      const flavors = pizzaSelections[p.id] || [];
+      const base = Number(p.basePrice) || (p.size === 'gigante' ? 50.00 : 40.00);
+      map[p.id] = calculatePizzaSurcharge(base, flavors);
+    });
+    return map;
+  }, [pizzasConfig, pizzaSelections]);
+
+  const totalComboSurcharge = useMemo(() => {
+    return Object.values(pizzaSurcharges).reduce((acc, v) => acc + (Number(v) || 0), 0);
+  }, [pizzaSurcharges]);
+
+  const baseComboPrice = Number(comboProduct?.price) || 0;
+  const finalComboPrice = baseComboPrice + totalComboSurcharge;
+
   if (!isOpen || !comboProduct) return null;
 
-  const currentPizza = pizzasConfig[activePizzaIndex] || pizzasConfig[0];
-  const currentFlavors = pizzaSelections[currentPizza?.id] || [];
-
   // Toggle a flavor for the active pizza
-  const toggleFlavor = (flavor) => {
+  const toggleFlavor = (flavorName) => {
     setValidationError('');
     const currentList = pizzaSelections[currentPizza.id] || [];
 
-    if (currentList.includes(flavor)) {
+    if (currentList.includes(flavorName)) {
       setPizzaSelections(prev => ({
         ...prev,
-        [currentPizza.id]: currentList.filter(f => f !== flavor)
+        [currentPizza.id]: currentList.filter(f => f !== flavorName)
       }));
     } else {
       if (currentList.length < currentPizza.maxFlavors) {
         setPizzaSelections(prev => ({
           ...prev,
-          [currentPizza.id]: [...currentList, flavor]
+          [currentPizza.id]: [...currentList, flavorName]
         }));
       }
     }
@@ -226,10 +288,12 @@ export function ComboCustomizerModal({
       }
     }
 
-    // Build human-friendly breakdown
+    // Build human-friendly breakdown with surcharges if any
     const breakdown = pizzasConfig.map((p) => {
       const flavors = pizzaSelections[p.id] || [];
-      return `${p.shortTitle}: ${flavors.join(' / ')}`;
+      const surcharge = pizzaSurcharges[p.id] || 0;
+      const extraStr = surcharge > 0 ? ` (+ R$ ${surcharge.toFixed(2).replace('.', ',')})` : '';
+      return `${p.shortTitle}: ${flavors.join(' / ')}${extraStr}`;
     }).join(' • ');
 
     const extras = [];
@@ -249,16 +313,22 @@ export function ComboCustomizerModal({
       extras.push(selectedDydyo || 'Dydyo 2L');
     }
     const extrasText = extras.length > 0 ? ` • Acompanha: ${extras.join(' + ')}` : '';
+    const surchargeNotice = totalComboSurcharge > 0 
+      ? ` • Sabores especiais: + R$ ${totalComboSurcharge.toFixed(2).replace('.', ',')}` 
+      : '';
 
     const customCombo = {
       id: `custom-combo-${comboProduct.id}-${Date.now()}`,
       name: comboProduct.name,
-      price: comboProduct.price,
+      price: finalComboPrice,
+      basePrice: baseComboPrice,
+      totalSurcharge: totalComboSurcharge,
       isCombo: true,
       semSuinosEsfirras: hasEsfirrasInCombo ? semSuinosEsfirras : false,
       pizzaSelections: pizzasConfig.map(p => ({
         pizzaTitle: p.title,
-        flavors: pizzaSelections[p.id] || []
+        flavors: pizzaSelections[p.id] || [],
+        surcharge: pizzaSurcharges[p.id] || 0
       })),
       acaiComplements: hasAcaiInCombo ? selectedAcaiComplements : [],
       acaiCobertura: hasAcaiInCombo ? selectedAcaiCobertura : '',
@@ -266,16 +336,18 @@ export function ComboCustomizerModal({
       notes: notes.trim(),
       image: comboProduct.image,
       bordaGratis: comboProduct.bordaGratis,
-      description: `${breakdown}. Acompanha borda de Catupiry grátis.${extrasText}${notes ? ` Obs: ${notes}` : ''}`
+      description: `${breakdown}. Acompanha borda de Catupiry grátis.${extrasText}${surchargeNotice}${notes ? ` Obs: ${notes}` : ''}`
     };
 
     onAddComboToCart(customCombo);
     onClose();
   };
 
+  const currentPizzaBase = Number(currentPizza?.basePrice) || (currentPizza?.size === 'gigante' ? 50.00 : 40.00);
+
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-dark-950/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 animate-fade-in">
-      <div className="relative w-full max-w-xl bg-dark-900 border border-brand-gold/40 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+      <div className="relative w-full max-w-2xl sm:max-w-3xl bg-dark-900 border border-brand-gold/40 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
         
         {/* Modal Header */}
         <div className="p-4 sm:p-5 border-b border-dark-800 bg-gradient-to-r from-dark-950 to-dark-900 flex items-center justify-between">
@@ -289,10 +361,10 @@ export function ComboCustomizerModal({
               </h2>
               <p className="text-xs text-brand-gold font-medium">
                 {hasAcaiInCombo
-                  ? 'Monte sua pizza com borda grátis e escolha os acompanhamentos da barca de açaí!'
+                  ? 'Monte sua pizza com foto de cada sabor e escolha os acompanhamentos do açaí!'
                   : pizzasConfig.length > 1 
-                  ? `Monte suas ${pizzasConfig.length} pizzas individualmente com borda grátis!` 
-                  : 'Escolha os sabores da sua pizza com borda de Catupiry grátis!'}
+                  ? `Escolha os sabores das suas ${pizzasConfig.length} pizzas com foto ilustrativa e borda grátis!` 
+                  : 'Escolha os sabores da sua pizza com foto ilustrativa e borda de Catupiry grátis!'}
               </p>
             </div>
           </div>
@@ -319,7 +391,7 @@ export function ComboCustomizerModal({
             <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center justify-between">
               <span>Etapas de Personalização:</span>
               <span className="text-brand-gold font-extrabold">
-                {activeStage === 'acai' ? 'Barca de Açaí' : `Pizza (${activePizzaIndex + 1}/${pizzasConfig.length})`}
+                {activeStage === 'acai' ? 'Barca de Açaí' : `${currentPizza?.shortTitle} (${activePizzaIndex + 1}/${pizzasConfig.length})`}
               </span>
             </div>
 
@@ -328,6 +400,7 @@ export function ComboCustomizerModal({
                 const isSelected = activeStage === 'pizzas' && activePizzaIndex === idx;
                 const flavorsCount = (pizzaSelections[pizza.id] || []).length;
                 const isComplete = flavorsCount > 0;
+                const surcharge = pizzaSurcharges[pizza.id] || 0;
 
                 return (
                   <button
@@ -355,10 +428,21 @@ export function ComboCustomizerModal({
                       )}
                     </div>
 
-                    <div className="text-[10px] mt-0.5 truncate font-medium">
-                      {flavorsCount > 0 
-                        ? `${flavorsCount}/${pizza.maxFlavors} sabores` 
-                        : `Até ${pizza.maxFlavors} sabores`}
+                    <div className="flex items-center justify-between gap-1 text-[10px] mt-0.5 font-medium">
+                      <span className="truncate">
+                        {flavorsCount > 0 
+                          ? `${flavorsCount}/${pizza.maxFlavors} sabores` 
+                          : `Até ${pizza.maxFlavors} sabores`}
+                      </span>
+                      {surcharge > 0 && (
+                        <span className={`px-1.5 py-0.2 rounded font-black text-[9px] ${
+                          isSelected 
+                            ? 'bg-dark-950 text-amber-300' 
+                            : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                        }`}>
+                          + R$ {surcharge.toFixed(2).replace('.', ',')}
+                        </span>
+                      )}
                     </div>
                   </button>
                 );
@@ -402,7 +486,7 @@ export function ComboCustomizerModal({
         )}
 
         {/* Modal Scrollable Body */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
+        <div className="flex-1 overflow-y-auto p-3.5 sm:p-5 space-y-4">
           
           {/* Validation Error Banner */}
           {validationError && (
@@ -416,10 +500,10 @@ export function ComboCustomizerModal({
           {/* ETAPA 1: ESCOLHA DOS SABORES DA PIZZA                   */}
           {/* ======================================================== */}
           {activeStage === 'pizzas' && (
-            <div className="space-y-4">
+            <div className="space-y-3.5">
               
               {/* Current Pizza Header & Helper */}
-              <div className="bg-dark-950/70 p-3.5 rounded-2xl border border-dark-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="bg-dark-950/70 p-3.5 rounded-2xl border border-dark-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                 <div>
                   <div className="flex items-center gap-2">
                     <PizzaIcon className="w-4 h-4 text-brand-gold" />
@@ -429,6 +513,11 @@ export function ComboCustomizerModal({
                   </div>
                   <p className="text-xs text-brand-goldLight mt-0.5 font-medium">
                     Escolha até {currentPizza?.maxFlavors} sabores ({currentFlavors.length}/{currentPizza?.maxFlavors} selecionados)
+                    {pizzaSurcharges[currentPizza?.id] > 0 && (
+                      <span className="ml-2 font-bold text-amber-300 bg-amber-500/20 border border-amber-500/30 px-1.5 py-0.2 rounded text-[10px]">
+                        Acréscimo nesta pizza: + R$ {pizzaSurcharges[currentPizza?.id].toFixed(2).replace('.', ',')}
+                      </span>
+                    )}
                   </p>
                 </div>
 
@@ -446,34 +535,158 @@ export function ComboCustomizerModal({
                 )}
               </div>
 
-              {/* Flavors Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {availableFlavors.map((flavor) => {
-                  const flavorName = typeof flavor === 'object' ? flavor.name : flavor;
+              {/* Informative Price Notice */}
+              <div className="px-3 py-2 rounded-xl bg-dark-950/50 border border-dark-800 text-[11px] text-slate-300 flex items-center gap-2">
+                <Info className="w-3.5 h-3.5 text-brand-gold flex-shrink-0" />
+                <span>
+                  <strong className="text-white">Regra de Sabores:</strong> Sabores tradicionais são <strong className="text-emerald-400">100% inclusos</strong>. Sabores especiais agregam apenas a diferença de valor da pizza.
+                </span>
+              </div>
+
+              {/* Search & Category Filter */}
+              <div className="space-y-2">
+                <div className="relative">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    placeholder="Buscar sabor por nome ou ingredientes..."
+                    value={flavorSearch}
+                    onChange={(e) => setFlavorSearch(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 text-xs rounded-xl bg-dark-950 border border-dark-800 text-white placeholder-slate-500 focus:outline-none focus:border-brand-gold"
+                  />
+                </div>
+
+                {/* Category Filter Pills */}
+                <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setCategoryFilter('todos')}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-colors cursor-pointer ${
+                      categoryFilter === 'todos'
+                        ? 'bg-brand-gold text-dark-950 font-black'
+                        : 'bg-dark-950 text-slate-300 hover:bg-dark-800 border border-dark-800'
+                    }`}
+                  >
+                    Todos ({availableFlavors.length})
+                  </button>
+                  {availableCategories.map(cat => {
+                    const label = cat === 'salgadas' ? 'Salgadas 🧀' : cat === 'especiais' ? 'Especiais ⭐' : cat === 'doces' ? 'Doces 🍫' : cat;
+                    return (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => setCategoryFilter(cat)}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-colors cursor-pointer capitalize ${
+                          categoryFilter === cat
+                            ? 'bg-brand-gold text-dark-950 font-black'
+                            : 'bg-dark-950 text-slate-300 hover:bg-dark-800 border border-dark-800'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Flavors Grid with Transparent-Background Photos */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {filteredFlavors.map((flavor) => {
+                  const flavorName = flavor.name;
                   const isSelected = currentFlavors.includes(flavorName);
+                  const isDisabled = !isSelected && currentFlavors.length >= currentPizza.maxFlavors;
+                  const extraPrice = getFlavorSurchargeForPizza(currentPizzaBase, flavor);
+                  const imageSrc = flavor.image || `/flavors/${flavor.id || 'calabresa'}.png`;
+
                   return (
                     <button
                       key={flavor.id || flavorName}
                       type="button"
                       onClick={() => toggleFlavor(flavorName)}
-                      className={`p-3 rounded-xl border text-left text-xs font-semibold flex items-center justify-between gap-2 transition-all cursor-pointer ${
+                      disabled={isDisabled}
+                      className={`w-full p-2.5 sm:p-3 rounded-2xl border text-left flex items-center justify-between gap-3 transition-all cursor-pointer relative overflow-hidden group ${
                         isSelected
-                          ? 'bg-brand-gold/20 border-brand-gold text-brand-goldLight shadow-sm'
-                          : 'bg-dark-950 border-dark-800 text-slate-300 hover:border-dark-700'
+                          ? 'bg-brand-gold/15 border-brand-gold text-white ring-1 ring-brand-gold/50 shadow-md'
+                          : isDisabled
+                          ? 'bg-dark-950/40 border-dark-800/80 text-slate-500 opacity-40 cursor-not-allowed'
+                          : 'bg-dark-950/90 hover:bg-dark-850 text-slate-200 border-dark-800 hover:border-dark-700'
                       }`}
                     >
-                      <span className="truncate">{flavorName}</span>
-                      <div className={`w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 border ${
+                      {/* Left: Transparent Cutout Pizza Flavor Image */}
+                      <div className="relative w-14 h-14 sm:w-16 sm:h-16 flex-shrink-0 flex items-center justify-center rounded-xl bg-dark-900/80 border border-dark-800/80 p-1 group-hover:scale-105 transition-transform">
+                        <img
+                          src={imageSrc}
+                          alt={flavorName}
+                          className="w-full h-full object-contain filter drop-shadow-md"
+                          loading="lazy"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                          }}
+                        />
+                      </div>
+
+                      {/* Center Info */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-xs sm:text-sm font-bold text-white line-clamp-1">
+                            {flavorName}
+                          </span>
+                          {flavor.category && (
+                            <span className={`text-[9px] px-1.5 py-0.2 rounded font-semibold uppercase tracking-wider ${
+                              flavor.category === 'especiais' 
+                                ? 'bg-amber-400/20 text-amber-300 border border-amber-400/30' 
+                                : flavor.category === 'doces'
+                                ? 'bg-pink-400/20 text-pink-300 border border-pink-400/30'
+                                : 'bg-slate-800 text-slate-400'
+                            }`}>
+                              {flavor.category === 'especiais' ? 'Especial ⭐' : flavor.category === 'doces' ? 'Doce 🍫' : 'Tradicional'}
+                            </span>
+                          )}
+                        </div>
+
+                        {flavor.description && (
+                          <p className="text-[10px] sm:text-[11px] text-slate-400 line-clamp-1 mt-0.5 font-normal">
+                            {flavor.description}
+                          </p>
+                        )}
+
+                        {/* Price / Addition for this Combo Pizza */}
+                        <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                          {extraPrice === 0 ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
+                              <Check className="w-3 h-3 stroke-[3]" />
+                              <span>Incluso no Combo (+ R$ 0,00)</span>
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-black text-amber-300 bg-amber-500/15 px-2 py-0.5 rounded-md border border-amber-500/30">
+                              <ArrowUpRight className="w-3 h-3 text-brand-gold stroke-[3]" />
+                              <span>+ R$ {extraPrice.toFixed(2).replace('.', ',')} no combo</span>
+                            </span>
+                          )}
+                          <span className="text-[9px] text-slate-500 font-medium">
+                            (Ref: R$ {Number(flavor.price || 40).toFixed(2).replace('.', ',')})
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Right: Checkbox */}
+                      <div className={`w-5 h-5 rounded-lg flex items-center justify-center flex-shrink-0 border transition-colors ${
                         isSelected
-                          ? 'bg-brand-gold border-brand-gold text-dark-950'
-                          : 'border-slate-600 bg-dark-900'
+                          ? 'bg-brand-gold border-brand-gold text-dark-950 font-black shadow-sm'
+                          : 'border-slate-700 bg-dark-900 text-transparent'
                       }`}>
-                        {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                        <Check className="w-3.5 h-3.5 stroke-[3]" />
                       </div>
                     </button>
                   );
                 })}
               </div>
+
+              {filteredFlavors.length === 0 && (
+                <div className="text-center py-8 text-slate-500 text-xs">
+                  Nenhum sabor encontrado para a busca informada.
+                </div>
+              )}
 
               {/* Botão de Avanço para a Barca de Açaí */}
               {hasAcaiInCombo && (
@@ -602,7 +815,7 @@ export function ComboCustomizerModal({
                         <div className={`w-4 h-4 rounded-md flex items-center justify-center flex-shrink-0 transition-colors ${
                           isSelected ? 'bg-purple-500 text-dark-950' : 'border border-dark-700 bg-dark-900'
                         }`}>
-                          {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                          {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
                         </div>
                       </button>
                     );
@@ -645,14 +858,22 @@ export function ComboCustomizerModal({
             <div className="space-y-1.5 text-xs">
               {pizzasConfig.map((pizza) => {
                 const flavors = pizzaSelections[pizza.id] || [];
+                const surcharge = pizzaSurcharges[pizza.id] || 0;
                 return (
                   <div key={pizza.id} className="flex items-start justify-between gap-2">
                     <span className="text-slate-400 font-medium">
                       🍕 {pizza.shortTitle}:
                     </span>
-                    <span className={`text-right font-bold ${flavors.length > 0 ? 'text-brand-gold' : 'text-slate-500 italic'}`}>
-                      {flavors.length > 0 ? flavors.join(' + ') : 'Escolha os sabores'}
-                    </span>
+                    <div className="text-right">
+                      <span className={`font-bold ${flavors.length > 0 ? 'text-brand-gold' : 'text-slate-500 italic'}`}>
+                        {flavors.length > 0 ? flavors.join(' + ') : 'Escolha os sabores'}
+                      </span>
+                      {surcharge > 0 && (
+                        <span className="ml-1 text-[10px] text-amber-300 font-extrabold">
+                          (+ R$ {surcharge.toFixed(2).replace('.', ',')})
+                        </span>
+                      )}
+                    </div>
                   </div>
                 );
               })}
@@ -733,7 +954,7 @@ export function ComboCustomizerModal({
                       <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
                         isSelected ? 'border-amber-400 bg-amber-400 text-dark-950' : 'border-dark-600'
                       }`}>
-                        {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                        {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="text-xs font-bold leading-tight truncate">
@@ -786,29 +1007,43 @@ export function ComboCustomizerModal({
         </div>
 
         {/* Modal Footer */}
-        <div className="p-4 sm:p-5 border-t border-dark-800 bg-dark-950 flex items-center justify-between gap-3">
+        <div className="p-4 sm:p-5 border-t border-dark-800 bg-dark-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Valor do Combo:</span>
-            <span className="text-base sm:text-lg font-black text-brand-gold font-mono">
-              R$ {Number(comboProduct.price || 0).toFixed(2).replace('.', ',')}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Valor Total do Combo:</span>
+              {totalComboSurcharge > 0 && (
+                <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.2 rounded font-bold">
+                  + R$ {totalComboSurcharge.toFixed(2).replace('.', ',')} sabores especiais
+                </span>
+              )}
+            </div>
+            <div className="flex items-baseline gap-2">
+              <span className="text-lg sm:text-xl font-black text-brand-gold font-mono">
+                R$ {finalComboPrice.toFixed(2).replace('.', ',')}
+              </span>
+              {totalComboSurcharge > 0 && (
+                <span className="text-xs text-slate-500 line-through">
+                  R$ {baseComboPrice.toFixed(2).replace('.', ',')}
+                </span>
+              )}
+            </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 w-full sm:w-auto">
             <button
               type="button"
               onClick={onClose}
-              className="px-3 py-2.5 rounded-xl bg-dark-850 hover:bg-dark-800 text-slate-400 font-bold text-xs cursor-pointer transition-colors"
+              className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl bg-dark-850 hover:bg-dark-800 text-slate-400 font-bold text-xs cursor-pointer transition-colors"
             >
               Cancelar
             </button>
             <button
               type="button"
               onClick={handleConfirm}
-              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-brand-gold via-amber-400 to-brand-gold hover:from-amber-400 hover:to-brand-gold text-dark-950 font-black text-xs sm:text-sm shadow-glow-gold flex items-center gap-1.5 cursor-pointer active:scale-98 transition-all"
+              className="flex-1 sm:flex-none px-5 py-2.5 rounded-xl bg-gradient-to-r from-brand-gold via-amber-400 to-brand-gold hover:from-amber-400 hover:to-brand-gold text-dark-950 font-black text-xs sm:text-sm shadow-glow-gold flex items-center justify-center gap-1.5 cursor-pointer active:scale-98 transition-all"
             >
               <Check className="w-4 h-4 stroke-[3]" />
-              <span>Adicionar Combo</span>
+              <span>Adicionar Combo • R$ {finalComboPrice.toFixed(2).replace('.', ',')}</span>
             </button>
           </div>
         </div>

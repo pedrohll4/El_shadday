@@ -192,7 +192,7 @@ export function BuffetSection({ onExploreFullBuffet, onBackToDelivery }) {
       let channelCs;
       try {
         channelCs = supabase
-          .channel('realtime_gallery_section_cs')
+          .channel(`realtime_gallery_section_cs_${Date.now()}`)
           .on('postgres_changes', { event: '*', schema: 'public', table: 'company_settings' }, () => {
             if (!isMounted) return;
             supabase
@@ -217,7 +217,7 @@ export function BuffetSection({ onExploreFullBuffet, onBackToDelivery }) {
       let channelBg;
       try {
         channelBg = supabase
-          .channel('realtime_gallery_section_bg')
+          .channel(`realtime_gallery_section_bg_${Date.now()}`)
           .on('postgres_changes', { event: '*', schema: 'public', table: 'buffet_gallery' }, () => {
             if (!isMounted) return;
             supabase
@@ -242,6 +242,8 @@ export function BuffetSection({ onExploreFullBuffet, onBackToDelivery }) {
       isMounted = false;
       window.removeEventListener('storage', handleGallerySync);
       window.removeEventListener('buffet_gallery_updated', handleGallerySync);
+      if (channelCs && supabase) { try { supabase.removeChannel(channelCs); } catch (e) {} }
+      if (channelBg && supabase) { try { supabase.removeChannel(channelBg); } catch (e) {} }
     };
   }, []);
 

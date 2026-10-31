@@ -87,7 +87,11 @@ let supabaseBridgeChannel = null;
 
 if (typeof window !== 'undefined' && isSupabaseConfigured && supabase) {
   try {
-    supabaseBridgeChannel = supabase.channel('el_shadday_whatsapp_bridge');
+    const existingChannels = typeof supabase.getChannels === 'function' ? supabase.getChannels() : [];
+    const prevBridge = existingChannels.find(ch => ch?.topic?.includes('el_shadday_whatsapp_bridge'));
+    if (prevBridge) supabase.removeChannel(prevBridge);
+
+    supabaseBridgeChannel = supabase.channel(`el_shadday_whatsapp_bridge_${Date.now()}`);
 
     supabaseBridgeChannel
       .on('broadcast', { event: 'STATUS_UPDATE' }, ({ payload }) => {

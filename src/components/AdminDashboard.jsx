@@ -327,31 +327,44 @@ export function AdminDashboard({
           }
         });
 
-      // Realtime: sincroniza alterações em buffet_gallery
-      const channelBuffetGallery = supabase
-        .channel('realtime_buffet_gallery_admin')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'buffet_gallery' }, () => {
-          supabase
-            .from('buffet_gallery')
-            .select('*')
-            .order('position', { ascending: true })
-            .then(({ data }) => {
-              if (Array.isArray(data)) {
-                const clean = data.filter(p => !isFakeGalleryItem(p));
-                setGalleryList(clean);
-                saveStoredBuffetGallery(clean);
-              }
-            });
-        })
-        .subscribe();
+      let channelBuffetGallery = null;
+      let channelCsGallery = null;
 
-      // Realtime company_settings: sincroniza novas fotos enviadas
-      const channelCsGallery = supabase
-        .channel('realtime_cs_gallery_admin')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'company_settings' }, () => {
-          loadFromCompanySettings();
-        })
-        .subscribe();
+      try {
+        const existingChannels = typeof supabase.getChannels === 'function' ? supabase.getChannels() : [];
+        const prevBuffet = existingChannels.find(ch => ch?.topic?.includes('realtime_buffet_gallery_admin'));
+        if (prevBuffet) supabase.removeChannel(prevBuffet);
+        const prevCs = existingChannels.find(ch => ch?.topic?.includes('realtime_cs_gallery_admin'));
+        if (prevCs) supabase.removeChannel(prevCs);
+
+        // Realtime: sincroniza alterações em buffet_gallery
+        channelBuffetGallery = supabase
+          .channel(`realtime_buffet_gallery_admin_${Date.now()}`)
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'buffet_gallery' }, () => {
+            supabase
+              .from('buffet_gallery')
+              .select('*')
+              .order('position', { ascending: true })
+              .then(({ data }) => {
+                if (Array.isArray(data)) {
+                  const clean = data.filter(p => !isFakeGalleryItem(p));
+                  setGalleryList(clean);
+                  saveStoredBuffetGallery(clean);
+                }
+              });
+          })
+          .subscribe();
+
+        // Realtime company_settings: sincroniza novas fotos enviadas
+        channelCsGallery = supabase
+          .channel(`realtime_cs_gallery_admin_${Date.now()}`)
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'company_settings' }, () => {
+            loadFromCompanySettings();
+          })
+          .subscribe();
+      } catch (err) {
+        console.warn('[AdminDashboard] Falha ao registrar realtime gallery:', err);
+      }
 
       return () => {
         window.removeEventListener('storage', handleGallerySync);
@@ -761,28 +774,36 @@ export function AdminDashboard({
           }
         });
 
-      channelCompanySettingsAdmin = supabase
-        .channel('realtime_cs_menu_admin')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'company_settings' }, (payload) => {
-          const fresh = payload.new;
-          if (fresh) {
-            if (Array.isArray(fresh.menu_products)) {
-              const normProds = normalizeProductsList(fresh.menu_products);
-              setProductsList(normProds);
-              saveStoredProducts(normProds);
+      try {
+        const existingChannels = typeof supabase.getChannels === 'function' ? supabase.getChannels() : [];
+        const prevMenu = existingChannels.find(ch => ch?.topic?.includes('realtime_cs_menu_admin'));
+        if (prevMenu) supabase.removeChannel(prevMenu);
+
+        channelCompanySettingsAdmin = supabase
+          .channel(`realtime_cs_menu_admin_${Date.now()}`)
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'company_settings' }, (payload) => {
+            const fresh = payload.new;
+            if (fresh) {
+              if (Array.isArray(fresh.menu_products)) {
+                const normProds = normalizeProductsList(fresh.menu_products);
+                setProductsList(normProds);
+                saveStoredProducts(normProds);
+              }
+              if (Array.isArray(fresh.pizza_flavors)) {
+                const normFlavors = normalizePizzaFlavors(fresh.pizza_flavors);
+                setPizzaFlavors(normFlavors);
+                saveStoredPizzaFlavors(normFlavors);
+              }
+              if (fresh.promo_settings) {
+                setPromoSettings(fresh.promo_settings);
+                saveStoredPromoSettings(fresh.promo_settings);
+              }
             }
-            if (Array.isArray(fresh.pizza_flavors)) {
-              const normFlavors = normalizePizzaFlavors(fresh.pizza_flavors);
-              setPizzaFlavors(normFlavors);
-              saveStoredPizzaFlavors(normFlavors);
-            }
-            if (fresh.promo_settings) {
-              setPromoSettings(fresh.promo_settings);
-              saveStoredPromoSettings(fresh.promo_settings);
-            }
-          }
-        })
-        .subscribe();
+          })
+          .subscribe();
+      } catch (err) {
+        console.warn('[AdminDashboard] Falha ao registrar realtime menu_admin:', err);
+      }
     }
 
     return () => {

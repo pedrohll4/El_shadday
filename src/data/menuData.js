@@ -763,6 +763,7 @@ export const INITIAL_PIZZA_FLAVORS = [
     price: 40.00,
     category: "salgadas",
     description: "Molho artesanal, queijo muçarela derretido, calabresa fatiada crocante, cebola e orégano.",
+    image: "/flavors/calabresa.png",
     isAvailable: true
   },
   {
@@ -771,6 +772,7 @@ export const INITIAL_PIZZA_FLAVORS = [
     price: 40.00,
     category: "salgadas",
     description: "Muçarela de primeira qualidade, molho artesanal e orégano perfumado.",
+    image: "/flavors/mucarela.png",
     isAvailable: true
   },
   {
@@ -779,6 +781,7 @@ export const INITIAL_PIZZA_FLAVORS = [
     price: 40.00,
     category: "salgadas",
     description: "Combinação saborosa de muçarela especial e queijo cremoso com orégano.",
+    image: "/flavors/dois-queijos.png",
     isAvailable: true
   },
   {
@@ -787,6 +790,7 @@ export const INITIAL_PIZZA_FLAVORS = [
     price: 40.00,
     category: "salgadas",
     description: "Peito de frango desfiado temperado, muçarela, legítimo Catupiry cremoso e orégano.",
+    image: "/flavors/frango-catupiry.png",
     isAvailable: true
   },
   {
@@ -795,6 +799,7 @@ export const INITIAL_PIZZA_FLAVORS = [
     price: 40.00,
     category: "salgadas",
     description: "Frango desfiado suculento, muçarela e delicioso queijo cheddar derretido.",
+    image: "/flavors/frango-cheddar.png",
     isAvailable: true
   },
   {
@@ -803,6 +808,7 @@ export const INITIAL_PIZZA_FLAVORS = [
     price: 40.00,
     category: "salgadas",
     description: "Milho verde, ervilha fresca, azeitona, muçarela, cebola crocante e orégano.",
+    image: "/flavors/vegetariana.png",
     isAvailable: true
   },
   {
@@ -811,6 +817,7 @@ export const INITIAL_PIZZA_FLAVORS = [
     price: 40.00,
     category: "salgadas",
     description: "Calabresa picadinha especial, ervilhas frescas, queijo muçarela e orégano.",
+    image: "/flavors/calabresa-picadinha.png",
     isAvailable: true
   },
   {
@@ -819,6 +826,7 @@ export const INITIAL_PIZZA_FLAVORS = [
     price: 40.00,
     category: "salgadas",
     description: "Cubos de bacon dourados e crocantes, queijo muçarela derretido e orégano.",
+    image: "/flavors/bacon-crocante.png",
     isAvailable: true
   },
   {
@@ -827,6 +835,7 @@ export const INITIAL_PIZZA_FLAVORS = [
     price: 40.00,
     category: "salgadas",
     description: "Receita especial com muçarela, presunto, champignon e orégano.",
+    image: "/flavors/romanesca.png",
     isAvailable: true
   },
   {
@@ -835,6 +844,7 @@ export const INITIAL_PIZZA_FLAVORS = [
     price: 40.00,
     category: "salgadas",
     description: "Molho artesanal, muçarela, salsicha fatiada selecionada, milho e batata palha.",
+    image: "/flavors/hot-dog.png",
     isAvailable: true
   },
   {
@@ -843,6 +853,7 @@ export const INITIAL_PIZZA_FLAVORS = [
     price: 40.00,
     category: "salgadas",
     description: "Calabresa moída, pimenta calabresa selecionada, cebola, ovos e muçarela.",
+    image: "/flavors/baiana-apimentada.png",
     isAvailable: true
   },
   {
@@ -851,6 +862,7 @@ export const INITIAL_PIZZA_FLAVORS = [
     price: 40.00,
     category: "salgadas",
     description: "Frango desfiado suculento, milho verde selecionado e queijo muçarela.",
+    image: "/flavors/frango-milho.png",
     isAvailable: true
   },
   {
@@ -859,6 +871,7 @@ export const INITIAL_PIZZA_FLAVORS = [
     price: 40.00,
     category: "salgadas",
     description: "Milho verde doce e suculento, muçarela derretida e orégano.",
+    image: "/flavors/milho.png",
     isAvailable: true
   },
   {
@@ -867,6 +880,7 @@ export const INITIAL_PIZZA_FLAVORS = [
     price: 50.00,
     category: "especiais",
     description: "Fatias de calabresa artesanal combinadas com o legítimo Catupiry cremoso e muçarela.",
+    image: "/flavors/calabresa-catupiry.png",
     isAvailable: true
   },
   {
@@ -875,6 +889,7 @@ export const INITIAL_PIZZA_FLAVORS = [
     price: 65.00,
     category: "especiais",
     description: "Carne seca desfiada de primeiríssima qualidade com generoso Catupiry cremoso.",
+    image: "/flavors/carne-seca.png",
     isAvailable: true
   },
   {
@@ -883,6 +898,7 @@ export const INITIAL_PIZZA_FLAVORS = [
     price: 55.00,
     category: "especiais",
     description: "Strogonoff de frango cremoso feito na hora, muçarela e batata palha crocante.",
+    image: "/flavors/strogonoff-frango.png",
     isAvailable: true
   },
   {
@@ -891,6 +907,7 @@ export const INITIAL_PIZZA_FLAVORS = [
     price: 65.00,
     category: "especiais",
     description: "Lombo canadense fatiado, pedaços doces de abacaxi e queijo muçarela derretido.",
+    image: "/flavors/lombo-abacaxi.png",
     isAvailable: true
   },
   {
@@ -899,6 +916,7 @@ export const INITIAL_PIZZA_FLAVORS = [
     price: 65.00,
     category: "especiais",
     description: "Lombo especial com cebola, ovos, azeitonas selecionadas e muçarela.",
+    image: "/flavors/lombo-portuguesa.png",
     isAvailable: true
   },
   {
@@ -907,6 +925,7 @@ export const INITIAL_PIZZA_FLAVORS = [
     price: 40.00,
     category: "doces",
     description: "Chocolate ao leite cremoso nobre, granulado de puro cacau e leve toque suave de queijo.",
+    image: "/flavors/brigadeiro-gourmet.png",
     isAvailable: true
   },
   {
@@ -915,6 +934,7 @@ export const INITIAL_PIZZA_FLAVORS = [
     price: 40.00,
     category: "doces",
     description: "Fatias de banana fresca, leite condensado cremoso artesanal, muçarela derretida e canela em pó perfumada.",
+    image: "/flavors/banana-canela.png",
     isAvailable: true
   },
   {
@@ -923,6 +943,7 @@ export const INITIAL_PIZZA_FLAVORS = [
     price: 40.00,
     category: "doces",
     description: "Goiabada cascão cremosa derretida harmonizada com bastante queijo muçarela especial.",
+    image: "/flavors/romeu-julieta.png",
     isAvailable: true
   },
   {
@@ -931,6 +952,7 @@ export const INITIAL_PIZZA_FLAVORS = [
     price: 40.00,
     category: "doces",
     description: "Chocolate ao leite nobre cremoso com flocos úmidos de coco ralado selecionado e queijo muçarela.",
+    image: "/flavors/prestigio-gourmet.png",
     isAvailable: true
   },
   {
@@ -939,6 +961,7 @@ export const INITIAL_PIZZA_FLAVORS = [
     price: 40.00,
     category: "doces",
     description: "Generoso chocolate nobre ao leite com pedaços frescos e suculentos de morango.",
+    image: "/flavors/chocolate-morango.png",
     isAvailable: true
   },
   {
@@ -947,6 +970,7 @@ export const INITIAL_PIZZA_FLAVORS = [
     price: 40.00,
     category: "doces",
     description: "Puro chocolate branco nobre derretido, amanteigado, aveludado e irresistível.",
+    image: "/flavors/chocolate-branco.png",
     isAvailable: true
   },
   {
@@ -955,6 +979,7 @@ export const INITIAL_PIZZA_FLAVORS = [
     price: 40.00,
     category: "doces",
     description: "Fatias de banana fresca, chocolate branco nobre derretido, queijo e canela suave.",
+    image: "/flavors/banana-nevada.png",
     isAvailable: true
   },
   {
@@ -963,6 +988,7 @@ export const INITIAL_PIZZA_FLAVORS = [
     price: 40.00,
     category: "doces",
     description: "Chocolate ao leite nobre cremoso com confeitos crocantes e coloridos de chocolate.",
+    image: "/flavors/confete-mm.png",
     isAvailable: true
   },
   {
@@ -971,6 +997,7 @@ export const INITIAL_PIZZA_FLAVORS = [
     price: 40.00,
     category: "doces",
     description: "Doce de leite artesanal aveludado e farofa generosa de paçoca de amendoim torrado.",
+    image: "/flavors/doce-leite-pacoca.png",
     isAvailable: true
   }
 ];
@@ -1002,33 +1029,41 @@ export function normalizeProductsList(prods) {
 
 export function normalizePizzaFlavors(flavors) {
   if (!Array.isArray(flavors) || flavors.length === 0) return INITIAL_PIZZA_FLAVORS;
-  const hasDoces = flavors.some(f => f.category === 'doces');
+  const hasDoces = flavors.some(f => f && typeof f === 'object' && f.category === 'doces');
   let normalized = flavors.map((item, idx) => {
+    if (!item) return null;
     if (typeof item === 'string') {
+      const generatedId = `flavor-${item.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
+      const found = INITIAL_PIZZA_FLAVORS.find(f => (f.name && f.name.toLowerCase() === item.toLowerCase()) || f.id === generatedId);
       return {
-        id: `flavor-${item.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
+        id: found?.id || generatedId,
         name: item,
-        price: 40.00,
-        category: 'salgadas',
-        description: '',
+        price: found ? found.price : 40.00,
+        category: found ? found.category : 'salgadas',
+        description: found ? found.description : '',
+        image: found?.image || `/flavors/${found?.id || generatedId}.png`,
         isAvailable: true
       };
     }
+    const id = item.id || `flavor-${Date.now()}-${idx}`;
+    const itemName = item.name || '';
+    const found = INITIAL_PIZZA_FLAVORS.find(f => f.id === id || (f.name && itemName && f.name.toLowerCase() === itemName.toLowerCase()));
     return {
-      id: item.id || `flavor-${Date.now()}-${idx}`,
-      name: item.name || '',
-      price: typeof item.price === 'number' ? item.price : (parseFloat(item.price) || 40.00),
-      category: item.category || 'salgadas',
-      description: item.description || '',
+      id: found?.id || id,
+      name: itemName || found?.name || 'Sabor Especial',
+      price: typeof item.price === 'number' ? item.price : (parseFloat(item.price) || (found ? found.price : 40.00)),
+      category: item.category || found?.category || 'salgadas',
+      description: item.description || found?.description || '',
+      image: item.image || found?.image || `/flavors/${found?.id || id}.png`,
       isAvailable: item.isAvailable !== false
     };
-  });
+  }).filter(Boolean);
 
   if (!hasDoces) {
     const docesFlavors = INITIAL_PIZZA_FLAVORS.filter(f => f.category === 'doces');
     normalized = [...normalized, ...docesFlavors];
   }
-  return normalized;
+  return normalized.length > 0 ? normalized : INITIAL_PIZZA_FLAVORS;
 }
 
 export function getStoredProducts() {
@@ -1133,22 +1168,19 @@ export function saveStoredRestaurantInfo(info) {
 
 export function getStoredPizzaFlavors() {
   try {
-    const saved = localStorage.getItem("el_shadday_pizza_flavors_v3");
-    if (saved !== null) {
+    const saved = localStorage.getItem("el_shadday_pizza_flavors_v4") || localStorage.getItem("el_shadday_pizza_flavors_v3");
+    if (saved) {
       const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed) && parsed.length > 0 && parsed.some(f => f.category === 'doces')) {
+      if (Array.isArray(parsed) && parsed.length > 0) {
         return normalizePizzaFlavors(parsed);
       }
     }
 
     const savedV2 = localStorage.getItem("el_shadday_pizza_flavors_v2");
-    if (savedV2 !== null) {
+    if (savedV2) {
       const parsed = JSON.parse(savedV2);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        const normalized = normalizePizzaFlavors(parsed);
-        localStorage.setItem("el_shadday_pizza_flavors_v3", JSON.stringify(normalized));
-        localStorage.setItem("el_shadday_pizza_flavors_v2", JSON.stringify(normalized));
-        return normalized;
+        return normalizePizzaFlavors(parsed);
       }
     }
   } catch (e) {
@@ -1159,10 +1191,12 @@ export function getStoredPizzaFlavors() {
 
 export function saveStoredPizzaFlavors(flavors) {
   try {
-    localStorage.setItem("el_shadday_pizza_flavors_v3", JSON.stringify(flavors));
-    localStorage.setItem("el_shadday_pizza_flavors_v2", JSON.stringify(flavors));
+    const normalized = normalizePizzaFlavors(flavors);
+    localStorage.setItem("el_shadday_pizza_flavors_v4", JSON.stringify(normalized));
+    localStorage.setItem("el_shadday_pizza_flavors_v3", JSON.stringify(normalized));
+    localStorage.setItem("el_shadday_pizza_flavors_v2", JSON.stringify(normalized));
     if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent("pizza_flavors_updated", { detail: flavors }));
+      window.dispatchEvent(new CustomEvent("pizza_flavors_updated", { detail: normalized }));
     }
   } catch (e) {
     console.error("Error saving stored pizza flavors:", e);
@@ -1176,13 +1210,16 @@ export function saveStoredPizzaFlavors(flavors) {
  */
 export function calculatePizzaPrice(basePrice, selectedFlavors) {
   const base = Number(basePrice) || 0;
-  if (!selectedFlavors || selectedFlavors.length === 0) {
+  if (!selectedFlavors || !Array.isArray(selectedFlavors) || selectedFlavors.length === 0) {
     return base;
   }
   
+  const allFlavors = getStoredPizzaFlavors();
   const flavorPrices = selectedFlavors.map(f => {
     if (!f) return 0;
-    const flavorObj = typeof f === 'object' ? f : getStoredPizzaFlavors().find(s => s.name === f);
+    const flavorObj = typeof f === 'object' 
+      ? f 
+      : allFlavors.find(s => s && s.name === f) || INITIAL_PIZZA_FLAVORS.find(s => s && s.name === f);
     if (!flavorObj) return 0;
     
     const price = Number(flavorObj.price) || 0;
@@ -1195,6 +1232,34 @@ export function calculatePizzaPrice(basePrice, selectedFlavors) {
 
   const maxFlavorPrice = Math.max(0, ...flavorPrices);
   return Math.max(base, maxFlavorPrice);
+}
+
+/**
+ * Retorna o acréscimo de uma pizza com base nos sabores selecionados
+ * @param {number} pizzaBasePrice 
+ * @param {Array<string|object>} selectedFlavors 
+ * @returns {number}
+ */
+export function calculatePizzaSurcharge(pizzaBasePrice, selectedFlavors) {
+  const base = Number(pizzaBasePrice) || 0;
+  const calculated = calculatePizzaPrice(base, selectedFlavors);
+  return Math.max(0, calculated - base);
+}
+
+/**
+ * Retorna o acréscimo individual que um sabor traria para uma pizza
+ * @param {number} pizzaBasePrice 
+ * @param {object} flavorObj 
+ * @returns {number}
+ */
+export function getFlavorSurchargeForPizza(pizzaBasePrice, flavorObj) {
+  if (!flavorObj) return 0;
+  const base = Number(pizzaBasePrice) || 0;
+  const rawPrice = Number(flavorObj.price) || 0;
+  if (rawPrice <= 40 && flavorObj.category !== 'especiais') {
+    return 0;
+  }
+  return Math.max(0, rawPrice - base);
 }
 
 /**

@@ -94,6 +94,12 @@ export class ErrorBoundary extends React.Component {
           <p className="text-xs sm:text-sm text-slate-400 max-w-md mb-6 leading-relaxed">
             Houve uma pequena oscilação no carregamento desta página. Seus dados e configurações continuam 100% preservados.
           </p>
+          {this.state.error && (
+            <div className="bg-red-950/60 border border-red-500/40 text-red-200 p-3 rounded-xl max-w-lg mb-6 text-left text-xs font-mono overflow-auto max-h-48">
+              <p className="font-bold text-red-400 mb-1">{this.state.error.name}: {this.state.error.message}</p>
+              <pre className="text-[10px] text-red-300 whitespace-pre-wrap">{this.state.error.stack}</pre>
+            </div>
+          )}
           <div className="flex flex-wrap items-center justify-center gap-3">
             <button
               type="button"
@@ -265,6 +271,8 @@ export default function App() {
     window.addEventListener('delivery_restaurant_info_updated', handleInfoSync);
     window.addEventListener('storage', handleProductsSync);
 
+    let channelSettings = null;
+
     // Hydrate products, gallery & promo settings from Supabase if configured
     if (isSupabaseConfigured && supabase) {
       const syncGalleryFromSupabase = () => {
@@ -336,36 +344,46 @@ export default function App() {
         });
 
       // Realtime subscription to company_settings across all devices
-      const channelSettings = supabase
-        .channel('realtime_company_settings_app')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'company_settings' }, (payload) => {
-          const freshData = payload.new;
-          if (freshData) {
-            if (Array.isArray(freshData.buffet_gallery)) {
-              const cleanGal = freshData.buffet_gallery.filter(p => !isFakeGalleryItem(p));
-              saveStoredBuffetGallery(cleanGal);
-              window.dispatchEvent(new CustomEvent("buffet_gallery_updated", { detail: cleanGal }));
-            }
-            if (Array.isArray(freshData.menu_products) && freshData.menu_products.length > 0) {
-              const normProds = normalizeProductsList(freshData.menu_products);
-              setProducts(normProds);
-              saveStoredProducts(normProds);
-            }
-            if (Array.isArray(freshData.pizza_flavors)) {
-              const normFlavors = normalizePizzaFlavors(freshData.pizza_flavors);
-              saveStoredPizzaFlavors(normFlavors);
-              window.dispatchEvent(new CustomEvent("pizza_flavors_updated", { detail: normFlavors }));
-            }
-            if (freshData.promo_settings) {
-              setPromoSettings(freshData.promo_settings);
-              saveStoredPromoSettings(freshData.promo_settings);
-              if (Array.isArray(freshData.promo_settings.buffet_unavailable_items)) {
-                saveUnavailableBuffetItemIds(freshData.promo_settings.buffet_unavailable_items);
+      try {
+        const existingChannels = typeof supabase.getChannels === 'function' ? supabase.getChannels() : [];
+        const existing = existingChannels.find(ch => ch?.topic?.includes('realtime_company_settings_app'));
+        if (existing) {
+          supabase.removeChannel(existing);
+        }
+
+        channelSettings = supabase
+          .channel(`realtime_company_settings_app_${Date.now()}`)
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'company_settings' }, (payload) => {
+            const freshData = payload.new;
+            if (freshData) {
+              if (Array.isArray(freshData.buffet_gallery)) {
+                const cleanGal = freshData.buffet_gallery.filter(p => !isFakeGalleryItem(p));
+                saveStoredBuffetGallery(cleanGal);
+                window.dispatchEvent(new CustomEvent("buffet_gallery_updated", { detail: cleanGal }));
+              }
+              if (Array.isArray(freshData.menu_products) && freshData.menu_products.length > 0) {
+                const normProds = normalizeProductsList(freshData.menu_products);
+                setProducts(normProds);
+                saveStoredProducts(normProds);
+              }
+              if (Array.isArray(freshData.pizza_flavors)) {
+                const normFlavors = normalizePizzaFlavors(freshData.pizza_flavors);
+                saveStoredPizzaFlavors(normFlavors);
+                window.dispatchEvent(new CustomEvent("pizza_flavors_updated", { detail: normFlavors }));
+              }
+              if (freshData.promo_settings) {
+                setPromoSettings(freshData.promo_settings);
+                saveStoredPromoSettings(freshData.promo_settings);
+                if (Array.isArray(freshData.promo_settings.buffet_unavailable_items)) {
+                  saveUnavailableBuffetItemIds(freshData.promo_settings.buffet_unavailable_items);
+                }
               }
             }
-          }
-        })
-        .subscribe();
+          })
+          .subscribe();
+      } catch (err) {
+        console.warn("Could not subscribe to Supabase company_settings realtime:", err);
+      }
     }
 
     // Hydrate from Global Cloud Pub/Sub (Cross-device instant sync)
@@ -398,6 +416,11 @@ export default function App() {
       window.removeEventListener('delivery_promos_updated', handlePromosSync);
       window.removeEventListener('delivery_restaurant_info_updated', handleInfoSync);
       window.removeEventListener('storage', handleProductsSync);
+      if (channelSettings && supabase) {
+        try {
+          supabase.removeChannel(channelSettings);
+        } catch (e) {}
+      }
       if (unsubscribeConfig) unsubscribeConfig();
     };
   }, []);

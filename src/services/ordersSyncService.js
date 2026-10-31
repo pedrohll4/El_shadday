@@ -395,8 +395,12 @@ export function subscribeToKitchenEvents({ onNewOrder, onOrderUpdate, onOrderDel
   // 1. Supabase Realtime Subscription (WebSockets)
   if (isSupabaseConfigured && supabase) {
     try {
+      const existingChannels = typeof supabase.getChannels === 'function' ? supabase.getChannels() : [];
+      const prevLive = existingChannels.find(ch => ch?.topic?.includes('kds_orders_live'));
+      if (prevLive) supabase.removeChannel(prevLive);
+
       supabaseChannel = supabase
-        .channel('kds_orders_live')
+        .channel(`kds_orders_live_${Date.now()}`)
         .on(
           'postgres_changes',
           { event: 'INSERT', schema: 'public', table: 'orders' },

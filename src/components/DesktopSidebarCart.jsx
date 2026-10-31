@@ -98,13 +98,23 @@ export function DesktopSidebarCart({
                     </h5>
                     
                     {/* Flavors / Customizations Breakdown */}
-                    {item.pizzaSelections && item.pizzaSelections.length > 0 && (
+                    {Array.isArray(item.pizzaSelections) && item.pizzaSelections.length > 0 && (
                       <div className="mt-0.5 space-y-0.5">
                         {item.pizzaSelections.map((p, pIdx) => (
                           <p key={pIdx} className="text-[10px] text-brand-gold/90 leading-snug">
-                            🍕 <span className="text-white font-medium">{p.pizzaTitle}:</span> {p.flavors.join(' / ')}
+                            🍕 <span className="text-white font-medium">{p.pizzaTitle || `Pizza ${pIdx + 1}`}:</span> {Array.isArray(p.flavors) ? p.flavors.join(' / ') : (p.flavors || '')}
+                            {p.surcharge > 0 && (
+                              <span className="text-amber-300 font-bold ml-1">
+                                (+ R$ {Number(p.surcharge).toFixed(2).replace('.', ',')})
+                              </span>
+                            )}
                           </p>
                         ))}
+                        {item.totalSurcharge > 0 && (
+                          <p className="text-[10px] text-amber-300 font-semibold leading-snug">
+                            ⭐ Sabores especiais: + R$ {Number(item.totalSurcharge).toFixed(2).replace('.', ',')}
+                          </p>
+                        )}
                       </div>
                     )}
 

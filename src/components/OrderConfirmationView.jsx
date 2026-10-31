@@ -32,15 +32,21 @@ export function OrderConfirmationView({ order, onBackToMenu }) {
     message += `\n*ITENS CONFIRMADOS:*\n`;
     order.items.forEach((item, index) => {
       message += `\n${index + 1}. *${item.quantity}x ${item.name}* - R$ ${(item.price * item.quantity).toFixed(2).replace('.', ',')}\n`;
-      if (item.pizzaSelections && item.pizzaSelections.length > 0) {
+      if (Array.isArray(item.pizzaSelections) && item.pizzaSelections.length > 0) {
         item.pizzaSelections.forEach(p => {
-          message += `   🍕 ${p.pizzaTitle}: ${p.flavors.join(' / ')}\n`;
+          const surchargeStr = p.surcharge > 0 ? ` (+ R$ ${Number(p.surcharge).toFixed(2).replace('.', ',')})` : '';
+          const flavorsText = Array.isArray(p.flavors) ? p.flavors.join(' / ') : (p.flavors || '');
+          message += `   🍕 ${p.pizzaTitle || 'Pizza'}: ${flavorsText}${surchargeStr}\n`;
         });
+        if (item.totalSurcharge > 0) {
+          message += `   ⭐ Adicional Sabores Especiais: + R$ ${Number(item.totalSurcharge).toFixed(2).replace('.', ',')}\n`;
+        }
         if (item.bordaGratis) {
           message += `   🧀 Borda de Catupiry Grátis\n`;
         }
-      } else if (item.flavors && item.flavors.length > 0) {
-        message += `   🍕 Sabores: ${item.flavors.join(' / ')}\n`;
+      } else if (item.flavors) {
+        const flavorsText = Array.isArray(item.flavors) ? item.flavors.join(' / ') : item.flavors;
+        message += `   🍕 Sabores: ${flavorsText}\n`;
       }
       if (item.acaiComplements && item.acaiComplements.length > 0) {
         message += `   🍧 Barca de Açaí: ${item.acaiComplements.join(', ')}\n`;
@@ -275,16 +281,28 @@ export function OrderConfirmationView({ order, onBackToMenu }) {
                     <div className="font-bold text-white">
                       {item.quantity}x {item.name}
                     </div>
-                    {item.pizzaSelections && item.pizzaSelections.length > 0 && (
+                    {Array.isArray(item.pizzaSelections) && item.pizzaSelections.length > 0 && (
                       <div className="space-y-0.5 text-[11px] text-brand-goldLight">
                         {item.pizzaSelections.map((p, pIdx) => (
-                          <div key={pIdx}>🍕 <strong>{p.pizzaTitle}:</strong> {p.flavors.join(' / ')}</div>
+                          <div key={pIdx}>
+                            🍕 <strong>{p.pizzaTitle || `Pizza ${pIdx + 1}`}:</strong> {Array.isArray(p.flavors) ? p.flavors.join(' / ') : (p.flavors || '')}
+                            {p.surcharge > 0 && (
+                              <span className="text-amber-300 font-bold ml-1">
+                                (+ R$ {Number(p.surcharge).toFixed(2).replace('.', ',')})
+                              </span>
+                            )}
+                          </div>
                         ))}
+                        {item.totalSurcharge > 0 && (
+                          <div className="text-[10px] text-amber-300 font-bold">
+                            ⭐ Sabores Especiais: + R$ {Number(item.totalSurcharge).toFixed(2).replace('.', ',')}
+                          </div>
+                        )}
                       </div>
                     )}
                     {item.flavors && !item.pizzaSelections && (
                       <div className="text-[11px] text-brand-goldLight">
-                        🍕 <strong>Sabores:</strong> {item.flavors.join(' / ')}
+                        🍕 <strong>Sabores:</strong> {Array.isArray(item.flavors) ? item.flavors.join(' / ') : item.flavors}
                       </div>
                     )}
                     {item.acaiComplements && item.acaiComplements.length > 0 && (

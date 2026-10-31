@@ -264,13 +264,15 @@ export function PizzaCustomizerModal({ isOpen, onClose, pizzaProduct, onAddPizza
               const effectivePrice = isStandard ? basePrice : rawFlavorPrice;
               const isFlavorMoreExpensive = effectivePrice > basePrice;
 
+              const imageSrc = flavor.image || `/flavors/${flavor.id || 'calabresa'}.png`;
+
               return (
                 <button
                   key={flavor.id || flavor.name}
                   type="button"
                   onClick={() => toggleFlavor(flavor)}
                   disabled={isDisabled}
-                  className={`w-full p-3 rounded-2xl border text-left flex items-start justify-between gap-3 transition-all cursor-pointer ${
+                  className={`w-full p-2.5 sm:p-3 rounded-2xl border text-left flex items-center justify-between gap-3 transition-all cursor-pointer group ${
                     isSelected
                       ? 'bg-brand-gold/15 border-brand-gold text-white font-bold shadow-md'
                       : isDisabled
@@ -278,6 +280,19 @@ export function PizzaCustomizerModal({ isOpen, onClose, pizzaProduct, onAddPizza
                       : 'bg-dark-850 hover:bg-dark-800 text-slate-200 border-dark-800 hover:border-dark-700'
                   }`}
                 >
+                  {/* Left: Illustrated transparent-background pizza photo */}
+                  <div className="relative w-14 h-14 sm:w-16 sm:h-16 flex-shrink-0 flex items-center justify-center rounded-xl bg-dark-900/80 border border-dark-800/80 p-1 group-hover:scale-105 transition-transform">
+                    <img
+                      src={imageSrc}
+                      alt={flavor.name}
+                      className="w-full h-full object-contain filter drop-shadow-md"
+                      loading="lazy"
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                      }}
+                    />
+                  </div>
+
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-xs sm:text-sm font-bold text-white">
@@ -297,13 +312,13 @@ export function PizzaCustomizerModal({ isOpen, onClose, pizzaProduct, onAddPizza
                     </div>
 
                     {flavor.description && (
-                      <p className="text-[11px] text-slate-400 line-clamp-2 mt-0.5 font-normal">
+                      <p className="text-[11px] text-slate-400 line-clamp-1 sm:line-clamp-2 mt-0.5 font-normal">
                         {flavor.description}
                       </p>
                     )}
 
                     {/* Preço do Sabor */}
-                    <div className="mt-1 flex items-center gap-2">
+                    <div className="mt-1 flex items-center gap-2 flex-wrap">
                       {isStandard ? (
                         <span className="text-[10px] text-emerald-400 font-semibold">
                           Incluso no tamanho (Sem acréscimo)

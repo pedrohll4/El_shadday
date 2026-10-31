@@ -182,11 +182,21 @@ export function CartDrawer({
                     {/* Breakdown for combos */}
                     {item.isCombo && (
                       <div className="mt-1 space-y-0.5 text-[10px] text-slate-300">
-                        {item.pizzaSelections && item.pizzaSelections.map((pz, idx) => (
+                        {Array.isArray(item.pizzaSelections) && item.pizzaSelections.map((pz, idx) => (
                           <div key={idx} className="line-clamp-1">
-                            🍕 <strong className="text-white">{pz.pizzaTitle || `Pizza ${idx + 1}`}:</strong> {pz.flavors?.join(' / ')}
+                            🍕 <strong className="text-white">{pz.pizzaTitle || `Pizza ${idx + 1}`}:</strong> {Array.isArray(pz.flavors) ? pz.flavors.join(' / ') : (pz.flavors || '')}
+                            {pz.surcharge > 0 && (
+                              <span className="text-amber-300 font-bold ml-1">
+                                (+ R$ {Number(pz.surcharge).toFixed(2).replace('.', ',')})
+                              </span>
+                            )}
                           </div>
                         ))}
+                        {item.totalSurcharge > 0 && (
+                          <div className="text-amber-300 font-semibold text-[10px]">
+                            ⭐ Adicional Especial: + R$ {Number(item.totalSurcharge).toFixed(2).replace('.', ',')}
+                          </div>
+                        )}
                         {item.acaiComplements && item.acaiComplements.length > 0 && (
                           <div className="text-purple-300 font-semibold line-clamp-2">
                             🍧 <strong>Barca Açaí:</strong> {item.acaiComplements.join(', ')}
