@@ -26,6 +26,9 @@ import {
   saveStoredRestaurantInfo,
   getStoredPizzaFlavors,
   saveStoredPizzaFlavors,
+  getStoredAcaiSettings,
+  saveStoredAcaiSettings,
+  DEFAULT_ACAI_SETTINGS,
   calculatePizzaPrice,
   calculateCardMachineFee,
   getCardMachineNoticeText,
@@ -601,7 +604,20 @@ export function AdminDashboard({
   const [flavorFormPrice, setFlavorFormPrice] = useState('40.00');
   const [flavorFormCategory, setFlavorFormCategory] = useState('salgadas');
   const [flavorFormDescription, setFlavorFormDescription] = useState('');
+  const [flavorFormImage, setFlavorFormImage] = useState('');
   const [flavorFormIsAvailable, setFlavorFormIsAvailable] = useState(true);
+
+  // Açaí Complements & Settings State
+  const [acaiSettings, setAcaiSettings] = useState(() => getStoredAcaiSettings());
+  const [tempMaxAcai, setTempMaxAcai] = useState(() => (getStoredAcaiSettings().maxComplementsPerAcai ?? 0).toString());
+  const [tempMaxComboBarca, setTempMaxComboBarca] = useState(() => (getStoredAcaiSettings().maxComplementsPerComboBarca ?? 0).toString());
+  const [isComplementModalOpen, setIsComplementModalOpen] = useState(false);
+  const [editingComplement, setEditingComplement] = useState(null);
+  const [complementFormName, setComplementFormName] = useState('');
+  const [complementFormIcon, setComplementFormIcon] = useState('🥜');
+  const [complementFormIsAvailable, setComplementFormIsAvailable] = useState(true);
+  const [complementFormDefaultSelected, setComplementFormDefaultSelected] = useState(false);
+  const [newCoberturaText, setNewCoberturaText] = useState('');
 
   // PDV Custom Modals (Pizza, Esfirra Box, Açaí, Combos)
   const [pdvPizzaToCustomize, setPdvPizzaToCustomize] = useState(null);
@@ -709,11 +725,24 @@ export function AdminDashboard({
         setPizzaFlavors(getStoredPizzaFlavors());
       }
     };
+    const handleAcaiSync = (e) => {
+      if (e?.detail) {
+        setAcaiSettings(e.detail);
+        if (e.detail.maxComplementsPerAcai !== undefined) setTempMaxAcai((e.detail.maxComplementsPerAcai || 0).toString());
+        if (e.detail.maxComplementsPerComboBarca !== undefined) setTempMaxComboBarca((e.detail.maxComplementsPerComboBarca || 0).toString());
+      } else {
+        const stored = getStoredAcaiSettings();
+        setAcaiSettings(stored);
+        setTempMaxAcai((stored.maxComplementsPerAcai || 0).toString());
+        setTempMaxComboBarca((stored.maxComplementsPerComboBarca || 0).toString());
+      }
+    };
 
     window.addEventListener('delivery_products_updated', handleProductsSync);
     window.addEventListener('delivery_promos_updated', handlePromosSync);
     window.addEventListener('delivery_restaurant_info_updated', handleStoreSync);
     window.addEventListener('pizza_flavors_updated', handleFlavorsSync);
+    window.addEventListener('acai_settings_updated', handleAcaiSync);
     window.addEventListener('storage', handleProductsSync);
 
     let channelCompanySettingsAdmin = null;
@@ -740,6 +769,12 @@ export function AdminDashboard({
               const normFlavors = normalizePizzaFlavors(data.pizza_flavors);
               setPizzaFlavors(normFlavors);
               saveStoredPizzaFlavors(normFlavors);
+            }
+            if (data.acai_settings) {
+              const normAcai = saveStoredAcaiSettings(data.acai_settings);
+              setAcaiSettings(normAcai);
+              if (normAcai.maxComplementsPerAcai !== undefined) setTempMaxAcai((normAcai.maxComplementsPerAcai || 0).toString());
+              if (normAcai.maxComplementsPerComboBarca !== undefined) setTempMaxComboBarca((normAcai.maxComplementsPerComboBarca || 0).toString());
             }
             if (data.card_machine_notice !== undefined || data.name || data.card_machine_settings) {
               const currentStore = getStoredRestaurantInfo();
@@ -794,6 +829,12 @@ export function AdminDashboard({
                 setPizzaFlavors(normFlavors);
                 saveStoredPizzaFlavors(normFlavors);
               }
+              if (fresh.acai_settings) {
+                const normAcai = saveStoredAcaiSettings(fresh.acai_settings);
+                setAcaiSettings(normAcai);
+                if (normAcai.maxComplementsPerAcai !== undefined) setTempMaxAcai((normAcai.maxComplementsPerAcai || 0).toString());
+                if (normAcai.maxComplementsPerComboBarca !== undefined) setTempMaxComboBarca((normAcai.maxComplementsPerComboBarca || 0).toString());
+              }
               if (fresh.promo_settings) {
                 setPromoSettings(fresh.promo_settings);
                 saveStoredPromoSettings(fresh.promo_settings);
@@ -811,6 +852,7 @@ export function AdminDashboard({
       window.removeEventListener('delivery_promos_updated', handlePromosSync);
       window.removeEventListener('delivery_restaurant_info_updated', handleStoreSync);
       window.removeEventListener('pizza_flavors_updated', handleFlavorsSync);
+      window.removeEventListener('acai_settings_updated', handleAcaiSync);
       window.removeEventListener('storage', handleProductsSync);
       if (channelCompanySettingsAdmin && supabase) {
         supabase.removeChannel(channelCompanySettingsAdmin);
@@ -1150,6 +1192,7 @@ export function AdminDashboard({
     setFlavorFormPrice('40.00');
     setFlavorFormCategory('salgadas');
     setFlavorFormDescription('');
+    setFlavorFormImage('');
     setFlavorFormIsAvailable(true);
     setIsFlavorModalOpen(true);
   };
@@ -1160,6 +1203,7 @@ export function AdminDashboard({
     setFlavorFormPrice(flavor.price !== undefined ? flavor.price.toString() : '40.00');
     setFlavorFormCategory(flavor.category || 'salgadas');
     setFlavorFormDescription(flavor.description || '');
+    setFlavorFormImage(flavor.image || '');
     setFlavorFormIsAvailable(flavor.isAvailable !== false);
     setIsFlavorModalOpen(true);
   };
@@ -1182,6 +1226,7 @@ export function AdminDashboard({
       price: priceNum,
       category: flavorFormCategory,
       description: flavorFormDescription.trim(),
+      image: flavorFormImage.trim() || (editingFlavor?.image || ''),
       isAvailable: flavorFormIsAvailable
     };
 
@@ -1198,6 +1243,140 @@ export function AdminDashboard({
     saveStoredPizzaFlavors(updated);
     dispatchConfigSync('PIZZA_FLAVORS_UPDATE', updated);
     setIsFlavorModalOpen(false);
+  };
+
+  // Handlers for Açaí Complements & Settings
+  const handleSaveAcaiLimits = (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    const limAcai = Math.max(0, parseInt(tempMaxAcai, 10) || 0);
+    const limCombo = Math.max(0, parseInt(tempMaxComboBarca, 10) || 0);
+    const updated = {
+      ...acaiSettings,
+      maxComplementsPerAcai: limAcai,
+      maxComplementsPerComboBarca: limCombo
+    };
+    setAcaiSettings(updated);
+    saveStoredAcaiSettings(updated);
+    dispatchConfigSync('ACAI_SETTINGS_UPDATE', updated);
+    triggerMenuToast('Limites de acompanhamentos do Açaí salvos e sincronizados com sucesso!');
+  };
+
+  const handleToggleComplementAvailability = (complementId) => {
+    const updatedComps = (acaiSettings.complements || []).map(c => {
+      if (c.id === complementId) {
+        const nextState = c.isAvailable === false ? true : false;
+        triggerMenuToast(nextState ? `Acompanhamento "${c.name}" disponível!` : `Acompanhamento "${c.name}" pausado (esgotado)!`);
+        return { ...c, isAvailable: nextState };
+      }
+      return c;
+    });
+    const updated = { ...acaiSettings, complements: updatedComps };
+    setAcaiSettings(updated);
+    saveStoredAcaiSettings(updated);
+    dispatchConfigSync('ACAI_SETTINGS_UPDATE', updated);
+  };
+
+  const handleToggleComplementDefault = (complementId) => {
+    const updatedComps = (acaiSettings.complements || []).map(c => {
+      if (c.id === complementId) {
+        return { ...c, defaultSelected: !c.defaultSelected };
+      }
+      return c;
+    });
+    const updated = { ...acaiSettings, complements: updatedComps };
+    setAcaiSettings(updated);
+    saveStoredAcaiSettings(updated);
+    dispatchConfigSync('ACAI_SETTINGS_UPDATE', updated);
+  };
+
+  const handleOpenCreateComplement = () => {
+    setEditingComplement(null);
+    setComplementFormName('');
+    setComplementFormIcon('🥜');
+    setComplementFormIsAvailable(true);
+    setComplementFormDefaultSelected(false);
+    setIsComplementModalOpen(true);
+  };
+
+  const handleOpenEditComplement = (comp) => {
+    setEditingComplement(comp);
+    setComplementFormName(comp.name || '');
+    setComplementFormIcon(comp.icon || '✨');
+    setComplementFormIsAvailable(comp.isAvailable !== false);
+    setComplementFormDefaultSelected(Boolean(comp.defaultSelected));
+    setIsComplementModalOpen(true);
+  };
+
+  const handleSaveComplement = (e) => {
+    e.preventDefault();
+    if (!complementFormName.trim()) {
+      alert('Informe o nome do acompanhamento.');
+      return;
+    }
+    const newComp = {
+      id: editingComplement ? editingComplement.id : `acai_comp_${Date.now()}`,
+      name: complementFormName.trim(),
+      icon: complementFormIcon.trim() || '✨',
+      isAvailable: complementFormIsAvailable,
+      defaultSelected: complementFormDefaultSelected
+    };
+
+    let updatedComps;
+    if (editingComplement) {
+      updatedComps = (acaiSettings.complements || []).map(c => c.id === editingComplement.id ? newComp : c);
+      triggerMenuToast(`Acompanhamento "${newComp.name}" atualizado com sucesso!`);
+    } else {
+      updatedComps = [...(acaiSettings.complements || []), newComp];
+      triggerMenuToast(`Novo acompanhamento "${newComp.name}" adicionado!`);
+    }
+
+    const updated = { ...acaiSettings, complements: updatedComps };
+    setAcaiSettings(updated);
+    saveStoredAcaiSettings(updated);
+    dispatchConfigSync('ACAI_SETTINGS_UPDATE', updated);
+    setIsComplementModalOpen(false);
+  };
+
+  const handleDeleteComplement = (complementId) => {
+    const comp = (acaiSettings.complements || []).find(c => c.id === complementId);
+    if (!window.confirm(`Tem certeza que deseja remover o acompanhamento "${comp?.name || ''}"?`)) return;
+    const updatedComps = (acaiSettings.complements || []).filter(c => c.id !== complementId);
+    const updated = { ...acaiSettings, complements: updatedComps };
+    setAcaiSettings(updated);
+    saveStoredAcaiSettings(updated);
+    dispatchConfigSync('ACAI_SETTINGS_UPDATE', updated);
+    triggerMenuToast('Acompanhamento removido.');
+  };
+
+  const handleAddCobertura = (e) => {
+    e.preventDefault();
+    const val = newCoberturaText.trim();
+    if (!val) return;
+    if ((acaiSettings.coberturas || []).includes(val)) {
+      alert('Esta cobertura já existe na lista.');
+      return;
+    }
+    const updatedCobs = [...(acaiSettings.coberturas || []), val];
+    const updated = { ...acaiSettings, coberturas: updatedCobs };
+    setAcaiSettings(updated);
+    saveStoredAcaiSettings(updated);
+    dispatchConfigSync('ACAI_SETTINGS_UPDATE', updated);
+    setNewCoberturaText('');
+    triggerMenuToast(`Cobertura "${val}" adicionada com sucesso!`);
+  };
+
+  const handleDeleteCobertura = (cobName) => {
+    if (cobName === 'Sem Cobertura') {
+      alert('"Sem Cobertura" é a opção padrão do cliente e não pode ser removida.');
+      return;
+    }
+    if (!window.confirm(`Remover "${cobName}" da lista de coberturas?`)) return;
+    const updatedCobs = (acaiSettings.coberturas || []).filter(c => c !== cobName);
+    const updated = { ...acaiSettings, coberturas: updatedCobs };
+    setAcaiSettings(updated);
+    saveStoredAcaiSettings(updated);
+    dispatchConfigSync('ACAI_SETTINGS_UPDATE', updated);
+    triggerMenuToast('Cobertura removida.');
   };
 
   const handleToggleFlavorAvailability = (flavorId) => {
@@ -4529,6 +4708,19 @@ export function AdminDashboard({
                       <Pizza className="w-3.5 h-3.5" />
                       <span>Sabores de Pizza ({pizzaFlavors.length})</span>
                     </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setMenuSubTab('acai')}
+                      className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                        menuSubTab === 'acai'
+                          ? 'bg-purple-500 text-white font-black shadow-sm'
+                          : 'bg-dark-800/80 text-purple-300 hover:text-white hover:bg-purple-950/40'
+                      }`}
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                      <span>Açaí & Acompanhamentos ({(acaiSettings.complements || []).length})</span>
+                    </button>
                   </div>
 
                   <button
@@ -5006,9 +5198,28 @@ export function AdminDashboard({
                         >
                           <div>
                             <div className="flex items-start justify-between gap-2 mb-2">
-                              <h4 className="text-sm font-extrabold text-white leading-snug">
-                                {flavor.name}
-                              </h4>
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <div className="w-11 h-11 rounded-xl bg-dark-950 border border-dark-750 flex items-center justify-center p-1 flex-shrink-0">
+                                  {flavor.image ? (
+                                    <img 
+                                      src={flavor.image} 
+                                      alt={flavor.name} 
+                                      className="w-full h-full object-contain drop-shadow" 
+                                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                    />
+                                  ) : (
+                                    <Pizza className="w-5 h-5 text-slate-600" />
+                                  )}
+                                </div>
+                                <div className="min-w-0">
+                                  <h4 className="text-sm font-extrabold text-white leading-snug truncate">
+                                    {flavor.name}
+                                  </h4>
+                                  <span className="text-[10px] text-slate-500 font-mono block">
+                                    {flavor.image ? '📷 Foto Ativa' : 'Sem foto'}
+                                  </span>
+                                </div>
+                              </div>
                               <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold flex-shrink-0 ${
                                 flavor.category === 'especiais'
                                   ? 'bg-amber-400/20 text-amber-300 border border-amber-400/30'
@@ -5088,6 +5299,283 @@ export function AdminDashboard({
                       </button>
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* SUBTAB 3: AÇAÍ, ACOMPANHAMENTOS & COBERTURAS */}
+              {activeAdminTab === 'menu' && menuSubTab === 'acai' && (
+                <div className="mt-5 space-y-6 max-w-5xl">
+                  
+                  {/* Top Banner & Header */}
+                  <div className="p-5 sm:p-6 rounded-2xl bg-gradient-to-r from-purple-950/40 via-dark-850 to-dark-850 border border-purple-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-2xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-purple-400 shadow-lg shadow-purple-500/10">
+                        <Sparkles className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <h3 className="font-extrabold text-base text-white flex items-center gap-2">
+                          Açaí & Acompanhamentos
+                          <span className="text-[10px] px-2.5 py-0.5 rounded-full font-black uppercase tracking-wider bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                            {(acaiSettings.complements || []).length} Adicionais
+                          </span>
+                        </h3>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          Configure os acompanhamentos adicionais para copos e barcas, pause itens esgotados e defina limites máximos por pedido.
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleOpenCreateComplement}
+                      className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-purple-500 to-indigo-500 text-white font-black text-xs hover:brightness-110 shadow-lg shadow-purple-500/20 flex items-center gap-2 cursor-pointer transition-all self-start sm:self-auto"
+                    >
+                      <Plus className="w-4 h-4 stroke-[3]" />
+                      <span>Novo Acompanhamento</span>
+                    </button>
+                  </div>
+
+                  {/* Card 1: REGRAS DE LIMITE DE ACOMPANHAMENTOS */}
+                  <div className="p-5 sm:p-6 rounded-2xl bg-dark-850 border border-dark-750 space-y-4">
+                    <div className="border-b border-dark-800 pb-3 flex items-center justify-between">
+                      <div>
+                        <h4 className="text-sm font-extrabold text-white flex items-center gap-2">
+                          <Sliders className="w-4 h-4 text-purple-400" />
+                          Regras de Limite de Acompanhamentos por Pedido
+                        </h4>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          Evite desperdícios ou excessos limitando quantos acompanhamentos o cliente pode escolher por item.
+                        </p>
+                      </div>
+                    </div>
+
+                    <form onSubmit={handleSaveAcaiLimits} className="space-y-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {/* Limite no Açaí Individual */}
+                        <div className="p-4 rounded-xl bg-dark-900 border border-dark-750">
+                          <label className="block text-xs font-bold text-slate-200 mb-1">
+                            Limite Máximo no Açaí Individual (Copos / Barcas)
+                          </label>
+                          <p className="text-[11px] text-slate-400 mb-2">
+                            Ex: <strong>5</strong> para permitir até 5 itens. Digite <strong>0</strong> para deixar <em>ilimitado</em>.
+                          </p>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="number"
+                              min="0"
+                              max="50"
+                              value={tempMaxAcai}
+                              onChange={(e) => setTempMaxAcai(e.target.value)}
+                              className="w-28 px-3.5 py-2 rounded-xl bg-dark-800 border border-dark-700 text-sm text-white font-bold font-mono focus:outline-none focus:border-purple-400"
+                            />
+                            <span className="text-xs text-slate-400 font-medium">
+                              {parseInt(tempMaxAcai, 10) > 0 ? `Máx. ${tempMaxAcai} acompanhamentos` : 'Ilimitado (Sem limite)'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Limite no Combo Barca de Açaí */}
+                        <div className="p-4 rounded-xl bg-dark-900 border border-dark-750">
+                          <label className="block text-xs font-bold text-slate-200 mb-1">
+                            Limite Máximo na Barca dos Combos (Pizza + Açaí)
+                          </label>
+                          <p className="text-[11px] text-slate-400 mb-2">
+                            Ex: <strong>5</strong> para a barca inclusa no combo. Digite <strong>0</strong> para <em>ilimitado</em>.
+                          </p>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="number"
+                              min="0"
+                              max="50"
+                              value={tempMaxComboBarca}
+                              onChange={(e) => setTempMaxComboBarca(e.target.value)}
+                              className="w-28 px-3.5 py-2 rounded-xl bg-dark-800 border border-dark-700 text-sm text-white font-bold font-mono focus:outline-none focus:border-purple-400"
+                            />
+                            <span className="text-xs text-slate-400 font-medium">
+                              {parseInt(tempMaxComboBarca, 10) > 0 ? `Máx. ${tempMaxComboBarca} acompanhamentos` : 'Ilimitado (Sem limite)'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end pt-2">
+                        <button
+                          type="submit"
+                          className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-500 to-indigo-500 text-white font-black text-xs hover:brightness-110 shadow-md shadow-purple-500/20 flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <Save className="w-4 h-4" />
+                          <span>Salvar Regras de Limite</span>
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+
+                  {/* Card 2: ACOMPANHAMENTOS CADASTRADOS */}
+                  <div className="p-5 sm:p-6 rounded-2xl bg-dark-850 border border-dark-750 space-y-4">
+                    <div className="border-b border-dark-800 pb-3 flex items-center justify-between flex-wrap gap-2">
+                      <div>
+                        <h4 className="text-sm font-extrabold text-white flex items-center gap-2">
+                          <Layers className="w-4 h-4 text-purple-400" />
+                          Acompanhamentos Cadastrados ({(acaiSettings.complements || []).length})
+                        </h4>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          Clique em Disponível/Esgotado para pausar um acompanhamento que acabou na cozinha.
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleOpenCreateComplement}
+                        className="px-3.5 py-2 rounded-xl bg-dark-800 hover:bg-dark-750 text-purple-300 border border-purple-500/30 text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Adicionar Item</span>
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {(acaiSettings.complements || []).map(comp => {
+                        const isAvail = comp.isAvailable !== false;
+                        const isDef = Boolean(comp.defaultSelected);
+                        return (
+                          <div
+                            key={comp.id}
+                            className={`p-3.5 rounded-2xl border transition-all flex flex-col justify-between gap-3 ${
+                              !isAvail 
+                                ? 'bg-dark-950/60 border-dark-800 opacity-60' 
+                                : 'bg-dark-900 border-dark-750 hover:border-purple-500/40 shadow-sm'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <span className="text-2xl p-1 rounded-xl bg-dark-950 border border-dark-800 flex-shrink-0">
+                                  {comp.icon || '✨'}
+                                </span>
+                                <div className="min-w-0">
+                                  <h5 className="text-xs sm:text-sm font-bold text-white truncate">
+                                    {comp.name}
+                                  </h5>
+                                  <div className="flex items-center gap-1.5 mt-1">
+                                    {isDef && (
+                                      <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                                        Padrão ⭐
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="pt-2 border-t border-dark-800 flex items-center justify-between gap-2">
+                              {/* Toggle Availability */}
+                              <button
+                                type="button"
+                                onClick={() => handleToggleComplementAvailability(comp.id)}
+                                className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer ${
+                                  isAvail
+                                    ? 'bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25 border border-emerald-500/30'
+                                    : 'bg-amber-500/15 text-amber-300 hover:bg-amber-500/25 border border-amber-500/30'
+                                }`}
+                                title={isAvail ? 'Clique para pausar este item' : 'Clique para ativar este item'}
+                              >
+                                {isAvail ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+                                <span>{isAvail ? 'Disponível' : 'Esgotado'}</span>
+                              </button>
+
+                              <div className="flex items-center gap-1">
+                                {/* Toggle Default */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleComplementDefault(comp.id)}
+                                  className={`p-1.5 rounded-lg border text-[10px] font-bold transition-colors cursor-pointer ${
+                                    isDef
+                                      ? 'bg-purple-500/20 text-purple-300 border-purple-500/40'
+                                      : 'bg-dark-800 text-slate-400 border-dark-700 hover:text-white'
+                                  }`}
+                                  title={isDef ? 'Remover dos itens marcados por padrão' : 'Marcar este item por padrão na abertura do açaí'}
+                                >
+                                  <Star className={`w-3.5 h-3.5 ${isDef ? 'fill-purple-400 text-purple-400' : ''}`} />
+                                </button>
+
+                                {/* Edit */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenEditComplement(comp)}
+                                  className="p-1.5 rounded-lg bg-dark-800 hover:bg-dark-750 text-slate-300 hover:text-purple-300 transition-colors cursor-pointer"
+                                  title="Editar nome ou ícone"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+
+                                {/* Delete */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteComplement(comp.id)}
+                                  className="p-1.5 rounded-lg bg-dark-800 hover:bg-red-950/40 text-slate-400 hover:text-red-400 transition-colors cursor-pointer"
+                                  title="Remover acompanhamento"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Card 3: COBERTURAS DO AÇAÍ */}
+                  <div className="p-5 sm:p-6 rounded-2xl bg-dark-850 border border-dark-750 space-y-4">
+                    <div className="border-b border-dark-800 pb-3">
+                      <h4 className="text-sm font-extrabold text-white flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-purple-400" />
+                        Coberturas para Copos e Barca de Açaí
+                      </h4>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        Adicione ou remova opções de cobertura que o cliente pode selecionar.
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      {(acaiSettings.coberturas || []).map(cob => (
+                        <div
+                          key={cob}
+                          className="px-3 py-1.5 rounded-xl bg-dark-900 border border-purple-500/30 text-xs text-white font-bold flex items-center gap-2"
+                        >
+                          <span>{cob}</span>
+                          {cob !== 'Sem Cobertura' && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteCobertura(cob)}
+                              className="text-slate-500 hover:text-red-400 cursor-pointer transition-colors"
+                              title="Remover cobertura"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Form Adicionar Cobertura */}
+                    <form onSubmit={handleAddCobertura} className="flex items-center gap-2 max-w-md pt-2">
+                      <input
+                        type="text"
+                        value={newCoberturaText}
+                        onChange={(e) => setNewCoberturaText(e.target.value)}
+                        placeholder="Ex: Cobertura de Maracujá..."
+                        className="flex-1 px-3.5 py-2 rounded-xl bg-dark-900 border border-dark-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-400"
+                      />
+                      <button
+                        type="submit"
+                        className="px-4 py-2 rounded-xl bg-purple-500 hover:bg-purple-600 text-white font-bold text-xs cursor-pointer transition-colors flex items-center gap-1"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Adicionar</span>
+                      </button>
+                    </form>
+                  </div>
+
                 </div>
               )}
 
@@ -7614,6 +8102,105 @@ export function AdminDashboard({
                 />
               </div>
 
+              {/* Foto Ilustrativa do Sabor (Sem Fundo) */}
+              <div className="pt-2 border-t border-dark-800 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-slate-200">
+                    Foto do Sabor (Sem Fundo)
+                  </label>
+                  <span className="text-[10px] text-brand-gold font-medium">PNG transparente recomendado</span>
+                </div>
+
+                {/* Preview Box e Upload */}
+                <div className="flex items-center gap-3 p-3 rounded-2xl bg-dark-900 border border-dark-750">
+                  <div className="w-16 h-16 rounded-xl bg-dark-950 border border-dark-800 flex items-center justify-center p-1.5 flex-shrink-0 relative overflow-hidden">
+                    {flavorFormImage ? (
+                      <img 
+                        src={flavorFormImage} 
+                        alt="Prévia do Sabor" 
+                        className="w-full h-full object-contain drop-shadow" 
+                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                      />
+                    ) : (
+                      <Pizza className="w-8 h-8 text-slate-600" />
+                    )}
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-bold text-white truncate">
+                      {flavorFormImage ? 'Foto ativa para este sabor' : 'Nenhuma foto selecionada'}
+                    </p>
+                    <p className="text-[10px] text-slate-400 mb-2">
+                      Aparecerá nos combos de pizza e na montagem individual
+                    </p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <label className="px-2.5 py-1 rounded-lg bg-dark-800 hover:bg-dark-750 text-slate-200 border border-dark-700 text-[11px] font-bold cursor-pointer transition-colors flex items-center gap-1">
+                        <Camera className="w-3.5 h-3.5 text-brand-gold" />
+                        <span>Carregar do Aparelho</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              const reader = new FileReader();
+                              reader.onload = (re) => {
+                                if (re.target?.result) setFlavorFormImage(re.target.result);
+                              };
+                              reader.readAsDataURL(file);
+                            }
+                          }}
+                        />
+                      </label>
+
+                      {flavorFormImage && (
+                        <button
+                          type="button"
+                          onClick={() => setFlavorFormImage('')}
+                          className="px-2 py-1 rounded-lg bg-red-950/40 hover:bg-red-900/50 text-red-300 border border-red-800/40 text-[11px] font-bold cursor-pointer transition-colors"
+                        >
+                          Remover Foto
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Seleção rápida das fotos oficiais da El Shadday */}
+                <div>
+                  <span className="text-[10px] text-slate-400 block font-medium mb-1">
+                    Ou selecione uma foto pronta do catálogo da El Shadday:
+                  </span>
+                  <select
+                    value={flavorFormImage}
+                    onChange={(e) => setFlavorFormImage(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-dark-800 border border-dark-700 text-xs text-white focus:outline-none focus:border-brand-gold cursor-pointer"
+                  >
+                    <option value="">-- Escolher foto do acervo --</option>
+                    {INITIAL_PIZZA_FLAVORS.map(init => (
+                      <option key={init.id} value={init.image}>
+                        {init.name} ({init.category === 'especiais' ? 'Especial' : init.category === 'doces' ? 'Doce' : 'Tradicional'})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* URL direta */}
+                <div>
+                  <span className="text-[10px] text-slate-400 block font-medium mb-1">
+                    Ou informe o caminho/URL da imagem:
+                  </span>
+                  <input
+                    type="text"
+                    value={flavorFormImage}
+                    onChange={(e) => setFlavorFormImage(e.target.value)}
+                    placeholder="Ex: /flavors/carne-seca.png ou https://..."
+                    className="w-full px-3 py-2 rounded-xl bg-dark-800 border border-dark-700 text-xs text-white placeholder-slate-500 font-mono focus:outline-none focus:border-brand-gold"
+                  />
+                </div>
+              </div>
+
               {/* Disponibilidade */}
               <div className="pt-2 border-t border-dark-800">
                 <label className="flex items-center gap-2.5 p-3 rounded-xl bg-dark-800/60 border border-dark-700 cursor-pointer">
@@ -7649,6 +8236,132 @@ export function AdminDashboard({
                 </button>
               </div>
 
+            </form>
+
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: CADASTRAR / EDITAR ACOMPANHAMENTO DE AÇAÍ */}
+      {isComplementModalOpen && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-dark-950/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 animate-fade-in">
+          <div className="relative w-full max-w-md bg-dark-900 border border-purple-500/40 rounded-3xl shadow-2xl overflow-hidden p-5 sm:p-6">
+            
+            <div className="flex items-center justify-between pb-4 border-b border-dark-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-purple-500/20 text-purple-300 flex items-center justify-center border border-purple-500/30">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-display font-extrabold text-base text-white">
+                    {editingComplement ? `Editar: ${editingComplement.name}` : 'Novo Acompanhamento'}
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    {editingComplement ? 'Altere o nome, ícone ou status' : 'Adicione um novo acompanhamento de açaí'}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsComplementModalOpen(false)}
+                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-dark-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveComplement} className="space-y-4 mt-4">
+              {/* Nome */}
+              <div>
+                <label className="block text-xs font-bold text-slate-200 mb-1">
+                  Nome do Acompanhamento *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={complementFormName}
+                  onChange={(e) => setComplementFormName(e.target.value)}
+                  placeholder="Ex: Nutella, Paçoca, Morango..."
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-dark-800 border border-dark-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-400"
+                />
+              </div>
+
+              {/* Ícone / Emoji */}
+              <div>
+                <label className="block text-xs font-bold text-slate-200 mb-1">
+                  Emoji / Ícone Ilustrativo
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={complementFormIcon}
+                    onChange={(e) => setComplementFormIcon(e.target.value)}
+                    placeholder="Ex: 🥜 ou 🍓 ou ✨"
+                    className="w-16 text-center px-2 py-2 rounded-xl bg-dark-800 border border-dark-700 text-lg text-white focus:outline-none focus:border-purple-400"
+                  />
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {['🥜', '🍓', '🍌', '🥛', '🥣', '🥝', '🍫', '✨', '🍬', '🥥'].map(emoji => (
+                      <button
+                        key={emoji}
+                        type="button"
+                        onClick={() => setComplementFormIcon(emoji)}
+                        className="w-8 h-8 rounded-lg bg-dark-800 hover:bg-dark-750 text-base flex items-center justify-center cursor-pointer transition-colors"
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Opções */}
+              <div className="space-y-2 pt-2 border-t border-dark-800">
+                <label className="flex items-center gap-2.5 p-3 rounded-xl bg-dark-800/60 border border-dark-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={complementFormIsAvailable}
+                    onChange={(e) => setComplementFormIsAvailable(e.target.checked)}
+                    className="w-4 h-4 accent-emerald-400 cursor-pointer"
+                  />
+                  <div>
+                    <div className="text-xs font-bold text-white">Disponível para Pedidos</div>
+                    <div className="text-[10px] text-slate-400">Desmarque caso tenha acabado na cozinha</div>
+                  </div>
+                </label>
+
+                <label className="flex items-center gap-2.5 p-3 rounded-xl bg-dark-800/60 border border-dark-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={complementFormDefaultSelected}
+                    onChange={(e) => setComplementFormDefaultSelected(e.target.checked)}
+                    className="w-4 h-4 accent-purple-400 cursor-pointer"
+                  />
+                  <div>
+                    <div className="text-xs font-bold text-white">Marcado por Padrão</div>
+                    <div className="text-[10px] text-slate-400">Vem pré-selecionado quando o cliente abre o modal</div>
+                  </div>
+                </label>
+              </div>
+
+              {/* Footer */}
+              <div className="pt-4 border-t border-dark-800 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setIsComplementModalOpen(false)}
+                  className="px-4 py-2.5 rounded-xl bg-dark-800 hover:bg-dark-750 text-slate-300 text-xs font-semibold cursor-pointer"
+                >
+                  Cancelar
+                </button>
+
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-500 to-indigo-500 text-white font-black text-xs hover:brightness-110 shadow-md shadow-purple-500/20 cursor-pointer flex items-center gap-1.5"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>{editingComplement ? 'Salvar Acompanhamento' : 'Adicionar Acompanhamento'}</span>
+                </button>
+              </div>
             </form>
 
           </div>

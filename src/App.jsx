@@ -14,7 +14,8 @@ import {
   saveStoredRestaurantInfo,
   saveStoredPizzaFlavors,
   normalizeProductsList,
-  normalizePizzaFlavors
+  normalizePizzaFlavors,
+  saveStoredAcaiSettings
 } from './data/menuData';
 import { saveStoredBuffetGallery, isFakeGalleryItem, saveUnavailableBuffetItemIds } from './buffet/buffetData';
 import { supabase, isSupabaseConfigured } from './services/supabaseClient';
@@ -370,6 +371,9 @@ export default function App() {
                 const normFlavors = normalizePizzaFlavors(freshData.pizza_flavors);
                 saveStoredPizzaFlavors(normFlavors);
                 window.dispatchEvent(new CustomEvent("pizza_flavors_updated", { detail: normFlavors }));
+              }
+              if (freshData.acai_settings) {
+                saveStoredAcaiSettings(freshData.acai_settings);
               }
               if (freshData.promo_settings) {
                 setPromoSettings(freshData.promo_settings);

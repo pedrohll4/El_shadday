@@ -7,7 +7,7 @@
  */
 
 import { supabase, isSupabaseConfigured } from './supabaseClient';
-import { saveStoredProducts, saveStoredPromoSettings, saveStoredRestaurantInfo, saveStoredPizzaFlavors } from '../data/menuData';
+import { saveStoredProducts, saveStoredPromoSettings, saveStoredRestaurantInfo, saveStoredPizzaFlavors, saveStoredAcaiSettings } from '../data/menuData';
 import { saveStoredBuffetGallery, saveUnavailableBuffetItemIds, getUnavailableBuffetItemIds } from '../buffet/buffetData';
 
 const CONFIG_TOPIC = 'el-shadday-config-sync-ariquemes-v2';
@@ -70,6 +70,12 @@ export async function dispatchConfigSync(type, data) {
         await supabase.from('company_settings').upsert({
           id: 'el_shadday_config',
           pizza_flavors: data,
+          updated_at: new Date().toISOString()
+        });
+      } else if (type === 'ACAI_SETTINGS_UPDATE') {
+        await supabase.from('company_settings').upsert({
+          id: 'el_shadday_config',
+          acai_settings: data,
           updated_at: new Date().toISOString()
         });
       } else if (type === 'BUFFET_AVAILABILITY_UPDATE') {
@@ -155,11 +161,13 @@ export async function fetchCloudConfigHistory() {
         const products = Array.isArray(data.menu_products) && data.menu_products.length > 0 ? data.menu_products : null;
         const gallery = Array.isArray(data.buffet_gallery) ? data.buffet_gallery : [];
         const flavors = Array.isArray(data.pizza_flavors) && data.pizza_flavors.length > 0 ? data.pizza_flavors : null;
+        const acaiSettings = data.acai_settings || null;
         const promos = data.promo_settings || null;
         
         if (products) saveStoredProducts(products);
         saveStoredBuffetGallery(gallery);
         if (flavors) saveStoredPizzaFlavors(flavors);
+        if (acaiSettings) saveStoredAcaiSettings(acaiSettings);
         if (promos) {
           saveStoredPromoSettings(promos);
           if (Array.isArray(promos.buffet_unavailable_items)) {
@@ -231,6 +239,8 @@ export async function fetchCloudConfigHistory() {
               latestStore = parsed.data;
             } else if (parsed.type === 'PIZZA_FLAVORS_UPDATE' && Array.isArray(parsed.data)) {
               latestFlavors = parsed.data;
+            } else if (parsed.type === 'ACAI_SETTINGS_UPDATE' && parsed.data) {
+              saveStoredAcaiSettings(parsed.data);
             }
           }
         }

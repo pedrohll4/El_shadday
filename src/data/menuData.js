@@ -1312,17 +1312,17 @@ export function getCardMachineNoticeText(cardSettings) {
 
 // 11 ACOMPANHAMENTOS OFICIAIS PARA COPOS E BARCAS DE AÇAÍ
 export const OFFICIAL_ACAI_COMPLEMENTS = [
-  { id: 'pacoca', name: 'Paçoca', icon: '🥜', defaultSelected: true },
-  { id: 'amendoim-torrado', name: 'Amendoim torrado', icon: '🥜', defaultSelected: false },
-  { id: 'leite-em-po', name: 'Leite em pó', icon: '🥛', defaultSelected: true },
-  { id: 'granola-crocante', name: 'Granola crocante', icon: '🥣', defaultSelected: true },
-  { id: 'morango-fresco', name: 'Morango fresco', icon: '🍓', defaultSelected: true },
-  { id: 'banana-fatiada', name: 'Banana fatiada', icon: '🍌', defaultSelected: true },
-  { id: 'kiwi-fresco', name: 'Kiwi fresco', icon: '🥝', defaultSelected: false },
-  { id: 'chocoball', name: 'Chocoball', icon: '🍫', defaultSelected: false },
-  { id: 'ovomaltine', name: 'Ovomaltine', icon: '✨', defaultSelected: false },
-  { id: 'mms', name: "M&M's", icon: '🍬', defaultSelected: false },
-  { id: 'granulado-nobre', name: 'Granulado nobre', icon: '🍫', defaultSelected: false }
+  { id: 'pacoca', name: 'Paçoca', icon: '🥜', defaultSelected: true, isAvailable: true },
+  { id: 'amendoim-torrado', name: 'Amendoim torrado', icon: '🥜', defaultSelected: false, isAvailable: true },
+  { id: 'leite-em-po', name: 'Leite em pó', icon: '🥛', defaultSelected: true, isAvailable: true },
+  { id: 'granola-crocante', name: 'Granola crocante', icon: '🥣', defaultSelected: true, isAvailable: true },
+  { id: 'morango-fresco', name: 'Morango fresco', icon: '🍓', defaultSelected: true, isAvailable: true },
+  { id: 'banana-fatiada', name: 'Banana fatiada', icon: '🍌', defaultSelected: true, isAvailable: true },
+  { id: 'kiwi-fresco', name: 'Kiwi fresco', icon: '🥝', defaultSelected: false, isAvailable: true },
+  { id: 'chocoball', name: 'Chocoball', icon: '🍫', defaultSelected: false, isAvailable: true },
+  { id: 'ovomaltine', name: 'Ovomaltine', icon: '✨', defaultSelected: false, isAvailable: true },
+  { id: 'mms', name: "M&M's", icon: '🍬', defaultSelected: false, isAvailable: true },
+  { id: 'granulado-nobre', name: 'Granulado nobre', icon: '🍫', defaultSelected: false, isAvailable: true }
 ];
 
 export const ACAI_COBERTURAS = [
@@ -1331,6 +1331,79 @@ export const ACAI_COBERTURAS = [
   'Cobertura de Chocolate',
   'Cobertura de Caramelo'
 ];
+
+export const DEFAULT_ACAI_SETTINGS = {
+  maxComplementsPerAcai: 0, // 0 = Sem limite
+  maxComplementsPerComboBarca: 0, // 0 = Sem limite
+  complements: OFFICIAL_ACAI_COMPLEMENTS,
+  coberturas: ACAI_COBERTURAS
+};
+
+export function normalizeAcaiSettings(raw) {
+  if (!raw || typeof raw !== 'object') return DEFAULT_ACAI_SETTINGS;
+
+  const maxAcai = typeof raw.maxComplementsPerAcai === 'number' 
+    ? Math.max(0, raw.maxComplementsPerAcai) 
+    : (parseInt(raw.maxComplementsPerAcai, 10) || 0);
+
+  const maxCombo = typeof raw.maxComplementsPerComboBarca === 'number' 
+    ? Math.max(0, raw.maxComplementsPerComboBarca) 
+    : (parseInt(raw.maxComplementsPerComboBarca, 10) || 0);
+
+  let complements = Array.isArray(raw.complements) && raw.complements.length > 0 
+    ? raw.complements.map((c, idx) => ({
+        id: c.id || `acai_comp_${Date.now()}_${idx}`,
+        name: (c.name || 'Adicional').trim(),
+        icon: c.icon || '✨',
+        defaultSelected: Boolean(c.defaultSelected),
+        isAvailable: c.isAvailable !== false
+      }))
+    : OFFICIAL_ACAI_COMPLEMENTS;
+
+  let coberturas = Array.isArray(raw.coberturas) && raw.coberturas.length > 0
+    ? raw.coberturas.map(cb => typeof cb === 'string' ? cb.trim() : (cb?.name || '')).filter(Boolean)
+    : ACAI_COBERTURAS;
+
+  if (!coberturas.includes('Sem Cobertura')) {
+    coberturas = ['Sem Cobertura', ...coberturas];
+  }
+
+  return {
+    maxComplementsPerAcai: maxAcai,
+    maxComplementsPerComboBarca: maxCombo,
+    complements,
+    coberturas
+  };
+}
+
+export function getStoredAcaiSettings() {
+  try {
+    const saved = localStorage.getItem("el_shadday_acai_settings_v1");
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed && typeof parsed === 'object') {
+        return normalizeAcaiSettings(parsed);
+      }
+    }
+  } catch (e) {
+    console.error("Error reading stored açaí settings:", e);
+  }
+  return DEFAULT_ACAI_SETTINGS;
+}
+
+export function saveStoredAcaiSettings(settings) {
+  try {
+    const normalized = normalizeAcaiSettings(settings);
+    localStorage.setItem("el_shadday_acai_settings_v1", JSON.stringify(normalized));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent("acai_settings_updated", { detail: normalized }));
+    }
+    return normalized;
+  } catch (e) {
+    console.error("Error saving stored açaí settings:", e);
+    return DEFAULT_ACAI_SETTINGS;
+  }
+}
 
 // SABORES OFICIAIS DE DYDYO 2L DISPONÍVEIS NO CARDÁPIO
 export const DYDYO_FLAVORS = [

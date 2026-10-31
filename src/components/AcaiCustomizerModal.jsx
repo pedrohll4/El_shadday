@@ -1,21 +1,40 @@
 import React, { useState, useEffect } from 'react';
-import { X, Sparkles, Check, Plus, Minus, Info } from 'lucide-react';
-import { OFFICIAL_ACAI_COMPLEMENTS, ACAI_COBERTURAS } from '../data/menuData';
+import { X, Sparkles, Check, Plus, Minus, Info, AlertCircle } from 'lucide-react';
+import { getStoredAcaiSettings } from '../data/menuData';
 
 export function AcaiCustomizerModal({ isOpen, onClose, acaiProduct, onAddAcaiToCart }) {
+  const [acaiConfig, setAcaiConfig] = useState(() => getStoredAcaiSettings());
   const [selectedComplements, setSelectedComplements] = useState([]);
   const [selectedCobertura, setSelectedCobertura] = useState('Sem Cobertura');
   const [notes, setNotes] = useState('');
   const [quantity, setQuantity] = useState(1);
+  const [limitWarning, setLimitWarning] = useState('');
+
+  useEffect(() => {
+    const handleSync = (e) => {
+      if (e.detail) setAcaiConfig(e.detail);
+      else setAcaiConfig(getStoredAcaiSettings());
+    };
+    window.addEventListener('acai_settings_updated', handleSync);
+    return () => window.removeEventListener('acai_settings_updated', handleSync);
+  }, []);
+
+  const availableComplements = acaiConfig.complements.filter(c => c.isAvailable !== false);
+  const maxLimit = Number(acaiConfig.maxComplementsPerAcai) || 0; // 0 = sem limite
 
   useEffect(() => {
     if (isOpen && acaiProduct) {
-      // Pré-seleciona os 5 adicionais clássicos da casa
-      const defaults = OFFICIAL_ACAI_COMPLEMENTS.filter(c => c.defaultSelected).map(c => c.name);
-      setSelectedComplements(defaults);
+      // Pré-seleciona os adicionais marcados como padrão que estejam disponíveis
+      const currentConfig = getStoredAcaiSettings();
+      setAcaiConfig(currentConfig);
+      const avail = currentConfig.complements.filter(c => c.isAvailable !== false);
+      const defaults = avail.filter(c => c.defaultSelected).map(c => c.name);
+      const lim = Number(currentConfig.maxComplementsPerAcai) || 0;
+      setSelectedComplements(lim > 0 ? defaults.slice(0, lim) : defaults);
       setSelectedCobertura('Sem Cobertura');
       setNotes('');
       setQuantity(1);
+      setLimitWarning('');
     }
   }, [isOpen, acaiProduct]);
 
@@ -25,20 +44,40 @@ export function AcaiCustomizerModal({ isOpen, onClose, acaiProduct, onAddAcaiToC
   const totalPrice = basePrice * quantity;
 
   const toggleComplement = (name) => {
-    setSelectedComplements(prev => 
-      prev.includes(name) ? prev.filter(c => c !== name) : [...prev, name]
-    );
+    setLimitWarning('');
+    setSelectedComplements(prev => {
+      if (prev.includes(name)) {
+        return prev.filter(c => c !== name);
+      }
+      if (maxLimit > 0 && prev.length >= maxLimit) {
+        setLimitWarning(`Limite máximo atingido (${maxLimit} acompanhamentos neste açaí). Desmarque um para trocar.`);
+        return prev;
+      }
+      return [...prev, name];
+    });
   };
 
   const handleSelectDefault = () => {
-    setSelectedComplements(OFFICIAL_ACAI_COMPLEMENTS.filter(c => c.defaultSelected).map(c => c.name));
+    setLimitWarning('');
+    const defaults = availableComplements.filter(c => c.defaultSelected).map(c => c.name);
+    setSelectedComplements(maxLimit > 0 ? defaults.slice(0, maxLimit) : defaults);
   };
 
   const handleSelectAll = () => {
-    setSelectedComplements(OFFICIAL_ACAI_COMPLEMENTS.map(c => c.name));
+    setLimitWarning('');
+    const allNames = availableComplements.map(c => c.name);
+    if (maxLimit > 0) {
+      setSelectedComplements(allNames.slice(0, maxLimit));
+      if (allNames.length > maxLimit) {
+        setLimitWarning(`Marcados os primeiros ${maxLimit} acompanhamentos permitidos.`);
+      }
+    } else {
+      setSelectedComplements(allNames);
+    }
   };
 
   const handleClearAll = () => {
+    setLimitWarning('');
     setSelectedComplements([]);
   };
 
@@ -86,7 +125,7 @@ export function AcaiCustomizerModal({ isOpen, onClose, acaiProduct, onAddAcaiToC
               </h2>
               <div className="flex items-center gap-2 mt-0.5">
                 <span className="text-xs text-purple-400 font-bold">
-                  11 Acompanhamentos disponíveis para copos e barcas
+                  {maxLimit > 0 ? `Escolha até ${maxLimit} acompanhamentos` : `${availableComplements.length} Acompanhamentos disponíveis`}
                 </span>
                 <span className="text-[11px] text-slate-400">• R$ {basePrice.toFixed(2).replace('.', ',')}</span>
               </div>
@@ -109,7 +148,7 @@ export function AcaiCustomizerModal({ isOpen, onClose, acaiProduct, onAddAcaiToC
           <div className="space-y-2">
             <div className="flex items-center justify-between flex-wrap gap-2">
               <label className="text-xs font-bold text-slate-200 uppercase tracking-wider block">
-                1. Escolha os Acompanhamentos ({selectedComplements.length} selecionados):
+                1. Escolha os Acompanhamentos ({selectedComplements.length}{maxLimit > 0 ? `/${maxLimit}` : ''}):
               </label>
               <div className="flex items-center gap-2 text-[10px]">
                 <button
@@ -117,7 +156,7 @@ export function AcaiCustomizerModal({ isOpen, onClose, acaiProduct, onAddAcaiToC
                   onClick={handleSelectDefault}
                   className="text-purple-400 hover:underline cursor-pointer font-bold"
                 >
-                  Padrão (5)
+                  Padrão
                 </button>
                 <span className="text-slate-600">•</span>
                 <button
@@ -125,7 +164,7 @@ export function AcaiCustomizerModal({ isOpen, onClose, acaiProduct, onAddAcaiToC
                   onClick={handleSelectAll}
                   className="text-purple-400 hover:underline cursor-pointer font-bold"
                 >
-                  Marcar Todos
+                  {maxLimit > 0 ? `Marcar (até ${maxLimit})` : 'Marcar Todos'}
                 </button>
                 <span className="text-slate-600">•</span>
                 <button
@@ -138,8 +177,15 @@ export function AcaiCustomizerModal({ isOpen, onClose, acaiProduct, onAddAcaiToC
               </div>
             </div>
 
+            {limitWarning && (
+              <div className="p-2.5 rounded-xl bg-purple-950/70 border border-purple-500/50 text-purple-200 text-xs flex items-center gap-2 animate-pulse">
+                <AlertCircle className="w-4 h-4 text-purple-400 flex-shrink-0" />
+                <span>{limitWarning}</span>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {OFFICIAL_ACAI_COMPLEMENTS.map(item => {
+              {availableComplements.map(item => {
                 const isSelected = selectedComplements.includes(item.name);
                 return (
                   <button
@@ -173,7 +219,7 @@ export function AcaiCustomizerModal({ isOpen, onClose, acaiProduct, onAddAcaiToC
               2. Cobertura:
             </label>
             <div className="grid grid-cols-2 gap-2">
-              {ACAI_COBERTURAS.map(cob => (
+              {(acaiConfig.coberturas || ['Sem Cobertura']).map(cob => (
                 <button
                   key={cob}
                   type="button"
@@ -216,17 +262,28 @@ export function AcaiCustomizerModal({ isOpen, onClose, acaiProduct, onAddAcaiToC
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-3 py-2.5 rounded-xl bg-dark-850 hover:bg-dark-800 text-slate-400 font-bold text-xs cursor-pointer transition-colors"
-            >
-              Cancelar
-            </button>
+            <div className="flex items-center bg-dark-900 border border-dark-750 rounded-xl p-0.5">
+              <button
+                type="button"
+                onClick={() => setQuantity(q => Math.max(1, q - 1))}
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-dark-800 cursor-pointer transition-colors"
+              >
+                <Minus className="w-3.5 h-3.5" />
+              </button>
+              <span className="w-7 text-center font-bold text-xs text-white">{quantity}</span>
+              <button
+                type="button"
+                onClick={() => setQuantity(q => q + 1)}
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-dark-800 cursor-pointer transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
             <button
               type="button"
               onClick={handleConfirm}
-              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 via-purple-500 to-purple-600 hover:from-purple-500 hover:to-purple-400 text-white font-black text-xs sm:text-sm shadow-lg flex items-center gap-1.5 cursor-pointer active:scale-98 transition-all"
+              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-500 to-indigo-500 text-white font-black text-xs hover:brightness-110 shadow-lg shadow-purple-500/20 cursor-pointer transition-all flex items-center gap-1.5"
             >
               <Check className="w-4 h-4 stroke-[3]" />
               <span>Adicionar Açaí</span>

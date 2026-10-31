@@ -9,8 +9,7 @@ import {
   calculatePizzaPrice, 
   calculatePizzaSurcharge, 
   getFlavorSurchargeForPizza,
-  OFFICIAL_ACAI_COMPLEMENTS, 
-  ACAI_COBERTURAS, 
+  getStoredAcaiSettings,
   DYDYO_FLAVORS,
   INITIAL_PIZZA_FLAVORS 
 } from '../data/menuData';
@@ -131,8 +130,10 @@ export function ComboCustomizerModal({
   }, [comboProduct]);
 
   const [flavorsList, setFlavorsList] = useState(() => getStoredPizzaFlavors());
+  const [acaiConfig, setAcaiConfig] = useState(() => getStoredAcaiSettings());
+  const [acaiLimitWarning, setAcaiLimitWarning] = useState('');
 
-  // Listen to pizza_flavors_updated
+  // Listen to pizza_flavors_updated and acai_settings_updated
   useEffect(() => {
     const handleFlavorsUpdated = (e) => {
       if (e?.detail && Array.isArray(e.detail) && e.detail.length > 0) {
@@ -142,10 +143,16 @@ export function ComboCustomizerModal({
         setFlavorsList(stored && stored.length > 0 ? stored : INITIAL_PIZZA_FLAVORS);
       }
     };
+    const handleAcaiUpdated = (e) => {
+      if (e?.detail) setAcaiConfig(e.detail);
+      else setAcaiConfig(getStoredAcaiSettings());
+    };
     window.addEventListener('pizza_flavors_updated', handleFlavorsUpdated);
+    window.addEventListener('acai_settings_updated', handleAcaiUpdated);
     window.addEventListener('storage', handleFlavorsUpdated);
     return () => {
       window.removeEventListener('pizza_flavors_updated', handleFlavorsUpdated);
+      window.removeEventListener('acai_settings_updated', handleAcaiUpdated);
       window.removeEventListener('storage', handleFlavorsUpdated);
     };
   }, []);
@@ -156,10 +163,19 @@ export function ComboCustomizerModal({
     return unpaused.length > 0 ? unpaused : list;
   }, [flavorsList]);
 
+  const availableAcaiComplements = useMemo(() => {
+    return (acaiConfig.complements || []).filter(c => c.isAvailable !== false);
+  }, [acaiConfig]);
+
+  const maxComboLimit = Number(acaiConfig.maxComplementsPerComboBarca) || 0;
+
   // Reset state on open
   useEffect(() => {
     if (isOpen && comboProduct) {
       setFlavorsList(getStoredPizzaFlavors());
+      const currentAcai = getStoredAcaiSettings();
+      setAcaiConfig(currentAcai);
+
       setActiveStage('pizzas');
       setActivePizzaIndex(0);
       setFlavorSearch('');
@@ -167,10 +183,13 @@ export function ComboCustomizerModal({
       setNotes('');
       setValidationError('');
       setSemSuinosEsfirras(false);
+      setAcaiLimitWarning('');
 
       // Pre-seleciona adicionais padrão do Açaí se houver barca
-      const defaultComplements = OFFICIAL_ACAI_COMPLEMENTS.filter(c => c.defaultSelected).map(c => c.name);
-      setSelectedAcaiComplements(defaultComplements);
+      const avail = (currentAcai.complements || []).filter(c => c.isAvailable !== false);
+      const defaultComplements = avail.filter(c => c.defaultSelected).map(c => c.name);
+      const lim = Number(currentAcai.maxComplementsPerComboBarca) || 0;
+      setSelectedAcaiComplements(lim > 0 ? defaultComplements.slice(0, lim) : defaultComplements);
       setSelectedAcaiCobertura('Sem Cobertura');
       setSelectedDydyo('Dydyo Guaraná 2L');
 
@@ -256,9 +275,17 @@ export function ComboCustomizerModal({
 
   // Toggle complement for Açaí
   const toggleAcaiComplement = (name) => {
-    setSelectedAcaiComplements(prev => 
-      prev.includes(name) ? prev.filter(c => c !== name) : [...prev, name]
-    );
+    setAcaiLimitWarning('');
+    setSelectedAcaiComplements(prev => {
+      if (prev.includes(name)) {
+        return prev.filter(c => c !== name);
+      }
+      if (maxComboLimit > 0 && prev.length >= maxComboLimit) {
+        setAcaiLimitWarning(`Limite máximo de acompanhamentos atingido na barca (${maxComboLimit}). Desmarque um para trocar.`);
+        return prev;
+      }
+      return [...prev, name];
+    });
   };
 
   // Quick action: copy flavors from 1st pizza to 2nd pizza
@@ -746,7 +773,7 @@ export function ComboCustomizerModal({
                       Barca de Açaí Especial Inclusa
                     </h3>
                     <p className="text-xs text-purple-300 font-medium">
-                      11 acompanhamentos frescos disponíveis para a sua barca
+                      {maxComboLimit > 0 ? `Escolha até ${maxComboLimit} acompanhamentos inclusos` : `${availableAcaiComplements.length} acompanhamentos frescos disponíveis`}
                     </p>
                   </div>
                 </div>
@@ -765,28 +792,46 @@ export function ComboCustomizerModal({
               <div className="space-y-2">
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <label className="text-xs font-bold text-slate-200 uppercase tracking-wider block">
-                    Escolha os Acompanhamentos ({selectedAcaiComplements.length} selecionados):
+                    Escolha os Acompanhamentos ({selectedAcaiComplements.length}{maxComboLimit > 0 ? `/${maxComboLimit}` : ''}):
                   </label>
                   <div className="flex items-center gap-2 text-[10px]">
                     <button
                       type="button"
-                      onClick={() => setSelectedAcaiComplements(OFFICIAL_ACAI_COMPLEMENTS.filter(c => c.defaultSelected).map(c => c.name))}
+                      onClick={() => {
+                        setAcaiLimitWarning('');
+                        const defaults = availableAcaiComplements.filter(c => c.defaultSelected).map(c => c.name);
+                        setSelectedAcaiComplements(maxComboLimit > 0 ? defaults.slice(0, maxComboLimit) : defaults);
+                      }}
                       className="text-purple-400 hover:underline cursor-pointer font-bold"
                     >
-                      Padrão (5)
+                      Padrão
                     </button>
                     <span className="text-slate-600">•</span>
                     <button
                       type="button"
-                      onClick={() => setSelectedAcaiComplements(OFFICIAL_ACAI_COMPLEMENTS.map(c => c.name))}
+                      onClick={() => {
+                        setAcaiLimitWarning('');
+                        const allNames = availableAcaiComplements.map(c => c.name);
+                        if (maxComboLimit > 0) {
+                          setSelectedAcaiComplements(allNames.slice(0, maxComboLimit));
+                          if (allNames.length > maxComboLimit) {
+                            setAcaiLimitWarning(`Marcados os primeiros ${maxComboLimit} acompanhamentos permitidos.`);
+                          }
+                        } else {
+                          setSelectedAcaiComplements(allNames);
+                        }
+                      }}
                       className="text-purple-400 hover:underline cursor-pointer font-bold"
                     >
-                      Marcar Todos
+                      {maxComboLimit > 0 ? `Marcar (até ${maxComboLimit})` : 'Marcar Todos'}
                     </button>
                     <span className="text-slate-600">•</span>
                     <button
                       type="button"
-                      onClick={() => setSelectedAcaiComplements([])}
+                      onClick={() => {
+                        setAcaiLimitWarning('');
+                        setSelectedAcaiComplements([]);
+                      }}
                       className="text-slate-400 hover:underline cursor-pointer"
                     >
                       Limpar
@@ -794,8 +839,15 @@ export function ComboCustomizerModal({
                   </div>
                 </div>
 
+                {acaiLimitWarning && (
+                  <div className="p-2.5 rounded-xl bg-purple-950/70 border border-purple-500/50 text-purple-200 text-xs flex items-center gap-2 animate-pulse">
+                    <AlertCircle className="w-4 h-4 text-purple-400 flex-shrink-0" />
+                    <span>{acaiLimitWarning}</span>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {OFFICIAL_ACAI_COMPLEMENTS.map((item) => {
+                  {availableAcaiComplements.map((item) => {
                     const isSelected = selectedAcaiComplements.includes(item.name);
                     return (
                       <button
@@ -829,7 +881,7 @@ export function ComboCustomizerModal({
                   Cobertura da Barca (Opcional):
                 </label>
                 <div className="grid grid-cols-2 gap-2">
-                  {ACAI_COBERTURAS.map(cob => (
+                  {(acaiConfig.coberturas || ['Sem Cobertura']).map(cob => (
                     <button
                       key={cob}
                       type="button"
