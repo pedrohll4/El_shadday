@@ -27,6 +27,7 @@ import { DesktopSidebarCart } from './components/DesktopSidebarCart';
 import { BoxBuilderModal } from './components/BoxBuilderModal';
 import { PizzaCustomizerModal } from './components/PizzaCustomizerModal';
 import { ComboCustomizerModal } from './components/ComboCustomizerModal';
+import { AcaiCustomizerModal } from './components/AcaiCustomizerModal';
 import { BranchSelectorModal } from './components/BranchSelectorModal';
 import { ConstructionModal } from './components/ConstructionModal';
 import { DeliveryCartDrawer } from './components/DeliveryCartDrawer';
@@ -580,6 +581,8 @@ export default function App() {
   const [selectedPizzaForCustomizer, setSelectedPizzaForCustomizer] = useState(null);
   const [isComboCustomizerOpen, setIsComboCustomizerOpen] = useState(false);
   const [selectedComboForCustomizer, setSelectedComboForCustomizer] = useState(null);
+  const [isAcaiModalOpen, setIsAcaiModalOpen] = useState(false);
+  const [selectedAcaiForCustomizer, setSelectedAcaiForCustomizer] = useState(null);
   const [isOrderSuccessOpen, setIsOrderSuccessOpen] = useState(false);
   const [completedOrderData, setCompletedOrderData] = useState(null);
 
@@ -634,6 +637,11 @@ export default function App() {
 
   const handleAddComboToCart = (customCombo) => {
     setCartItems(prev => [...prev, { ...customCombo, quantity: 1 }]);
+    setIsCartOpen(true);
+  };
+
+  const handleAddAcaiToCart = (customAcai) => {
+    setCartItems(prev => [...prev, customAcai]);
     setIsCartOpen(true);
   };
 
@@ -1210,6 +1218,10 @@ export default function App() {
                             setSelectedComboForCustomizer(prod);
                             setIsComboCustomizerOpen(true);
                           }}
+                          onOpenAcaiCustomizer={(prod) => {
+                            setSelectedAcaiForCustomizer(prod);
+                            setIsAcaiModalOpen(true);
+                          }}
                         />
                       );
                     })}
@@ -1275,6 +1287,10 @@ export default function App() {
                             onOpenComboCustomizer={(prod) => {
                               setSelectedComboForCustomizer(prod);
                               setIsComboCustomizerOpen(true);
+                            }}
+                            onOpenAcaiCustomizer={(prod) => {
+                              setSelectedAcaiForCustomizer(prod);
+                              setIsAcaiModalOpen(true);
                             }}
                           />
                         );
@@ -1440,6 +1456,14 @@ export default function App() {
         onClose={() => setIsComboCustomizerOpen(false)}
         comboProduct={selectedComboForCustomizer}
         onAddComboToCart={handleAddComboToCart}
+      />
+
+      {/* Acai Customizer Modal */}
+      <AcaiCustomizerModal
+        isOpen={isAcaiModalOpen}
+        onClose={() => setIsAcaiModalOpen(false)}
+        acaiProduct={selectedAcaiForCustomizer}
+        onAddAcaiToCart={handleAddAcaiToCart}
       />
 
     </div>

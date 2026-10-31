@@ -33,6 +33,9 @@ import {
   normalizePizzaFlavors
 } from '../data/menuData';
 import { PizzaCustomizerModal } from './PizzaCustomizerModal';
+import { BoxBuilderModal } from './BoxBuilderModal';
+import { ComboCustomizerModal } from './ComboCustomizerModal';
+import { AcaiCustomizerModal } from './AcaiCustomizerModal';
 import { 
   GALLERY_CATEGORIES, 
   INITIAL_BUFFET_GALLERY, 
@@ -587,8 +590,11 @@ export function AdminDashboard({
   const [flavorFormDescription, setFlavorFormDescription] = useState('');
   const [flavorFormIsAvailable, setFlavorFormIsAvailable] = useState(true);
 
-  // PDV Custom Pizza Modal
+  // PDV Custom Modals (Pizza, Esfirra Box, Açaí, Combos)
   const [pdvPizzaToCustomize, setPdvPizzaToCustomize] = useState(null);
+  const [pdvBoxToCustomize, setPdvBoxToCustomize] = useState(null);
+  const [pdvComboToCustomize, setPdvComboToCustomize] = useState(null);
+  const [pdvAcaiToCustomize, setPdvAcaiToCustomize] = useState(null);
 
   // Promo Form Fields
   const [tempBannerText, setTempBannerText] = useState(promoSettings.bannerText || '');
@@ -2020,6 +2026,123 @@ export function AdminDashboard({
 
   const pdvDeliveryFee = pdvDeliveryType === 'delivery' ? (pdvDistrict?.price || 8) : 0;
   const pdvCartTotal = pdvCartSubtotal + pdvDeliveryFee;
+
+  // PDV Customization Product Detectors
+  const isPizzaProduct = (prod) => {
+    if (!prod) return false;
+    return Boolean(
+      prod.isPizzaCustomizer || 
+      prod.categoryId === 'pizzas' || 
+      (prod.name && prod.name.toLowerCase().includes('pizza'))
+    );
+  };
+
+  const isBoxProduct = (prod) => {
+    if (!prod) return false;
+    return Boolean(
+      prod.isBox || 
+      prod.categoryId === 'caixas' || 
+      (prod.name && prod.name.toLowerCase().includes('caixa') && prod.name.toLowerCase().includes('esfirr'))
+    );
+  };
+
+  const isComboProduct = (prod) => {
+    if (!prod) return false;
+    return Boolean(
+      prod.categoryId === 'combos' || 
+      (prod.name && prod.name.toLowerCase().includes('combo'))
+    );
+  };
+
+  const isAcaiProduct = (prod) => {
+    if (!prod) return false;
+    const name = (prod.name || '').toLowerCase();
+    const id = (prod.id || '').toLowerCase();
+    return Boolean(
+      prod.categoryId === 'acai' || 
+      id.includes('acai') || 
+      name.includes('açaí') || 
+      name.includes('acai')
+    );
+  };
+
+  const handlePDVProductClick = (prod) => {
+    if (isPizzaProduct(prod)) {
+      setPdvPizzaToCustomize(prod);
+    } else if (isBoxProduct(prod)) {
+      setPdvBoxToCustomize(prod);
+    } else if (isComboProduct(prod)) {
+      setPdvComboToCustomize(prod);
+    } else if (isAcaiProduct(prod)) {
+      setPdvAcaiToCustomize(prod);
+    } else {
+      handleAddProductToPDV(prod, 1);
+    }
+  };
+
+  const handleAddPizzaToPDV = (customPizza) => {
+    setPdvCart(prev => [...prev, {
+      id: customPizza.id,
+      name: customPizza.name,
+      price: customPizza.price,
+      quantity: 1,
+      notes: customPizza.notes || '',
+      flavors: customPizza.flavors,
+      bordaGratis: customPizza.bordaGratis,
+      tamanho: customPizza.tamanho,
+      isCustomPizza: true,
+      description: customPizza.description
+    }]);
+    setPdvPizzaToCustomize(null);
+  };
+
+  const handleAddBoxToPDV = (customBox) => {
+    setPdvCart(prev => [...prev, {
+      id: customBox.id,
+      name: customBox.name,
+      price: customBox.price,
+      quantity: 1,
+      isCustomBox: true,
+      isBox: true,
+      isSortido: customBox.isSortido,
+      totalCount: customBox.totalCount,
+      semSuinos: customBox.semSuinos,
+      salgadasDetails: customBox.salgadasDetails,
+      docesDetails: customBox.docesDetails,
+      description: customBox.description
+    }]);
+    setPdvBoxToCustomize(null);
+  };
+
+  const handleAddAcaiToPDV = (customAcai) => {
+    setPdvCart(prev => [...prev, {
+      id: customAcai.id,
+      name: customAcai.name,
+      price: customAcai.price,
+      quantity: customAcai.quantity || 1,
+      isCustomAcai: true,
+      complements: customAcai.complements,
+      cobertura: customAcai.cobertura,
+      notes: customAcai.notes || '',
+      description: customAcai.description
+    }]);
+    setPdvAcaiToCustomize(null);
+  };
+
+  const handleAddComboToPDV = (customCombo) => {
+    setPdvCart(prev => [...prev, {
+      id: customCombo.id,
+      name: customCombo.name,
+      price: customCombo.price,
+      quantity: 1,
+      isCombo: true,
+      isCustomCombo: true,
+      pizzaSelections: customCombo.pizzaSelections,
+      notes: customCombo.notes || '',
+      description: customCombo.description
+    }]);
+    setPdvComboToCustomize(null);
+  };
 
   const handleAddProductToPDV = (product, quantity = 1) => {
     setPdvValidationError('');
@@ -3544,7 +3667,7 @@ export function AdminDashboard({
                     return (
                       <div
                         key={prod.id}
-                        onClick={() => prod.isPizzaCustomizer ? setPdvPizzaToCustomize(prod) : handleAddProductToPDV(prod, 1)}
+                        onClick={() => handlePDVProductClick(prod)}
                         className={`p-2.5 rounded-2xl border transition-all cursor-pointer select-none flex items-center justify-between gap-2.5 ${
                           inCart
                             ? 'bg-brand-gold/10 border-brand-gold/60 shadow-sm'
@@ -3565,9 +3688,61 @@ export function AdminDashboard({
                           </div>
                         </div>
 
-                        {/* Quick Add Button */}
+                        {/* Action Button */}
                         <div className="flex items-center gap-1 flex-shrink-0">
-                          {inCart ? (
+                          {isPizzaProduct(prod) ? (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPdvPizzaToCustomize(prod);
+                              }}
+                              className="px-2.5 py-1.5 rounded-xl bg-brand-gold/15 hover:bg-brand-gold hover:text-dark-950 text-brand-gold font-bold text-xs transition-colors flex items-center gap-1 border border-brand-gold/40 cursor-pointer"
+                              title="Escolher Sabores da Pizza"
+                            >
+                              <Pizza className="w-3.5 h-3.5" />
+                              <span>Sabores</span>
+                            </button>
+                          ) : isBoxProduct(prod) ? (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPdvBoxToCustomize(prod);
+                              }}
+                              className="px-2.5 py-1.5 rounded-xl bg-brand-gold/15 hover:bg-brand-gold hover:text-dark-950 text-brand-gold font-bold text-xs transition-colors flex items-center gap-1 border border-brand-gold/40 cursor-pointer"
+                              title="Montar Caixa de Esfirras"
+                            >
+                              <Package className="w-3.5 h-3.5" />
+                              <span>Montar</span>
+                            </button>
+                          ) : isAcaiProduct(prod) ? (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPdvAcaiToCustomize(prod);
+                              }}
+                              className="px-2.5 py-1.5 rounded-xl bg-purple-500/15 hover:bg-purple-500 hover:text-white text-purple-300 font-bold text-xs transition-colors flex items-center gap-1 border border-purple-500/40 cursor-pointer"
+                              title="Escolher Adicionais do Açaí"
+                            >
+                              <Sparkles className="w-3.5 h-3.5" />
+                              <span>Adicionais</span>
+                            </button>
+                          ) : isComboProduct(prod) ? (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPdvComboToCustomize(prod);
+                              }}
+                              className="px-2.5 py-1.5 rounded-xl bg-brand-gold/15 hover:bg-brand-gold hover:text-dark-950 text-brand-gold font-bold text-xs transition-colors flex items-center gap-1 border border-brand-gold/40 cursor-pointer"
+                              title="Personalizar Combo"
+                            >
+                              <Star className="w-3.5 h-3.5" />
+                              <span>Combo</span>
+                            </button>
+                          ) : inCart ? (
                             <div className="flex items-center gap-1 bg-dark-950 px-2 py-1 rounded-xl border border-dark-750">
                               <span className="text-xs font-black text-brand-gold">
                                 {inCart.quantity}x
@@ -3578,7 +3753,7 @@ export function AdminDashboard({
                                   e.stopPropagation();
                                   handleAddProductToPDV(prod, 1);
                                 }}
-                                className="w-5 h-5 rounded bg-brand-gold hover:bg-amber-400 text-dark-950 flex items-center justify-center font-bold text-xs"
+                                className="w-5 h-5 rounded bg-brand-gold hover:bg-amber-400 text-dark-950 flex items-center justify-center font-bold text-xs cursor-pointer"
                               >
                                 +
                               </button>
@@ -3590,7 +3765,7 @@ export function AdminDashboard({
                                 e.stopPropagation();
                                 handleAddProductToPDV(prod, 1);
                               }}
-                              className="px-2.5 py-1.5 rounded-xl bg-dark-800 hover:bg-brand-gold hover:text-dark-950 text-slate-300 font-bold text-xs transition-colors flex items-center gap-1 border border-dark-700"
+                              className="px-2.5 py-1.5 rounded-xl bg-dark-800 hover:bg-brand-gold hover:text-dark-950 text-slate-300 font-bold text-xs transition-colors flex items-center gap-1 border border-dark-700 cursor-pointer"
                             >
                               <Plus className="w-3.5 h-3.5 stroke-[3]" />
                               <span>Incluir</span>
@@ -3638,7 +3813,7 @@ export function AdminDashboard({
                           <div className="min-w-0 flex-1">
                             <div className="text-xs font-bold text-white truncate">{item.name}</div>
                             {item.description && (
-                              <div className="text-[10px] text-slate-400 truncate">{item.description}</div>
+                              <div className="text-[10px] text-slate-400 line-clamp-2 leading-tight mt-0.5">{item.description}</div>
                             )}
                             <div className="text-[11px] text-brand-gold">
                               R$ {(item.price * item.quantity).toFixed(2).replace('.', ',')}
@@ -7398,25 +7573,45 @@ export function AdminDashboard({
         </div>
       )}
 
-      {/* MODAL: PERSONALIZAR PIZZA NO PDV */}
+      {/* MODAL 1: PERSONALIZAR PIZZA NO PDV */}
       {pdvPizzaToCustomize && (
         <PizzaCustomizerModal
           isOpen={!!pdvPizzaToCustomize}
           onClose={() => setPdvPizzaToCustomize(null)}
           pizzaProduct={pdvPizzaToCustomize}
-          onAddPizzaToCart={(customPizza) => {
-            setPdvCart(prev => [...prev, {
-              id: customPizza.id,
-              name: customPizza.name,
-              price: customPizza.price,
-              quantity: 1,
-              notes: customPizza.notes || '',
-              flavors: customPizza.flavors,
-              isCustomPizza: true,
-              description: customPizza.description
-            }]);
-            setPdvPizzaToCustomize(null);
-          }}
+          flavors={pizzaFlavors}
+          onAddPizzaToCart={handleAddPizzaToPDV}
+        />
+      )}
+
+      {/* MODAL 2: MONTAR CAIXA DE ESFIRRAS NO PDV */}
+      {pdvBoxToCustomize && (
+        <BoxBuilderModal
+          isOpen={!!pdvBoxToCustomize}
+          onClose={() => setPdvBoxToCustomize(null)}
+          initialBox={pdvBoxToCustomize}
+          products={productsList}
+          onAddBoxToCart={handleAddBoxToPDV}
+        />
+      )}
+
+      {/* MODAL 3: PERSONALIZAR AÇAÍ NO PDV */}
+      {pdvAcaiToCustomize && (
+        <AcaiCustomizerModal
+          isOpen={!!pdvAcaiToCustomize}
+          onClose={() => setPdvAcaiToCustomize(null)}
+          acaiProduct={pdvAcaiToCustomize}
+          onAddAcaiToCart={handleAddAcaiToPDV}
+        />
+      )}
+
+      {/* MODAL 4: MONTAR COMBO NO PDV */}
+      {pdvComboToCustomize && (
+        <ComboCustomizerModal
+          isOpen={!!pdvComboToCustomize}
+          onClose={() => setPdvComboToCustomize(null)}
+          comboProduct={pdvComboToCustomize}
+          onAddComboToCart={handleAddComboToPDV}
         />
       )}
 

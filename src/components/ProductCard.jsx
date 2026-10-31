@@ -7,6 +7,7 @@ export function ProductCard({
   onOpenBoxBuilder, 
   onOpenPizzaCustomizer, 
   onOpenComboCustomizer,
+  onOpenAcaiCustomizer,
   onUpdateQuantity,
   cartQuantity = 0,
   cartItem = null
@@ -14,7 +15,8 @@ export function ProductCard({
   const isBox = product.isBox;
   const isPizza = product.isPizzaCustomizer;
   const isCombo = product.categoryId === 'combos';
-  const isCustomizable = isBox || isPizza || isCombo;
+  const isAcai = product.categoryId === 'acai' || (product.id && product.id.includes('acai')) || (product.name && product.name.toLowerCase().includes('açaí'));
+  const isCustomizable = isBox || isPizza || isCombo || isAcai;
 
   const handleAction = (e) => {
     e.stopPropagation();
@@ -24,6 +26,8 @@ export function ProductCard({
       onOpenPizzaCustomizer(product);
     } else if (isCombo && onOpenComboCustomizer) {
       onOpenComboCustomizer(product);
+    } else if (isAcai && onOpenAcaiCustomizer) {
+      onOpenAcaiCustomizer(product);
     } else {
       onAddToCart(product);
     }
@@ -155,6 +159,11 @@ export function ProductCard({
                 <>
                   <PizzaIcon className="w-3.5 h-3.5" />
                   <span>Escolher</span>
+                </>
+              ) : isAcai ? (
+                <>
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Adicionais</span>
                 </>
               ) : (
                 <>

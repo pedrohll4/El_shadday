@@ -1,24 +1,38 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { X, Pizza, Check, Sparkles, AlertCircle, Info, Search, Flame, ArrowUpRight } from 'lucide-react';
-import { getStoredPizzaFlavors, calculatePizzaPrice } from '../data/menuData';
+import { getStoredPizzaFlavors, calculatePizzaPrice, INITIAL_PIZZA_FLAVORS } from '../data/menuData';
 
-export function PizzaCustomizerModal({ isOpen, onClose, pizzaProduct, onAddPizzaToCart }) {
-  const [flavorsList, setFlavorsList] = useState(() => getStoredPizzaFlavors());
+export function PizzaCustomizerModal({ isOpen, onClose, pizzaProduct, onAddPizzaToCart, flavors }) {
+  const [flavorsList, setFlavorsList] = useState(() => {
+    if (flavors && Array.isArray(flavors) && flavors.length > 0) return flavors;
+    const stored = getStoredPizzaFlavors();
+    return (stored && stored.length > 0) ? stored : INITIAL_PIZZA_FLAVORS;
+  });
   const [selectedFlavors, setSelectedFlavors] = useState([]);
   const [flavorSearch, setFlavorSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('todos');
   const [notes, setNotes] = useState('');
 
-  const maxFlavors = pizzaProduct?.maxSabores || 2;
+  const maxFlavors = useMemo(() => {
+    if (pizzaProduct?.maxSabores) return Number(pizzaProduct.maxSabores);
+    const name = (pizzaProduct?.name || '').toLowerCase();
+    if (name.includes('gigante') || name.includes('12 fatia') || name.includes('3 sabor')) return 3;
+    if (name.includes('família') || name.includes('familia') || name.includes('8 fatia')) return 2;
+    if (name.includes('média') || name.includes('media') || name.includes('6 fatia')) return 2;
+    if (name.includes('pequena') || name.includes('4 fatia')) return 2;
+    return 2;
+  }, [pizzaProduct]);
+
   const basePrice = Number(pizzaProduct?.price) || 0;
 
   // Atualiza lista quando eventos de sincronização acontecerem
   useEffect(() => {
     const handleFlavorsUpdated = (e) => {
-      if (e?.detail && Array.isArray(e.detail)) {
+      if (e?.detail && Array.isArray(e.detail) && e.detail.length > 0) {
         setFlavorsList(e.detail);
       } else {
-        setFlavorsList(getStoredPizzaFlavors());
+        const stored = getStoredPizzaFlavors();
+        setFlavorsList((stored && stored.length > 0) ? stored : INITIAL_PIZZA_FLAVORS);
       }
     };
 
@@ -33,17 +47,22 @@ export function PizzaCustomizerModal({ isOpen, onClose, pizzaProduct, onAddPizza
 
   useEffect(() => {
     if (isOpen) {
-      setFlavorsList(getStoredPizzaFlavors());
+      const activeFlavors = (flavors && Array.isArray(flavors) && flavors.length > 0)
+        ? flavors
+        : getStoredPizzaFlavors();
+      setFlavorsList((activeFlavors && activeFlavors.length > 0) ? activeFlavors : INITIAL_PIZZA_FLAVORS);
       setSelectedFlavors([]);
       setFlavorSearch('');
       setCategoryFilter('todos');
       setNotes('');
     }
-  }, [isOpen, pizzaProduct]);
+  }, [isOpen, pizzaProduct, flavors]);
 
-  // Sabores disponíveis
+  // Sabores disponíveis com fallback para que a lista nunca fique vazia
   const availableFlavors = useMemo(() => {
-    return flavorsList.filter(f => f.isAvailable !== false);
+    const list = Array.isArray(flavorsList) && flavorsList.length > 0 ? flavorsList : INITIAL_PIZZA_FLAVORS;
+    const unpaused = list.filter(f => f.isAvailable !== false);
+    return unpaused.length > 0 ? unpaused : list;
   }, [flavorsList]);
 
   // Categorias disponíveis dinamicamente ordenadas
