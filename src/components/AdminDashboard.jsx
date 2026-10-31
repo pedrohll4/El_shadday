@@ -10,7 +10,7 @@ import {
   Utensils, ToggleLeft, ToggleRight, Save, Layers, CheckSquare,
   Pizza, ArrowUpRight, Info, CreditCard, Play, Film,
   Building2, Users, Crown, Sliders, BarChart3, Star, QrCode,
-  Settings2, Smartphone, Banknote, Shuffle
+  Settings2, Smartphone, Banknote, Shuffle, Lock
 } from 'lucide-react';
 import { 
   RESTAURANT_INFO, 
