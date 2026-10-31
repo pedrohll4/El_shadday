@@ -124,6 +124,9 @@ function formatOrderItemsSummary(items = []) {
     } else if (it.complements && it.complements.length > 0) {
       details.push(`Acomp: ${it.complements.join(', ')}`);
     }
+    if (it.dydyoFlavor) {
+      details.push(`Refri: ${it.dydyoFlavor}`);
+    }
     if (details.length > 0) {
       line += ` (${details.join(' | ')})`;
     }

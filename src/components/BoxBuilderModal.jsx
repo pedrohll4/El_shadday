@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   X, Package, Check, Sparkles, MessageSquare, Flame 
 } from 'lucide-react';
+import { DYDYO_FLAVORS } from '../data/menuData';
 
 // Tamanhos disponíveis das Caixas de Esfirras (mantidos para export/referência)
 export const BOX_CONFIGS = [
@@ -146,12 +147,14 @@ export const isCarneFlavor = (flavorName) => {
 
 export function BoxBuilderModal({ isOpen, onClose, onAddBoxToCart, initialBox = null }) {
   const [selectedOptionId, setSelectedOptionId] = useState(BOX_SORTIDO_OPTIONS[0].id);
+  const [selectedDydyo, setSelectedDydyo] = useState('Dydyo Guaraná 2L');
   const [notes, setNotes] = useState('');
 
-  // Sempre que o modal abre, reseta a opção e observações
+  // Sempre que o modal abre, reseta a opção, refrigerante e observações
   useEffect(() => {
     if (isOpen) {
       setSelectedOptionId(BOX_SORTIDO_OPTIONS[0].id);
+      setSelectedDydyo('Dydyo Guaraná 2L');
       setNotes('');
     }
   }, [isOpen, initialBox]);
@@ -189,9 +192,10 @@ export function BoxBuilderModal({ isOpen, onClose, onAddBoxToCart, initialBox = 
       semSuinos: isSemSuinos,
       salgadasCount: isDoces ? salgadasCount : totalCount,
       docesCount: isDoces ? docesCount : 0,
+      dydyoFlavor: isDydyoCombo ? selectedDydyo : null,
       notes: notes.trim(),
       image: currentBox.image || "https://assets.olaclick.app/companies/products/images/800/4cfa4549-ad5f-4b4e-b539-468584a0eeba.png",
-      description: `${currentOption.displayTitle} (${isDoces ? `${salgadasCount} Salgadas + ${docesCount} Doces` : `${totalCount} Salgadas`})${isSemSuinos ? ' • 🚫 Sem carne suína' : ''}${isDydyoCombo ? ' • 🥤 + Dydyo 2L' : ''}${notes.trim() ? ` • Obs: ${notes.trim()}` : ''}`
+      description: `${currentOption.displayTitle} (${isDoces ? `${salgadasCount} Salgadas + ${docesCount} Doces` : `${totalCount} Salgadas`})${isSemSuinos ? ' • 🚫 Sem carne suína' : ''}${isDydyoCombo ? ` • 🥤 + ${selectedDydyo}` : ''}${notes.trim() ? ` • Obs: ${notes.trim()}` : ''}`
     };
 
     onAddBoxToCart(customItem);
@@ -252,7 +256,7 @@ export function BoxBuilderModal({ isOpen, onClose, onAddBoxToCart, initialBox = 
                   {isDydyoCombo && (
                     <span className="text-[11px] font-black text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded border border-amber-500/30 flex items-center gap-1">
                       <span>🥤</span>
-                      <span>+ Dydyo 2L Geladíssimo</span>
+                      <span>+ {selectedDydyo}</span>
                     </span>
                   )}
                 </div>
@@ -341,6 +345,53 @@ export function BoxBuilderModal({ isOpen, onClose, onAddBoxToCart, initialBox = 
               })}
             </div>
           </div>
+
+          {/* Escolha do Sabor do Refrigerante Dydyo 2L (Incluso no Combo) */}
+          {isDydyoCombo && (
+            <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-dark-950 to-dark-900 border border-amber-500/40 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
+                  <span className="text-base">🥤</span>
+                  <span>Escolha o Sabor do seu Dydyo 2L:</span>
+                </span>
+                <span className="text-[10px] text-amber-300 font-bold bg-amber-500/15 px-2 py-0.5 rounded border border-amber-500/30">
+                  Incluso no Combo
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                {DYDYO_FLAVORS.map((dydyo) => {
+                  const isSelected = selectedDydyo === dydyo.name;
+                  return (
+                    <button
+                      key={dydyo.id}
+                      type="button"
+                      onClick={() => setSelectedDydyo(dydyo.name)}
+                      className={`p-2.5 rounded-xl border text-left transition-all flex items-center gap-2.5 cursor-pointer ${
+                        isSelected
+                          ? 'bg-amber-500/20 border-amber-400 text-white ring-1 ring-amber-400/50 shadow-md'
+                          : 'bg-dark-850 hover:bg-dark-800 border-dark-750 text-slate-300'
+                      }`}
+                    >
+                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                        isSelected ? 'border-amber-400 bg-amber-400 text-dark-950' : 'border-dark-600'
+                      }`}>
+                        {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-xs font-bold leading-tight truncate">
+                          {dydyo.flavor}
+                        </div>
+                        <div className="text-[10px] text-slate-400 truncate">
+                          {dydyo.badge || '2L Gelado'}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Observações para a Cozinha (Opcional) */}
           <div>

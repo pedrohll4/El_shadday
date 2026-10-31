@@ -48,6 +48,9 @@ export function OrderConfirmationView({ order, onBackToMenu }) {
           message += `   🍯 Cobertura: ${item.acaiCobertura}\n`;
         }
       }
+      if (item.dydyoFlavor) {
+        message += `   🥤 Refrigerante: ${item.dydyoFlavor}\n`;
+      }
       if (item.isCustomBox) {
         if (item.boxOptionTitle) {
           message += `   ✨ Opção: ${item.boxOptionTitle}\n`;
@@ -290,6 +293,11 @@ export function OrderConfirmationView({ order, onBackToMenu }) {
                         {item.acaiCobertura && item.acaiCobertura !== 'Sem Cobertura' && (
                           <div className="text-[10px] text-purple-200">🍯 <strong>Cobertura:</strong> {item.acaiCobertura}</div>
                         )}
+                      </div>
+                    )}
+                    {item.dydyoFlavor && (
+                      <div className="text-[11px] text-amber-300">
+                        🥤 <strong>Refrigerante:</strong> {item.dydyoFlavor}
                       </div>
                     )}
                     {item.isCustomBox && (

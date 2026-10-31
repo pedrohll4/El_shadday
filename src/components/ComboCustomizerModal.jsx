@@ -3,7 +3,7 @@ import {
   X, Flame, Check, Sparkles, AlertCircle, Copy, 
   ChevronRight, ArrowRight, Pizza as PizzaIcon, CheckCircle2, Package, IceCream, ArrowLeft 
 } from 'lucide-react';
-import { getStoredPizzaFlavors, OFFICIAL_ACAI_COMPLEMENTS, ACAI_COBERTURAS } from '../data/menuData';
+import { getStoredPizzaFlavors, OFFICIAL_ACAI_COMPLEMENTS, ACAI_COBERTURAS, DYDYO_FLAVORS } from '../data/menuData';
 
 // Helper to determine the pizza configuration for any combo
 export function getComboPizzasConfig(product) {
@@ -87,6 +87,7 @@ export function ComboCustomizerModal({
   const [pizzaSelections, setPizzaSelections] = useState({});
   const [selectedAcaiComplements, setSelectedAcaiComplements] = useState([]);
   const [selectedAcaiCobertura, setSelectedAcaiCobertura] = useState('Sem Cobertura');
+  const [selectedDydyo, setSelectedDydyo] = useState('Dydyo Guaraná 2L');
   const [notes, setNotes] = useState('');
   const [validationError, setValidationError] = useState('');
   const [semSuinosEsfirras, setSemSuinosEsfirras] = useState(false);
@@ -154,6 +155,7 @@ export function ComboCustomizerModal({
       const defaultComplements = OFFICIAL_ACAI_COMPLEMENTS.filter(c => c.defaultSelected).map(c => c.name);
       setSelectedAcaiComplements(defaultComplements);
       setSelectedAcaiCobertura('Sem Cobertura');
+      setSelectedDydyo('Dydyo Guaraná 2L');
 
       // Initialize empty selection for each pizza in the combo
       const initial = {};
@@ -244,7 +246,7 @@ export function ComboCustomizerModal({
       extras.push(acaiText);
     }
     if (hasDydyoInCombo) {
-      extras.push('Dydyo 2L');
+      extras.push(selectedDydyo || 'Dydyo 2L');
     }
     const extrasText = extras.length > 0 ? ` • Acompanha: ${extras.join(' + ')}` : '';
 
@@ -260,6 +262,7 @@ export function ComboCustomizerModal({
       })),
       acaiComplements: hasAcaiInCombo ? selectedAcaiComplements : [],
       acaiCobertura: hasAcaiInCombo ? selectedAcaiCobertura : '',
+      dydyoFlavor: hasDydyoInCombo ? selectedDydyo : null,
       notes: notes.trim(),
       image: comboProduct.image,
       bordaGratis: comboProduct.bordaGratis,
@@ -700,27 +703,67 @@ export function ComboCustomizerModal({
             </div>
           )}
 
-          {/* Outros Acompanhamentos Inclusos no Combo (Dydyo, Pizza P) */}
-          {(hasDydyoInCombo || hasPizzaPInCombo) && (
+          {/* Escolha do Refrigerante Dydyo 2L (Incluso no Combo) */}
+          {hasDydyoInCombo && (
+            <div className="p-3.5 sm:p-4 rounded-2xl bg-dark-950 border border-amber-500/40 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
+                  <span className="text-base">🥤</span>
+                  <span>Escolha o Sabor do seu Dydyo 2L:</span>
+                </span>
+                <span className="text-[10px] text-amber-300 font-bold bg-amber-500/15 px-2 py-0.5 rounded border border-amber-500/30">
+                  Incluso no Combo
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                {DYDYO_FLAVORS.map((dydyo) => {
+                  const isSelected = selectedDydyo === dydyo.name;
+                  return (
+                    <button
+                      key={dydyo.id}
+                      type="button"
+                      onClick={() => setSelectedDydyo(dydyo.name)}
+                      className={`p-2.5 rounded-xl border text-left transition-all flex items-center gap-2.5 cursor-pointer ${
+                        isSelected
+                          ? 'bg-amber-500/20 border-amber-400 text-white ring-1 ring-amber-400/50 shadow-md'
+                          : 'bg-dark-900 hover:bg-dark-850 border-dark-800 text-slate-300'
+                      }`}
+                    >
+                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                        isSelected ? 'border-amber-400 bg-amber-400 text-dark-950' : 'border-dark-600'
+                      }`}>
+                        {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-xs font-bold leading-tight truncate">
+                          {dydyo.flavor}
+                        </div>
+                        <div className="text-[10px] text-slate-400 truncate">
+                          {dydyo.badge || '2L Gelado'}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Pizza P Doce Brigadeiro (se houver no combo) */}
+          {hasPizzaPInCombo && (
             <div className="p-3.5 rounded-2xl bg-dark-950 border border-brand-gold/30 flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-xl bg-brand-gold/15 text-brand-gold flex items-center justify-center flex-shrink-0">
                 <Sparkles className="w-4 h-4" />
               </div>
               <div className="min-w-0">
                 <span className="text-xs font-bold text-white block">
-                  Itens Inclusos neste Combo:
+                  Sobremesa Inclusa no Combo:
                 </span>
-                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                  {hasPizzaPInCombo && (
-                    <span className="text-[11px] font-bold text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded border border-amber-500/30">
-                      🍫 1 Pizza P Doce Brigadeiro
-                    </span>
-                  )}
-                  {hasDydyoInCombo && (
-                    <span className="text-[11px] font-bold text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded border border-amber-500/30">
-                      🥤 1 Refrigerante Dydyo 2L Geladíssimo
-                    </span>
-                  )}
+                <div className="mt-0.5">
+                  <span className="text-[11px] font-bold text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded border border-amber-500/30">
+                    🍫 1 Pizza P Doce Brigadeiro
+                  </span>
                 </div>
               </div>
             </div>

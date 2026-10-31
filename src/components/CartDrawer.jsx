@@ -170,6 +170,11 @@ export function CartDrawer({
                           </div>
                         )}
                         {item.semSuinos && <div className="text-red-400 font-bold text-[10px]">🚫 Sem carne suína</div>}
+                        {item.dydyoFlavor && (
+                          <div className="text-amber-300 font-semibold text-[10px]">
+                            🥤 <strong>Refri:</strong> {item.dydyoFlavor}
+                          </div>
+                        )}
                         {item.notes && <div className="text-[10px] text-slate-300 italic">Obs: {item.notes}</div>}
                       </div>
                     )}
@@ -186,6 +191,11 @@ export function CartDrawer({
                           <div className="text-purple-300 font-semibold line-clamp-2">
                             🍧 <strong>Barca Açaí:</strong> {item.acaiComplements.join(', ')}
                             {item.acaiCobertura && item.acaiCobertura !== 'Sem Cobertura' ? ` (${item.acaiCobertura})` : ''}
+                          </div>
+                        )}
+                        {item.dydyoFlavor && (
+                          <div className="text-amber-300 font-semibold text-[10px]">
+                            🥤 <strong>Refri:</strong> {item.dydyoFlavor}
                           </div>
                         )}
                         {item.semSuinosEsfirras && (

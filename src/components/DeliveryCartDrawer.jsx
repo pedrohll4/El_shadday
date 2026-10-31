@@ -122,6 +122,9 @@ export function DeliveryCartDrawer({
         if (item.acaiCobertura && item.acaiCobertura !== 'Sem Cobertura') {
           desc += `\n   ↳ 🍯 *Cobertura:* ${item.acaiCobertura}`;
         }
+        if (item.dydyoFlavor) {
+          desc += `\n   ↳ 🥤 *Refrigerante:* ${item.dydyoFlavor}`;
+        }
         if (item.notes) {
           desc += `\n   ↳ 📝 Obs: ${item.notes}`;
         }
@@ -166,6 +169,9 @@ export function DeliveryCartDrawer({
           if (item.semSuinos) {
             desc += `\n   ↳ 🚫 *SEM SUÍNOS:* Sim (Sem porco / bacon / calabresa)`;
           }
+        }
+        if (item.dydyoFlavor) {
+          desc += `\n   ↳ 🥤 *Refrigerante:* ${item.dydyoFlavor}`;
         }
       } else if (item.description && (item.isBox || item.isCombo)) {
         desc = `\n   ↳ ${item.description}`;
@@ -456,6 +462,11 @@ Pedido gerado via Cardápio Digital El Shadday.`;
                               )}
                             </p>
                           )}
+                          {item.dydyoFlavor && (
+                            <p className="text-[11px] text-amber-300 font-medium leading-tight mt-1 pt-1 border-t border-dark-800">
+                              🥤 <strong className="text-white">Refrigerante:</strong> {item.dydyoFlavor}
+                            </p>
+                          )}
                           {item.notes && (
                             <p className="text-[10px] text-slate-400 italic mt-0.5">
                               Obs: {item.notes}
@@ -521,6 +532,11 @@ Pedido gerado via Cardápio Digital El Shadday.`;
                               <p><strong className="text-white">Doces:</strong> {Object.entries(item.docesDetails || {}).map(([f, q]) => `${q}x ${f}`).join(', ')}</p>
                             </div>
                           ) : null}
+                          {item.dydyoFlavor && (
+                            <div className="text-[11px] text-amber-300 font-medium">
+                              🥤 <strong className="text-white">Refrigerante:</strong> {item.dydyoFlavor}
+                            </div>
+                          )}
                           {item.notes && (
                             <p className="text-[10px] text-slate-300 italic">Obs: {item.notes}</p>
                           )}

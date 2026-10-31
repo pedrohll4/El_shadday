@@ -117,6 +117,12 @@ export function DesktopSidebarCart({
                       </p>
                     )}
 
+                    {item.dydyoFlavor && (
+                      <p className="text-[10px] text-amber-300 font-medium mt-0.5 leading-snug">
+                        🥤 <span className="text-white font-bold">Refri:</span> {item.dydyoFlavor}
+                      </p>
+                    )}
+
                     {item.flavors && !item.pizzaSelections && (
                       <p className="text-[10px] text-brand-gold/90 mt-0.5 leading-snug">
                         {Array.isArray(item.flavors) ? item.flavors.join(' + ') : item.flavors}

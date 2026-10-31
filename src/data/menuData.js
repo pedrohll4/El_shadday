@@ -1266,3 +1266,39 @@ export const ACAI_COBERTURAS = [
   'Cobertura de Chocolate',
   'Cobertura de Caramelo'
 ];
+
+// SABORES OFICIAIS DE DYDYO 2L DISPONÍVEIS NO CARDÁPIO
+export const DYDYO_FLAVORS = [
+  {
+    id: 'guarana',
+    name: 'Dydyo Guaraná 2L',
+    flavor: 'Guaraná',
+    badge: 'Mais Pedido ⭐',
+    description: 'Guaraná da Amazônia 2L geladíssimo',
+    image: 'https://assets.olaclick.app/companies/products/images/800/a0597d6a-fee7-43a6-99be-e072f6beba77.png'
+  },
+  {
+    id: 'cola',
+    name: 'Dydyo Cola 2L',
+    flavor: 'Cola',
+    badge: 'Regional 🥤',
+    description: 'Refrigerante sabor Cola 2L bem gelado',
+    image: 'https://assets.olaclick.app/companies/products/images/800/5c0b2454-6874-4f56-850c-2126b597191f.png'
+  },
+  {
+    id: 'laranja',
+    name: 'Dydyo Laranja 2L',
+    flavor: 'Laranja',
+    badge: 'Frutado 🍊',
+    description: 'Refrigerante sabor Laranja 2L bem gelado',
+    image: 'https://assets.olaclick.app/companies/products/images/800/7a8f04b2-2b44-4e12-bdc7-1c9173c97537.png'
+  },
+  {
+    id: 'limao',
+    name: 'Dydyo Limão 2L',
+    flavor: 'Limão',
+    badge: 'Refrescante 🍋',
+    description: 'Refrigerante sabor Limão 2L geladíssimo',
+    image: 'https://assets.olaclick.app/companies/products/images/800/a0597d6a-fee7-43a6-99be-e072f6beba77.png'
+  }
+];

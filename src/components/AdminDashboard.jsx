@@ -1650,6 +1650,9 @@ export function AdminDashboard({
             if ((it.acaiCobertura || it.cobertura) && (it.acaiCobertura || it.cobertura) !== 'Sem Cobertura') {
               details.push(`Cobertura: ${it.acaiCobertura || it.cobertura}`);
             }
+            if (it.dydyoFlavor) {
+              details.push(`Refri: ${it.dydyoFlavor}`);
+            }
             if (it.boxOptionTitle) {
               details.push(`Opção: ${it.boxOptionTitle}`);
             }
@@ -2124,6 +2127,7 @@ export function AdminDashboard({
       notes: customBox.notes,
       salgadasDetails: customBox.salgadasDetails,
       docesDetails: customBox.docesDetails,
+      dydyoFlavor: customBox.dydyoFlavor || null,
       description: customBox.description
     }]);
     setPdvBoxToCustomize(null);
@@ -2155,6 +2159,7 @@ export function AdminDashboard({
       pizzaSelections: customCombo.pizzaSelections,
       acaiComplements: customCombo.acaiComplements || [],
       acaiCobertura: customCombo.acaiCobertura || '',
+      dydyoFlavor: customCombo.dydyoFlavor || null,
       notes: customCombo.notes || '',
       description: customCombo.description
     }]);
@@ -3396,6 +3401,14 @@ export function AdminDashboard({
                                       {(it.acaiCobertura || it.cobertura) && (it.acaiCobertura || it.cobertura) !== 'Sem Cobertura' && (
                                         <div>🍯 <strong>Cobertura:</strong> {it.acaiCobertura || it.cobertura}</div>
                                       )}
+                                    </div>
+                                  )}
+
+                                  {/* Refrigerante Dydyo */}
+                                  {it.dydyoFlavor && (
+                                    <div className="text-[11px] text-amber-300 font-semibold pl-2 mt-1 bg-amber-950/40 p-1.5 rounded border border-amber-500/40 flex items-center gap-1.5">
+                                      <span>🥤</span>
+                                      <span><strong>Refrigerante Incluso:</strong> {it.dydyoFlavor}</span>
                                     </div>
                                   )}
 
