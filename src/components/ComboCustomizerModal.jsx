@@ -88,10 +88,25 @@ export function ComboCustomizerModal({
   const [validationError, setValidationError] = useState('');
   const [semSuinosEsfirras, setSemSuinosEsfirras] = useState(false);
 
-  // Check if this combo contains esfirras
+  // Check accompaniments for this combo
   const hasEsfirrasInCombo = useMemo(() => {
     const text = `${comboProduct?.name || ''} ${comboProduct?.description || ''}`.toLowerCase();
     return text.includes('esfirra');
+  }, [comboProduct]);
+
+  const hasDydyoInCombo = useMemo(() => {
+    const text = `${comboProduct?.name || ''} ${comboProduct?.description || ''}`.toLowerCase();
+    return text.includes('dydyo');
+  }, [comboProduct]);
+
+  const hasAcaiInCombo = useMemo(() => {
+    const text = `${comboProduct?.name || ''} ${comboProduct?.description || ''}`.toLowerCase();
+    return text.includes('açaí') || text.includes('acai');
+  }, [comboProduct]);
+
+  const hasPizzaPInCombo = useMemo(() => {
+    const text = `${comboProduct?.name || ''} ${comboProduct?.description || ''}`.toLowerCase();
+    return text.includes('pizza p') || text.includes('brigadeiro');
   }, [comboProduct]);
 
   // Get configuration of pizzas for this combo
@@ -204,6 +219,21 @@ export function ComboCustomizerModal({
       return `${p.shortTitle}: ${flavors.join(' / ')}`;
     }).join(' • ');
 
+    const extras = [];
+    if (hasEsfirrasInCombo) {
+      extras.push(semSuinosEsfirras ? '10 Esfirras: SORTIDAS SEM CARNE SUÍNA' : '10 Esfirras Sortidas');
+    }
+    if (hasPizzaPInCombo) {
+      extras.push('Pizza P Doce Brigadeiro');
+    }
+    if (hasAcaiInCombo) {
+      extras.push('Barca de Açaí');
+    }
+    if (hasDydyoInCombo) {
+      extras.push('Dydyo 2L');
+    }
+    const extrasText = extras.length > 0 ? ` • Acompanha: ${extras.join(' + ')}` : '';
+
     const customCombo = {
       id: `custom-combo-${comboProduct.id}-${Date.now()}`,
       name: comboProduct.name,
@@ -217,7 +247,7 @@ export function ComboCustomizerModal({
       notes: notes.trim(),
       image: comboProduct.image,
       bordaGratis: comboProduct.bordaGratis,
-      description: `${breakdown}. Acompanha borda de Catupiry grátis.${hasEsfirrasInCombo ? (semSuinosEsfirras ? ' • 10 Esfirras: SORTIDAS SEM CARNE SUÍNA' : ' • 10 Esfirras Sortidas') : ''}${notes ? ` Obs: ${notes}` : ''}`
+      description: `${breakdown}. Acompanha borda de Catupiry grátis.${extrasText}${notes ? ` Obs: ${notes}` : ''}`
     };
 
     onAddComboToCart(customCombo);
@@ -451,6 +481,37 @@ export function ComboCustomizerModal({
                   🚫 Opção Sem Suínos
                 </span>
               </label>
+            </div>
+          )}
+
+          {/* Outros Acompanhamentos Inclusos no Combo */}
+          {(hasDydyoInCombo || hasAcaiInCombo || hasPizzaPInCombo) && (
+            <div className="p-3.5 rounded-2xl bg-dark-950 border border-brand-gold/30 flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-brand-gold/15 text-brand-gold flex items-center justify-center flex-shrink-0">
+                <Sparkles className="w-4 h-4" />
+              </div>
+              <div className="min-w-0">
+                <span className="text-xs font-bold text-white block">
+                  Itens Inclusos neste Combo:
+                </span>
+                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                  {hasPizzaPInCombo && (
+                    <span className="text-[11px] font-bold text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded border border-amber-500/30">
+                      🍫 1 Pizza P Doce Brigadeiro
+                    </span>
+                  )}
+                  {hasAcaiInCombo && (
+                    <span className="text-[11px] font-bold text-purple-300 bg-purple-500/20 px-2 py-0.5 rounded border border-purple-500/30">
+                      🍧 1 Barca de Açaí
+                    </span>
+                  )}
+                  {hasDydyoInCombo && (
+                    <span className="text-[11px] font-bold text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded border border-amber-500/30">
+                      🥤 1 Refrigerante Dydyo 2L Geladíssimo
+                    </span>
+                  )}
+                </div>
+              </div>
             </div>
           )}
 
