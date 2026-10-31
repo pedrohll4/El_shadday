@@ -4,8 +4,9 @@ import {
   Store, Calendar, Percent, ArrowUpRight, Filter, 
   ChevronRight, Award, Flame, Search, AlertCircle, Clock,
   ArrowRight, ShieldCheck, PieChart, Sparkles, Sliders,
-  Printer, FileText, Download, X
+  Printer, FileText, Download, X, Lock
 } from 'lucide-react';
+import { CashClosingModal } from '../CashClosingModal';
 
 export function MasterFinancialView({ 
   orders = [], 
@@ -32,6 +33,7 @@ export function MasterFinancialView({
   const [printReportType, setPrintReportType] = useState('summary'); // 'summary' | 'complete'
   const [printBranchFilter, setPrintBranchFilter] = useState('all');
   const [printPeriodFilter, setPrintPeriodFilter] = useState('all');
+  const [isCashClosingOpen, setIsCashClosingOpen] = useState(false);
 
   const handleSaveMargin = () => {
     const valid = Math.min(Math.max(Number(tempMargin) || 45, 5), 90);
@@ -894,6 +896,16 @@ export function MasterFinancialView({
             <Printer className="w-3.5 h-3.5 stroke-[2.5]" />
             <span>Imprimir em PDF</span>
           </button>
+
+          <button
+            type="button"
+            onClick={() => setIsCashClosingOpen(true)}
+            className="px-3.5 py-2 rounded-2xl bg-amber-500/15 hover:bg-amber-500/25 text-brand-gold border border-brand-gold/40 text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+            title="Abrir controle de fechamento de caixa e ver histórico de extratos"
+          >
+            <Lock className="w-3.5 h-3.5" />
+            <span>Fechar Caixa / Extratos</span>
+          </button>
         </div>
       </div>
 
@@ -1453,6 +1465,14 @@ export function MasterFinancialView({
           </div>
         </div>
       )}
+
+      {/* MODAL: FECHAMENTO DE CAIXA & HISTÓRICO */}
+      <CashClosingModal
+        isOpen={isCashClosingOpen}
+        onClose={() => setIsCashClosingOpen(false)}
+        orders={periodFilteredOrders}
+        currentBranch={branches.find(b => b.id === selectedBranchFilter) || branches[0]}
+      />
 
     </div>
   );

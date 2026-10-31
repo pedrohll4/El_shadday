@@ -17,13 +17,15 @@ export const RESTAURANT_INFO = {
   bannerUrl: "https://assets.olaclick.app/companies/backgrounds/dfd052f1-d436-49bb-a996-f2f05ce0d456.webp",
   cardMachineSettings: {
     active: true,
-    type: 'percentage', // 'percentage' | 'fixed' | 'split'
+    type: 'percentage', // 'percentage' | 'fixed' | 'split' | 'split_fixed'
     percentageRate: 3.5, // taxa percentual ex: 3.5%
-    fixedRate: 2.00, // taxa fixa ex: R$ 2,00
-    debitRate: 2.0, // taxa débito ex: 2.0%
-    creditRate: 4.5, // taxa crédito ex: 4.5%
+    fixedRate: 2.00, // taxa fixa geral ex: R$ 2,00
+    debitRate: 0, // taxa débito % ex: 0%
+    creditRate: 3.5, // taxa crédito % ex: 3.5%
+    debitFixed: 0, // taxa débito em R$ ex: R$ 0,00
+    creditFixed: 3.00, // taxa crédito em R$ ex: R$ 3,00
     autoAddToTotal: true, // soma no total do pedido
-    customNotice: "⚠️ Pagamentos no cartão (débito ou crédito) possuem acréscimo referente à taxa da maquininha cobrada pela operadora."
+    customNotice: ""
   },
   cardMachineNotice: "⚠️ Pagamentos no cartão (débito ou crédito) possuem taxa da maquininha cobrada pela operadora. Consulte as condições na entrega.",
   cardMachineNoticeActive: true
@@ -1203,6 +1205,56 @@ export function saveStoredPizzaFlavors(flavors) {
   }
 }
 
+export function normalizeDistrictsList(raw) {
+  if (!Array.isArray(raw) || raw.length === 0) {
+    return ARIQUEMES_DISTRICTS.map(d => ({
+      id: d.id,
+      name: d.name,
+      price: typeof d.price === 'number' ? Math.max(0, d.price) : (parseFloat(d.price) || 0),
+      isAvailable: d.isAvailable !== false
+    }));
+  }
+
+  return raw.map((d, idx) => {
+    const rawPrice = typeof d.price === 'number' ? d.price : (parseFloat(String(d.price).replace(',', '.')) || 0);
+    return {
+      id: d.id || `dist_${Date.now()}_${idx}`,
+      name: (d.name || `Bairro ${idx + 1}`).trim(),
+      price: Math.max(0, Math.round(rawPrice * 100) / 100),
+      isAvailable: d.isAvailable !== false
+    };
+  }).filter(d => Boolean(d.name));
+}
+
+export function getStoredDistricts() {
+  try {
+    const saved = localStorage.getItem("el_shadday_delivery_districts_v1");
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return normalizeDistrictsList(parsed);
+      }
+    }
+  } catch (e) {
+    console.error("Error reading stored delivery districts:", e);
+  }
+  return normalizeDistrictsList(ARIQUEMES_DISTRICTS);
+}
+
+export function saveStoredDistricts(districts) {
+  try {
+    const normalized = normalizeDistrictsList(districts);
+    localStorage.setItem("el_shadday_delivery_districts_v1", JSON.stringify(normalized));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent("delivery_districts_updated", { detail: normalized }));
+    }
+    return normalized;
+  } catch (e) {
+    console.error("Error saving stored delivery districts:", e);
+    return normalizeDistrictsList(ARIQUEMES_DISTRICTS);
+  }
+}
+
 /**
  * Regra de cálculo de Pizza por Sabor (Regra do Estabelecimento):
  * - Sabores tradicionais (salgadas ou doces padrão até R$ 40) são inclusos no valor base do tamanho escolhido (P, M, Família ou Gigante).
@@ -1274,62 +1326,137 @@ export function calculateCardMachineFee(subtotal, cardSettings, cardType = 'cred
   const numSubtotal = Number(subtotal) || 0;
   if (numSubtotal <= 0) return 0;
 
+  // 1. Taxa Fixa Geral em R$
   if (cardSettings.type === 'fixed') {
     return Math.max(0, Number(cardSettings.fixedRate) || 0);
   }
+
+  // 2. Débito e Crédito Separados em R$ (Valores Fixos em Reais)
+  if (cardSettings.type === 'split_fixed') {
+    const fixedFee = cardType === 'debito'
+      ? (cardSettings.debitFixed !== undefined ? Number(cardSettings.debitFixed) : (Number(cardSettings.debitRate) || 0))
+      : (cardSettings.creditFixed !== undefined ? Number(cardSettings.creditFixed) : (Number(cardSettings.creditRate) || 0));
+    return Math.max(0, Number(fixedFee) || 0);
+  }
+
+  // 3. Débito e Crédito Separados em % (Porcentagem)
   if (cardSettings.type === 'split') {
     const rate = cardType === 'debito' 
       ? (Number(cardSettings.debitRate) || 0) 
       : (Number(cardSettings.creditRate) || 0);
+    if (rate <= 0) return 0;
     return Math.round((numSubtotal * (rate / 100)) * 100) / 100;
   }
+
+  // 4. Porcentagem Geral (%)
   const rate = Number(cardSettings.percentageRate) || 0;
+  if (rate <= 0) return 0;
   return Math.round((numSubtotal * (rate / 100)) * 100) / 100;
 }
 
 /**
  * Retorna o texto formatado do aviso da taxa da maquininha
  * @param {object} cardSettings 
+ * @param {'credito' | 'debito' | null} cardType
  * @returns {string}
  */
-export function getCardMachineNoticeText(cardSettings) {
+export function getCardMachineNoticeText(cardSettings, cardType = null) {
   if (!cardSettings || cardSettings.active === false) return '';
   if (cardSettings.customNotice && cardSettings.customNotice.trim()) {
     return cardSettings.customNotice.trim();
   }
+
+  // 1. Valor Fixo Geral
   if (cardSettings.type === 'fixed') {
-    const feeStr = (Number(cardSettings.fixedRate) || 0).toFixed(2).replace('.', ',');
+    const fee = Number(cardSettings.fixedRate) || 0;
+    if (fee <= 0) return '✅ Pagamentos no cartão não possuem taxa da maquininha.';
+    const feeStr = fee.toFixed(2).replace('.', ',');
     return `⚠️ Pagamentos no cartão possuem taxa fixa de R$ ${feeStr} da maquininha cobrada pela operadora.`;
   }
+
+  // 2. Débito e Crédito Separados em R$
+  if (cardSettings.type === 'split_fixed') {
+    const debFee = Number(cardSettings.debitFixed !== undefined ? cardSettings.debitFixed : cardSettings.debitRate) || 0;
+    const credFee = Number(cardSettings.creditFixed !== undefined ? cardSettings.creditFixed : cardSettings.creditRate) || 0;
+
+    if (cardType === 'debito') {
+      return debFee > 0
+        ? `⚠️ Cartão de Débito: taxa de R$ ${debFee.toFixed(2).replace('.', ',')} da maquininha.`
+        : `✅ Cartão de Débito: sem taxa da maquininha (Taxa Grátis)!`;
+    }
+    if (cardType === 'credito') {
+      return credFee > 0
+        ? `⚠️ Cartão de Crédito: taxa de R$ ${credFee.toFixed(2).replace('.', ',')} da maquininha.`
+        : `✅ Cartão de Crédito: sem taxa da maquininha (Taxa Grátis)!`;
+    }
+
+    if (debFee <= 0 && credFee <= 0) {
+      return `✅ Pagamentos no cartão (débito ou crédito) não possuem taxa da maquininha.`;
+    }
+    if (debFee <= 0 && credFee > 0) {
+      const credStr = credFee.toFixed(2).replace('.', ',');
+      return `💳 Débito: Sem taxa (Grátis) | Crédito: Taxa fixa de R$ ${credStr} da maquininha.`;
+    }
+    const debStr = debFee.toFixed(2).replace('.', ',');
+    const credStr = credFee.toFixed(2).replace('.', ',');
+    return `💳 Débito: R$ ${debStr} | Crédito: R$ ${credStr} (taxa da maquininha cobrada pela operadora).`;
+  }
+
+  // 3. Débito e Crédito Separados em %
   if (cardSettings.type === 'split') {
-    const debStr = (Number(cardSettings.debitRate) || 0).toString().replace('.', ',');
-    const credStr = (Number(cardSettings.creditRate) || 0).toString().replace('.', ',');
+    const debRate = Number(cardSettings.debitRate) || 0;
+    const credRate = Number(cardSettings.creditRate) || 0;
+
+    if (cardType === 'debito') {
+      return debRate > 0
+        ? `⚠️ Cartão de Débito: acréscimo de ${debRate.toString().replace('.', ',')}% da maquininha.`
+        : `✅ Cartão de Débito: sem taxa da maquininha (Taxa Grátis)!`;
+    }
+    if (cardType === 'credito') {
+      return credRate > 0
+        ? `⚠️ Cartão de Crédito: acréscimo de ${credRate.toString().replace('.', ',')}% da maquininha.`
+        : `✅ Cartão de Crédito: sem taxa da maquininha (Taxa Grátis)!`;
+    }
+
+    if (debRate <= 0 && credRate <= 0) {
+      return `✅ Pagamentos no cartão (débito ou crédito) não possuem taxa da maquininha.`;
+    }
+    if (debRate <= 0 && credRate > 0) {
+      const credStr = credRate.toString().replace('.', ',');
+      return `💳 Débito: Sem taxa (Grátis) | Crédito: Taxa de ${credStr}% da maquininha.`;
+    }
+    const debStr = debRate.toString().replace('.', ',');
+    const credStr = credRate.toString().replace('.', ',');
     return `⚠️ Pagamentos na maquininha possuem taxa de ${debStr}% no Débito e ${credStr}% no Crédito cobrada pela operadora.`;
   }
-  const pctStr = (Number(cardSettings.percentageRate) || 0).toString().replace('.', ',');
+
+  // 4. Porcentagem Geral
+  const rate = Number(cardSettings.percentageRate) || 0;
+  if (rate <= 0) return '✅ Pagamentos no cartão não possuem taxa da maquininha.';
+  const pctStr = rate.toString().replace('.', ',');
   return `⚠️ Pagamentos no cartão possuem acréscimo de ${pctStr}% referente à taxa da maquininha cobrada pela operadora.`;
 }
 
 // 11 ACOMPANHAMENTOS OFICIAIS PARA COPOS E BARCAS DE AÇAÍ
 export const OFFICIAL_ACAI_COMPLEMENTS = [
-  { id: 'pacoca', name: 'Paçoca', icon: '🥜', defaultSelected: true, isAvailable: true },
-  { id: 'amendoim-torrado', name: 'Amendoim torrado', icon: '🥜', defaultSelected: false, isAvailable: true },
-  { id: 'leite-em-po', name: 'Leite em pó', icon: '🥛', defaultSelected: true, isAvailable: true },
-  { id: 'granola-crocante', name: 'Granola crocante', icon: '🥣', defaultSelected: true, isAvailable: true },
-  { id: 'morango-fresco', name: 'Morango fresco', icon: '🍓', defaultSelected: true, isAvailable: true },
-  { id: 'banana-fatiada', name: 'Banana fatiada', icon: '🍌', defaultSelected: true, isAvailable: true },
-  { id: 'kiwi-fresco', name: 'Kiwi fresco', icon: '🥝', defaultSelected: false, isAvailable: true },
-  { id: 'chocoball', name: 'Chocoball', icon: '🍫', defaultSelected: false, isAvailable: true },
-  { id: 'ovomaltine', name: 'Ovomaltine', icon: '✨', defaultSelected: false, isAvailable: true },
-  { id: 'mms', name: "M&M's", icon: '🍬', defaultSelected: false, isAvailable: true },
-  { id: 'granulado-nobre', name: 'Granulado nobre', icon: '🍫', defaultSelected: false, isAvailable: true }
+  { id: 'pacoca', name: 'Paçoca', icon: '🥜', price: 0, defaultSelected: true, isAvailable: true },
+  { id: 'amendoim-torrado', name: 'Amendoim torrado', icon: '🥜', price: 0, defaultSelected: false, isAvailable: true },
+  { id: 'leite-em-po', name: 'Leite em pó', icon: '🥛', price: 0, defaultSelected: true, isAvailable: true },
+  { id: 'granola-crocante', name: 'Granola crocante', icon: '🥣', price: 0, defaultSelected: true, isAvailable: true },
+  { id: 'morango-fresco', name: 'Morango fresco', icon: '🍓', price: 0, defaultSelected: true, isAvailable: true },
+  { id: 'banana-fatiada', name: 'Banana fatiada', icon: '🍌', price: 0, defaultSelected: true, isAvailable: true },
+  { id: 'kiwi-fresco', name: 'Kiwi fresco', icon: '🥝', price: 0, defaultSelected: false, isAvailable: true },
+  { id: 'chocoball', name: 'Chocoball', icon: '🍫', price: 0, defaultSelected: false, isAvailable: true },
+  { id: 'ovomaltine', name: 'Ovomaltine', icon: '✨', price: 0, defaultSelected: false, isAvailable: true },
+  { id: 'mms', name: "M&M's", icon: '🍬', price: 0, defaultSelected: false, isAvailable: true },
+  { id: 'granulado-nobre', name: 'Granulado nobre', icon: '🍫', price: 0, defaultSelected: false, isAvailable: true }
 ];
 
 export const ACAI_COBERTURAS = [
-  'Sem Cobertura',
-  'Cobertura de Morango',
-  'Cobertura de Chocolate',
-  'Cobertura de Caramelo'
+  { id: 'sem-cobertura', name: 'Sem Cobertura', price: 0, isAvailable: true },
+  { id: 'cobertura-morango', name: 'Cobertura de Morango', price: 0, isAvailable: true },
+  { id: 'cobertura-chocolate', name: 'Cobertura de Chocolate', price: 0, isAvailable: true },
+  { id: 'cobertura-caramelo', name: 'Cobertura de Caramelo', price: 0, isAvailable: true }
 ];
 
 export const DEFAULT_ACAI_SETTINGS = {
@@ -1355,17 +1482,43 @@ export function normalizeAcaiSettings(raw) {
         id: c.id || `acai_comp_${Date.now()}_${idx}`,
         name: (c.name || 'Adicional').trim(),
         icon: c.icon || '✨',
+        price: typeof c.price === 'number' ? Math.max(0, c.price) : (Math.max(0, parseFloat(c.price)) || 0),
         defaultSelected: Boolean(c.defaultSelected),
         isAvailable: c.isAvailable !== false
       }))
     : OFFICIAL_ACAI_COMPLEMENTS;
 
-  let coberturas = Array.isArray(raw.coberturas) && raw.coberturas.length > 0
-    ? raw.coberturas.map(cb => typeof cb === 'string' ? cb.trim() : (cb?.name || '')).filter(Boolean)
-    : ACAI_COBERTURAS;
+  let coberturas = [];
+  if (Array.isArray(raw.coberturas) && raw.coberturas.length > 0) {
+    coberturas = raw.coberturas.map((cb, idx) => {
+      if (typeof cb === 'string') {
+        const name = cb.trim();
+        const cleanId = name.toLowerCase().replace(/[^a-z0-9]+/g, '-') || `cob_${idx}`;
+        return {
+          id: cleanId,
+          name: name,
+          price: 0,
+          isAvailable: true
+        };
+      }
+      return {
+        id: cb.id || `cob_${Date.now()}_${idx}`,
+        name: (cb.name || 'Cobertura').trim(),
+        price: typeof cb.price === 'number' ? Math.max(0, cb.price) : (Math.max(0, parseFloat(cb.price)) || 0),
+        isAvailable: cb.isAvailable !== false
+      };
+    }).filter(c => Boolean(c.name));
+  } else {
+    coberturas = ACAI_COBERTURAS;
+  }
 
-  if (!coberturas.includes('Sem Cobertura')) {
-    coberturas = ['Sem Cobertura', ...coberturas];
+  // Garante que "Sem Cobertura" esteja sempre presente e no topo
+  const hasSemCobertura = coberturas.some(c => (c.name || '').toLowerCase() === 'sem cobertura');
+  if (!hasSemCobertura) {
+    coberturas = [
+      { id: 'sem-cobertura', name: 'Sem Cobertura', price: 0, isAvailable: true },
+      ...coberturas
+    ];
   }
 
   return {

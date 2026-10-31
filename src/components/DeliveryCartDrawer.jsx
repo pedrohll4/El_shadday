@@ -5,8 +5,8 @@ import {
   CreditCard, Banknote, QrCode, MessageCircle, Sparkles, Building2,
   Shuffle
 } from 'lucide-react';
-import { ARIQUEMES_DISTRICTS, RESTAURANT_INFO, getStoredRestaurantInfo, calculateCardMachineFee, getCardMachineNoticeText } from '../data/menuData';
-import { dispatchOrderToKitchen } from '../services/ordersSyncService';
+import { ARIQUEMES_DISTRICTS, RESTAURANT_INFO, getStoredRestaurantInfo, getStoredDistricts, calculateCardMachineFee, getCardMachineNoticeText } from '../data/menuData';
+import { dispatchOrderToKitchen, getNextOrderNumber } from '../services/ordersSyncService';
 import { cleanPhoneNumber } from '../services/whatsappNotificationService';
 import { recordCustomerFromOrder } from '../services/customerService';
 
@@ -23,14 +23,23 @@ export function DeliveryCartDrawer({
 }) {
   const [deliveryType, setDeliveryType] = useState(initialDeliveryType); // 'delivery' | 'retirada'
   const [storeInfo, setStoreInfo] = useState(() => getStoredRestaurantInfo());
+  const [districtsList, setDistrictsList] = useState(() => getStoredDistricts());
 
   React.useEffect(() => {
     const handleStoreUpdate = (e) => {
       if (e?.detail) setStoreInfo(e.detail);
       else setStoreInfo(getStoredRestaurantInfo());
     };
+    const handleDistrictsUpdate = (e) => {
+      if (e?.detail && Array.isArray(e.detail)) setDistrictsList(e.detail);
+      else setDistrictsList(getStoredDistricts());
+    };
     window.addEventListener('delivery_restaurant_info_updated', handleStoreUpdate);
-    return () => window.removeEventListener('delivery_restaurant_info_updated', handleStoreUpdate);
+    window.addEventListener('delivery_districts_updated', handleDistrictsUpdate);
+    return () => {
+      window.removeEventListener('delivery_restaurant_info_updated', handleStoreUpdate);
+      window.removeEventListener('delivery_districts_updated', handleDistrictsUpdate);
+    };
   }, []);
 
   React.useEffect(() => {
@@ -38,14 +47,17 @@ export function DeliveryCartDrawer({
       setDeliveryType(initialDeliveryType);
     }
   }, [initialDeliveryType, isOpen]);
-  const [selectedDistrict, setSelectedDistrict] = useState(ARIQUEMES_DISTRICTS[2].id); // Setor 03 default
+  const [selectedDistrict, setSelectedDistrict] = useState(() => {
+    const list = getStoredDistricts();
+    return list[2]?.id || list[0]?.id || 'setor-03';
+  });
   const [streetAddress, setStreetAddress] = useState('');
   const [addressNumber, setAddressNumber] = useState('');
   const [reference, setReference] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('pix'); // 'pix' | 'cartao' | 'dinheiro' | 'misto'
-  const [cardOption, setCardOption] = useState('credito'); // 'credito' | 'debito'
+  const [cardOption, setCardOption] = useState('debito'); // 'debito' | 'credito'
   const [cashChange, setCashChange] = useState('');
   const [splitMethod1, setSplitMethod1] = useState('pix'); // 'pix' | 'credito' | 'debito' | 'dinheiro'
   const [splitAmount1, setSplitAmount1] = useState('');
@@ -58,8 +70,8 @@ export function DeliveryCartDrawer({
 
   if (!isOpen) return null;
 
-  const currentDistrict = ARIQUEMES_DISTRICTS.find(d => d.id === selectedDistrict) || ARIQUEMES_DISTRICTS[0];
-  const deliveryFee = deliveryType === 'delivery' ? currentDistrict.price : 0;
+  const currentDistrict = districtsList.find(d => d.id === selectedDistrict) || districtsList[0] || { id: 'default', name: 'Setor 03', price: 8 };
+  const deliveryFee = deliveryType === 'delivery' ? (Number(currentDistrict.price) || 0) : 0;
   const subtotal = cartItems.reduce((acc, item) => acc + (item.price * item.quantity), 0);
 
   const cardSettings = storeInfo?.cardMachineSettings || RESTAURANT_INFO.cardMachineSettings;
@@ -105,8 +117,9 @@ export function DeliveryCartDrawer({
 
     setErrorMessage('');
 
-    // Generate Unique Human-Readable Order ID (ex: #ES-4921)
-    const orderId = 'ES-' + Math.floor(1000 + Math.random() * 9000);
+    // Generate Unique Sequential Order Number starting from 1 (ex: #01, #02, #03...)
+    const orderNumber = getNextOrderNumber();
+    const orderId = String(orderNumber).padStart(2, '0');
 
     // Format Items list for WhatsApp
     const itemsFormatted = cartItems.map((item, idx) => {
@@ -201,14 +214,16 @@ export function DeliveryCartDrawer({
       paymentText = `Cartão de ${cardTypeLabel} (Levar maquininha)`;
       if (cardFee > 0) {
         paymentText += `\n   ↳ 💳 *Taxa Maquininha:* + R$ ${cardFee.toFixed(2).replace('.', ',')}`;
+      } else if (isCardFeeActive) {
+        paymentText += `\n   ↳ 💳 *Taxa Maquininha:* Grátis (R$ 0,00)`;
       }
-      if (isCardFeeActive) {
-        const noticeMsg = getCardMachineNoticeText(cardSettings);
+      if (isCardFeeActive && cardFee > 0) {
+        const noticeMsg = getCardMachineNoticeText(cardSettings, cardOption);
         if (noticeMsg) {
           paymentText += `\n   ↳ ⚠️ *Aviso Taxa:* ${noticeMsg.replace(/⚠️\s*/g, '').trim()}`;
         }
       }
-      formattedPaymentMethod = `Cartão de ${cardTypeLabel}${cardFee > 0 ? ` (Taxa +R$ ${cardFee.toFixed(2).replace('.', ',')})` : ''}`;
+      formattedPaymentMethod = `Cartão de ${cardTypeLabel}${cardFee > 0 ? ` (+R$ ${cardFee.toFixed(2).replace('.', ',')})` : ' (Taxa Grátis)'}`;
       resolvedPaymentStatus = 'PENDENTE_COBRANCA';
     } else if (paymentMethod === 'dinheiro') {
       paymentText = `Dinheiro ${cashChange ? `(Troco para R$ ${cashChange})` : '(Sem troco)'}`;
@@ -290,6 +305,8 @@ Pedido gerado via Cardápio Digital El Shadday.`;
 
     const orderData = {
       orderId,
+      orderNumber,
+      displayNumber: '#' + orderId,
       branchId: activeBranch?.id || 'ariquemes',
       branchName: activeBranch?.displayName || activeBranch?.name || 'Unidade Ariquemes',
       createdAt: new Date().toISOString(),
@@ -629,9 +646,9 @@ Pedido gerado via Cardápio Digital El Shadday.`;
                       onChange={(e) => setSelectedDistrict(e.target.value)}
                       className="w-full px-3 py-2 rounded-xl bg-dark-900 border border-dark-800 text-white text-xs focus:border-brand-gold focus:outline-none"
                     >
-                      {ARIQUEMES_DISTRICTS.map((district) => (
+                      {districtsList.filter(d => d.isAvailable !== false).map((district) => (
                         <option key={district.id} value={district.id}>
-                          {district.name} — Taxa: R$ {district.price.toFixed(2).replace('.', ',')}
+                          {district.name} — {Number(district.price) <= 0 ? 'Taxa Grátis' : `Taxa: R$ ${Number(district.price).toFixed(2).replace('.', ',')}`}
                         </option>
                       ))}
                     </select>
@@ -870,28 +887,46 @@ Pedido gerado via Cardápio Digital El Shadday.`;
                           Tipo de Cartão na Maquininha:
                         </span>
                         <div className="flex items-center gap-1 bg-dark-900 p-0.5 rounded-lg border border-dark-750">
-                          <button
-                            type="button"
-                            onClick={() => setCardOption('debito')}
-                            className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
-                              cardOption === 'debito'
-                                ? 'bg-brand-gold text-dark-950 shadow-sm'
-                                : 'text-slate-400 hover:text-white'
-                            }`}
-                          >
-                            Débito
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setCardOption('credito')}
-                            className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
-                              cardOption === 'credito'
-                                ? 'bg-brand-gold text-dark-950 shadow-sm'
-                                : 'text-slate-400 hover:text-white'
-                            }`}
-                          >
-                            Crédito
-                          </button>
+                          {(() => {
+                            const debFee = calculateCardMachineFee(subtotal, cardSettings, 'debito');
+                            const credFee = calculateCardMachineFee(subtotal, cardSettings, 'credito');
+                            return (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => setCardOption('debito')}
+                                  className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                                    cardOption === 'debito'
+                                      ? 'bg-brand-gold text-dark-950 shadow-sm'
+                                      : 'text-slate-400 hover:text-white'
+                                  }`}
+                                >
+                                  <span>Débito</span>
+                                  {isCardFeeActive && (
+                                    <span className={`text-[10px] font-black ${cardOption === 'debito' ? 'text-dark-900' : 'text-emerald-400'}`}>
+                                      {debFee === 0 ? '(Grátis)' : `(+R$ ${debFee.toFixed(2).replace('.', ',')})`}
+                                    </span>
+                                  )}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setCardOption('credito')}
+                                  className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                                    cardOption === 'credito'
+                                      ? 'bg-brand-gold text-dark-950 shadow-sm'
+                                      : 'text-slate-400 hover:text-white'
+                                  }`}
+                                >
+                                  <span>Crédito</span>
+                                  {isCardFeeActive && (
+                                    <span className={`text-[10px] font-black ${cardOption === 'credito' ? 'text-dark-900' : 'text-amber-300'}`}>
+                                      {credFee === 0 ? '(Grátis)' : `(+R$ ${credFee.toFixed(2).replace('.', ',')})`}
+                                    </span>
+                                  )}
+                                </button>
+                              </>
+                            );
+                          })()}
                         </div>
                       </div>
 
@@ -901,22 +936,32 @@ Pedido gerado via Cardápio Digital El Shadday.`;
                     </div>
 
                     {isCardFeeActive && (
-                      <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs space-y-1.5">
-                        <div className="flex items-center justify-between font-bold text-amber-400 text-xs">
-                          <span className="flex items-center gap-1.5">
-                            <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                            Aviso de Taxa da Maquininha:
-                          </span>
-                          {cardFee > 0 && (
+                      cardFee > 0 ? (
+                        <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs space-y-1.5">
+                          <div className="flex items-center justify-between font-bold text-amber-400 text-xs">
+                            <span className="flex items-center gap-1.5">
+                              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                              Taxa da Maquininha ({cardOption === 'debito' ? 'Débito' : 'Crédito'}):
+                            </span>
                             <span className="font-mono bg-amber-400/20 px-2 py-0.5 rounded text-amber-300 font-extrabold text-[11px]">
                               + R$ {cardFee.toFixed(2).replace('.', ',')}
                             </span>
-                          )}
+                          </div>
+                          <p className="text-[11px] leading-relaxed text-amber-200/90 whitespace-pre-line">
+                            {getCardMachineNoticeText(cardSettings, cardOption)}
+                          </p>
                         </div>
-                        <p className="text-[11px] leading-relaxed text-amber-200/90 whitespace-pre-line">
-                          {getCardMachineNoticeText(cardSettings)}
-                        </p>
-                      </div>
+                      ) : (
+                        <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs flex items-center justify-between">
+                          <span className="flex items-center gap-1.5 font-bold">
+                            <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                            {cardOption === 'debito' ? 'Cartão de Débito:' : 'Cartão de Crédito:'} Sem taxa da maquininha (Taxa Grátis)!
+                          </span>
+                          <span className="font-mono bg-emerald-500/20 px-2 py-0.5 rounded text-emerald-300 font-extrabold text-[11px]">
+                            R$ 0,00
+                          </span>
+                        </div>
+                      )
                     )}
                   </div>
                 )}

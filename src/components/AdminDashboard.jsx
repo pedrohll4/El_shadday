@@ -4,7 +4,7 @@ import {
   MapPin, User, DollarSign, Package, 
   Printer, ArrowLeft, ArrowRight, LogOut, RefreshCw, Send, Check,
   Bike, ChefHat, BellRing, Plus, Minus, Trash2, XCircle,
-  MessageSquare, Phone, ShoppingBag, Store, Copy, ChevronRight,
+  MessageSquare, Phone, ShoppingBag, Store, Copy, ChevronLeft, ChevronRight,
   AlertCircle, X, ShieldAlert, Sparkles, CheckCheck,
   Camera, RotateCcw, Edit, Edit2, Eye, EyeOff, Tag, Percent,
   Utensils, ToggleLeft, ToggleRight, Save, Layers, CheckSquare,
@@ -15,6 +15,9 @@ import {
 import { 
   RESTAURANT_INFO, 
   ARIQUEMES_DISTRICTS, 
+  getStoredDistricts,
+  saveStoredDistricts,
+  normalizeDistrictsList, 
   CATEGORIES, 
   PRODUCTS,
   INITIAL_PIZZA_FLAVORS,
@@ -66,6 +69,12 @@ import { MasterFinancialView } from './admin/MasterFinancialView';
 import { BranchManagementView } from './admin/BranchManagementView';
 import { UserManagementView } from './admin/UserManagementView';
 import WhatsAppManagerView from './admin/WhatsAppManagerView';
+import { CashClosingModal } from './CashClosingModal';
+import { 
+  getCashRegisterSettings, 
+  executeCashClosing, 
+  calculateShiftTotals 
+} from '../services/cashRegisterService';
 import { 
   sendCustomerWhatsAppNotification, 
   buildStatusMessage, 
@@ -75,7 +84,7 @@ import {
   openWhatsAppInstantLink
 } from '../services/whatsappNotificationService';
 import { isCloudBaileysActive, fetchEngineStatus } from '../services/whatsappBranchService';
-import { normalizeOrderStatus } from '../services/ordersSyncService';
+import { normalizeOrderStatus, getNextOrderNumber, formatOrderNumber } from '../services/ordersSyncService';
 import { 
   searchCustomers, 
   recordCustomerFromOrder, 
@@ -180,6 +189,36 @@ export function AdminDashboard({
     }
   }, [currentUser, activeAdminTab, currentBranch]);
 
+  // Horizontal Scroll state for Navigation Tabs (Rotbar)
+  const tabsNavRef = useRef(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  const checkTabsScroll = () => {
+    if (tabsNavRef.current) {
+      const { scrollLeft, scrollWidth, clientWidth } = tabsNavRef.current;
+      setCanScrollLeft(scrollLeft > 10);
+      setCanScrollRight(scrollLeft + clientWidth < scrollWidth - 10);
+    }
+  };
+
+  useEffect(() => {
+    const timer = setTimeout(checkTabsScroll, 120);
+    window.addEventListener('resize', checkTabsScroll);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', checkTabsScroll);
+    };
+  }, [activeAdminTab, currentUser, branchesList]);
+
+  const handleScrollTabs = (direction) => {
+    if (tabsNavRef.current) {
+      const scrollAmount = direction === 'left' ? -280 : 280;
+      tabsNavRef.current.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+      setTimeout(checkTabsScroll, 320);
+    }
+  };
+
   // KDS Filters
   const [selectedFilter, setSelectedFilter] = useState('todos'); // 'todos' | 'atrasados' | 'pendentes' | 'preparo' | 'entrega' | 'concluidos' | 'nao_pagos' | 'cancelados'
   const [searchQuery, setSearchQuery] = useState('');
@@ -215,6 +254,43 @@ export function AdminDashboard({
   const [isAudioUnlocked, setIsAudioUnlocked] = useState(false);
   const knownOrderIdsRef = useRef(new Set((orders || []).map(o => o?.orderId).filter(Boolean)));
   const isInitialOrdersLoadedRef = useRef((orders || []).length > 0);
+
+  // KDS Grid Scheme & Card Density State
+  const [kdsGridCols, setKdsGridCols] = useState(() => {
+    try {
+      return localStorage.getItem('el_shadday_kds_grid_cols') || '3';
+    } catch (e) {
+      return '3';
+    }
+  });
+  const [kdsCompactMode, setKdsCompactMode] = useState(() => {
+    try {
+      return localStorage.getItem('el_shadday_kds_compact_mode') === 'true';
+    } catch (e) {
+      return false;
+    }
+  });
+
+  const handleSetKdsGridCols = (cols) => {
+    setKdsGridCols(cols);
+    try {
+      localStorage.setItem('el_shadday_kds_grid_cols', cols);
+    } catch (e) {}
+  };
+
+  const handleToggleKdsCompactMode = () => {
+    setKdsCompactMode(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem('el_shadday_kds_compact_mode', String(next));
+      } catch (e) {}
+      return next;
+    });
+  };
+
+  // Cash Register Closing States
+  const [isCashClosingModalOpen, setIsCashClosingModalOpen] = useState(false);
+  const [showArchivedKdsOrders, setShowArchivedKdsOrders] = useState(false);
 
   // WhatsApp Settings & Notification States
   const [whatsAppSettings, setWhatsAppSettings] = useState(() => getWhatsAppSettings());
@@ -256,7 +332,7 @@ export function AdminDashboard({
   const [pdvCustomerName, setPdvCustomerName] = useState('');
   const [pdvCustomerPhone, setPdvCustomerPhone] = useState('');
   const [pdvDeliveryType, setPdvDeliveryType] = useState('balcao'); // 'balcao' | 'delivery'
-  const [pdvDistrict, setPdvDistrict] = useState(ARIQUEMES_DISTRICTS[2]); // Setor 03 default
+  const [pdvDistrict, setPdvDistrict] = useState(() => getStoredDistricts()[2] || getStoredDistricts()[0] || { id: 'setor-03', name: 'Setor 03', price: 8 });
   const [pdvAddress, setPdvAddress] = useState('');
   const [pdvNumber, setPdvNumber] = useState('');
   const [pdvReference, setPdvReference] = useState('');
@@ -617,9 +693,30 @@ export function AdminDashboard({
   const [editingComplement, setEditingComplement] = useState(null);
   const [complementFormName, setComplementFormName] = useState('');
   const [complementFormIcon, setComplementFormIcon] = useState('🥜');
+  const [complementFormPrice, setComplementFormPrice] = useState('0');
   const [complementFormIsAvailable, setComplementFormIsAvailable] = useState(true);
   const [complementFormDefaultSelected, setComplementFormDefaultSelected] = useState(false);
+  
+  // Açaí Coberturas State
   const [newCoberturaText, setNewCoberturaText] = useState('');
+  const [newCoberturaPrice, setNewCoberturaPrice] = useState('0');
+  const [isCoberturaModalOpen, setIsCoberturaModalOpen] = useState(false);
+  const [editingCobertura, setEditingCobertura] = useState(null);
+  const [coberturaFormName, setCoberturaFormName] = useState('');
+  const [coberturaFormPrice, setCoberturaFormPrice] = useState('0');
+  const [coberturaFormIsAvailable, setCoberturaFormIsAvailable] = useState(true);
+
+  // Delivery Districts Management State (Taxas de Entrega por Bairro)
+  const [districtsList, setDistrictsList] = useState(() => getStoredDistricts());
+  const [districtSearch, setDistrictSearch] = useState('');
+  const [districtPriceFilter, setDistrictPriceFilter] = useState('all'); // 'all' | '8' | '10' | '15' | '20+' | 'unavailable'
+  const [newDistrictName, setNewDistrictName] = useState('');
+  const [newDistrictPrice, setNewDistrictPrice] = useState('8.00');
+  const [editingDistrict, setEditingDistrict] = useState(null);
+  const [isDistrictModalOpen, setIsDistrictModalOpen] = useState(false);
+  const [districtFormName, setDistrictFormName] = useState('');
+  const [districtFormPrice, setDistrictFormPrice] = useState('8.00');
+  const [districtFormIsAvailable, setDistrictFormIsAvailable] = useState(true);
 
   // PDV Custom Modals (Pizza, Esfirra Box, Açaí, Combos)
   const [pdvPizzaToCustomize, setPdvPizzaToCustomize] = useState(null);
@@ -659,8 +756,10 @@ export function AdminDashboard({
   const [tempCardType, setTempCardType] = useState(currentCardSettings.type || 'percentage');
   const [tempCardPercentage, setTempCardPercentage] = useState(currentCardSettings.percentageRate !== undefined ? currentCardSettings.percentageRate.toString() : '3.5');
   const [tempCardFixed, setTempCardFixed] = useState(currentCardSettings.fixedRate !== undefined ? currentCardSettings.fixedRate.toString() : '2.00');
-  const [tempCardDebit, setTempCardDebit] = useState(currentCardSettings.debitRate !== undefined ? currentCardSettings.debitRate.toString() : '2.0');
-  const [tempCardCredit, setTempCardCredit] = useState(currentCardSettings.creditRate !== undefined ? currentCardSettings.creditRate.toString() : '4.5');
+  const [tempCardDebit, setTempCardDebit] = useState(currentCardSettings.debitRate !== undefined ? currentCardSettings.debitRate.toString() : '0');
+  const [tempCardCredit, setTempCardCredit] = useState(currentCardSettings.creditRate !== undefined ? currentCardSettings.creditRate.toString() : '3.5');
+  const [tempCardDebitFixed, setTempCardDebitFixed] = useState(currentCardSettings.debitFixed !== undefined ? currentCardSettings.debitFixed.toString() : '0.00');
+  const [tempCardCreditFixed, setTempCardCreditFixed] = useState(currentCardSettings.creditFixed !== undefined ? currentCardSettings.creditFixed.toString() : '3.00');
   const [tempCardAutoAdd, setTempCardAutoAdd] = useState(currentCardSettings.autoAddToTotal !== false);
   const [tempCardCustomNotice, setTempCardCustomNotice] = useState(currentCardSettings.customNotice || '');
 
@@ -715,6 +814,8 @@ export function AdminDashboard({
           if (cs.fixedRate !== undefined) setTempCardFixed(cs.fixedRate.toString());
           if (cs.debitRate !== undefined) setTempCardDebit(cs.debitRate.toString());
           if (cs.creditRate !== undefined) setTempCardCredit(cs.creditRate.toString());
+          if (cs.debitFixed !== undefined) setTempCardDebitFixed(cs.debitFixed.toString());
+          if (cs.creditFixed !== undefined) setTempCardCreditFixed(cs.creditFixed.toString());
           if (cs.autoAddToTotal !== undefined) setTempCardAutoAdd(cs.autoAddToTotal);
           if (cs.customNotice !== undefined) setTempCardCustomNotice(cs.customNotice);
         }
@@ -804,6 +905,8 @@ export function AdminDashboard({
                 if (cs.fixedRate !== undefined) setTempCardFixed(cs.fixedRate.toString());
                 if (cs.debitRate !== undefined) setTempCardDebit(cs.debitRate.toString());
                 if (cs.creditRate !== undefined) setTempCardCredit(cs.creditRate.toString());
+                if (cs.debitFixed !== undefined) setTempCardDebitFixed(cs.debitFixed.toString());
+                if (cs.creditFixed !== undefined) setTempCardCreditFixed(cs.creditFixed.toString());
                 if (cs.autoAddToTotal !== undefined) setTempCardAutoAdd(cs.autoAddToTotal);
                 if (cs.customNotice !== undefined) setTempCardCustomNotice(cs.customNotice);
               }
@@ -1158,6 +1261,8 @@ export function AdminDashboard({
     const fixNum = parseFloat(tempCardFixed.toString().replace(',', '.')) || 0;
     const debNum = parseFloat(tempCardDebit.toString().replace(',', '.')) || 0;
     const credNum = parseFloat(tempCardCredit.toString().replace(',', '.')) || 0;
+    const debFixNum = parseFloat(tempCardDebitFixed.toString().replace(',', '.')) || 0;
+    const credFixNum = parseFloat(tempCardCreditFixed.toString().replace(',', '.')) || 0;
 
     const newCardSettings = {
       active: tempCardActive,
@@ -1166,6 +1271,8 @@ export function AdminDashboard({
       fixedRate: fixNum,
       debitRate: debNum,
       creditRate: credNum,
+      debitFixed: debFixNum,
+      creditFixed: credFixNum,
       autoAddToTotal: tempCardAutoAdd,
       customNotice: tempCardCustomNotice.trim()
     };
@@ -1330,6 +1437,7 @@ export function AdminDashboard({
     setEditingComplement(null);
     setComplementFormName('');
     setComplementFormIcon('🥜');
+    setComplementFormPrice('0');
     setComplementFormIsAvailable(true);
     setComplementFormDefaultSelected(false);
     setIsComplementModalOpen(true);
@@ -1339,6 +1447,7 @@ export function AdminDashboard({
     setEditingComplement(comp);
     setComplementFormName(comp.name || '');
     setComplementFormIcon(comp.icon || '✨');
+    setComplementFormPrice((comp.price ?? 0).toString());
     setComplementFormIsAvailable(comp.isAvailable !== false);
     setComplementFormDefaultSelected(Boolean(comp.defaultSelected));
     setIsComplementModalOpen(true);
@@ -1350,10 +1459,12 @@ export function AdminDashboard({
       alert('Informe o nome do acompanhamento.');
       return;
     }
+    const priceNum = Math.max(0, parseFloat(complementFormPrice.toString().replace(',', '.')) || 0);
     const newComp = {
       id: editingComplement ? editingComplement.id : `acai_comp_${Date.now()}`,
       name: complementFormName.trim(),
       icon: complementFormIcon.trim() || '✨',
+      price: priceNum,
       isAvailable: complementFormIsAvailable,
       defaultSelected: complementFormDefaultSelected
     };
@@ -1385,30 +1496,119 @@ export function AdminDashboard({
     triggerMenuToast('Acompanhamento removido.');
   };
 
+  const handleOpenCreateCobertura = () => {
+    setEditingCobertura(null);
+    setCoberturaFormName('');
+    setCoberturaFormPrice('0');
+    setCoberturaFormIsAvailable(true);
+    setIsCoberturaModalOpen(true);
+  };
+
+  const handleOpenEditCobertura = (cob) => {
+    const item = typeof cob === 'string' ? { id: cob, name: cob, price: 0, isAvailable: true } : cob;
+    setEditingCobertura(item);
+    setCoberturaFormName(item.name || '');
+    setCoberturaFormPrice((item.price ?? 0).toString());
+    setCoberturaFormIsAvailable(item.isAvailable !== false);
+    setIsCoberturaModalOpen(true);
+  };
+
+  const handleSaveCobertura = (e) => {
+    e.preventDefault();
+    if (!coberturaFormName.trim()) {
+      alert('Informe o nome da cobertura.');
+      return;
+    }
+    const priceNum = Math.max(0, parseFloat(coberturaFormPrice.toString().replace(',', '.')) || 0);
+    const newCob = {
+      id: editingCobertura ? editingCobertura.id : `cob_${Date.now()}`,
+      name: coberturaFormName.trim(),
+      price: priceNum,
+      isAvailable: coberturaFormIsAvailable
+    };
+
+    let updatedCobs;
+    if (editingCobertura) {
+      updatedCobs = (acaiSettings.coberturas || []).map(c => {
+        const isMatch = typeof c === 'string' ? c === editingCobertura.name : (c.id === editingCobertura.id || c.name === editingCobertura.name);
+        return isMatch ? newCob : (typeof c === 'string' ? { id: c, name: c, price: 0, isAvailable: true } : c);
+      });
+      triggerMenuToast(`Cobertura "${newCob.name}" atualizada com sucesso!`);
+    } else {
+      const exists = (acaiSettings.coberturas || []).some(c => (typeof c === 'string' ? c : c.name).toLowerCase() === newCob.name.toLowerCase());
+      if (exists) {
+        alert('Esta cobertura já existe na lista.');
+        return;
+      }
+      const existingObjs = (acaiSettings.coberturas || []).map(c => typeof c === 'string' ? { id: c, name: c, price: 0, isAvailable: true } : c);
+      updatedCobs = [...existingObjs, newCob];
+      triggerMenuToast(`Nova cobertura "${newCob.name}" adicionada!`);
+    }
+
+    const updated = { ...acaiSettings, coberturas: updatedCobs };
+    setAcaiSettings(updated);
+    saveStoredAcaiSettings(updated);
+    dispatchConfigSync('ACAI_SETTINGS_UPDATE', updated);
+    setIsCoberturaModalOpen(false);
+  };
+
+  const handleToggleCoberturaAvailability = (cobIdOrName) => {
+    const updatedCobs = (acaiSettings.coberturas || []).map(c => {
+      const isMatch = typeof c === 'string' ? c === cobIdOrName : (c.id === cobIdOrName || c.name === cobIdOrName);
+      if (isMatch) {
+        const itemObj = typeof c === 'string' ? { id: c, name: c, price: 0, isAvailable: true } : c;
+        const nextState = itemObj.isAvailable === false ? true : false;
+        triggerMenuToast(nextState ? `Cobertura "${itemObj.name}" ativada (disponível)!` : `Cobertura "${itemObj.name}" pausada (esgotada)!`);
+        return { ...itemObj, isAvailable: nextState };
+      }
+      return typeof c === 'string' ? { id: c, name: c, price: 0, isAvailable: true } : c;
+    });
+    const updated = { ...acaiSettings, coberturas: updatedCobs };
+    setAcaiSettings(updated);
+    saveStoredAcaiSettings(updated);
+    dispatchConfigSync('ACAI_SETTINGS_UPDATE', updated);
+  };
+
   const handleAddCobertura = (e) => {
     e.preventDefault();
     const val = newCoberturaText.trim();
     if (!val) return;
-    if ((acaiSettings.coberturas || []).includes(val)) {
+    const exists = (acaiSettings.coberturas || []).some(c => (typeof c === 'string' ? c : c.name).toLowerCase() === val.toLowerCase());
+    if (exists) {
       alert('Esta cobertura já existe na lista.');
       return;
     }
-    const updatedCobs = [...(acaiSettings.coberturas || []), val];
+    const priceNum = Math.max(0, parseFloat(newCoberturaPrice.toString().replace(',', '.')) || 0);
+    const newCob = {
+      id: `cob_${Date.now()}`,
+      name: val,
+      price: priceNum,
+      isAvailable: true
+    };
+    const existingObjs = (acaiSettings.coberturas || []).map(c => typeof c === 'string' ? { id: c, name: c, price: 0, isAvailable: true } : c);
+    const updatedCobs = [...existingObjs, newCob];
     const updated = { ...acaiSettings, coberturas: updatedCobs };
     setAcaiSettings(updated);
     saveStoredAcaiSettings(updated);
     dispatchConfigSync('ACAI_SETTINGS_UPDATE', updated);
     setNewCoberturaText('');
+    setNewCoberturaPrice('0');
     triggerMenuToast(`Cobertura "${val}" adicionada com sucesso!`);
   };
 
-  const handleDeleteCobertura = (cobName) => {
-    if (cobName === 'Sem Cobertura') {
+  const handleDeleteCobertura = (cobIdOrName) => {
+    const cob = (acaiSettings.coberturas || []).find(c => 
+      typeof c === 'string' ? c === cobIdOrName : (c.id === cobIdOrName || c.name === cobIdOrName)
+    );
+    const cobName = typeof cob === 'string' ? cob : (cob?.name || '');
+    if (cobName === 'Sem Cobertura' || (cob && cob.id === 'sem-cobertura')) {
       alert('"Sem Cobertura" é a opção padrão do cliente e não pode ser removida.');
       return;
     }
     if (!window.confirm(`Remover "${cobName}" da lista de coberturas?`)) return;
-    const updatedCobs = (acaiSettings.coberturas || []).filter(c => c !== cobName);
+    const updatedCobs = (acaiSettings.coberturas || []).filter(c => 
+      typeof c === 'string' ? c !== cobIdOrName : (c.id !== cobIdOrName && c.name !== cobIdOrName)
+    );
     const updated = { ...acaiSettings, coberturas: updatedCobs };
     setAcaiSettings(updated);
     saveStoredAcaiSettings(updated);
@@ -1456,11 +1656,155 @@ export function AdminDashboard({
     triggerMenuToast('Todos os sabores de pizza foram removidos!');
   };
 
+  // Handlers & Sync for Delivery Districts (Taxas de Entrega)
+  useEffect(() => {
+    const handleDistrictsSync = (e) => {
+      if (e?.detail && Array.isArray(e.detail)) setDistrictsList(e.detail);
+      else setDistrictsList(getStoredDistricts());
+    };
+    window.addEventListener('delivery_districts_updated', handleDistrictsSync);
+    window.addEventListener('storage', handleDistrictsSync);
+    return () => {
+      window.removeEventListener('delivery_districts_updated', handleDistrictsSync);
+      window.removeEventListener('storage', handleDistrictsSync);
+    };
+  }, []);
+
+  const handleAddNewDistrict = async (e) => {
+    if (e) e.preventDefault();
+    if (!newDistrictName.trim()) {
+      triggerMenuToast('Por favor, informe o nome do bairro ou localidade.');
+      return;
+    }
+
+    const cleanPrice = Math.max(0, parseFloat(String(newDistrictPrice).replace(',', '.')) || 0);
+    const cleanId = newDistrictName.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-') || `dist_${Date.now()}`;
+    const newDistrict = {
+      id: `${cleanId}_${Date.now().toString().slice(-4)}`,
+      name: newDistrictName.trim(),
+      price: cleanPrice,
+      isAvailable: true
+    };
+
+    const updated = [newDistrict, ...districtsList];
+    setDistrictsList(updated);
+    saveStoredDistricts(updated);
+    await dispatchConfigSync('DELIVERY_DISTRICTS_UPDATE', updated);
+    setNewDistrictName('');
+    setNewDistrictPrice('8.00');
+    triggerMenuToast(`Bairro "${newDistrict.name}" cadastrado com taxa de R$ ${cleanPrice.toFixed(2).replace('.', ',')}!`);
+  };
+
+  const handleUpdateDistrictInlinePrice = async (districtId, newPriceStr) => {
+    const cleanPrice = Math.max(0, parseFloat(String(newPriceStr).replace(',', '.')) || 0);
+    const updated = districtsList.map(d => d.id === districtId ? { ...d, price: cleanPrice } : d);
+    setDistrictsList(updated);
+    saveStoredDistricts(updated);
+    await dispatchConfigSync('DELIVERY_DISTRICTS_UPDATE', updated);
+    const target = updated.find(d => d.id === districtId);
+    triggerMenuToast(`Taxa de "${target?.name || 'Bairro'}" atualizada para R$ ${cleanPrice.toFixed(2).replace('.', ',')}`);
+  };
+
+  const handleOpenEditDistrict = (district) => {
+    setEditingDistrict(district);
+    setDistrictFormName(district.name || '');
+    setDistrictFormPrice(Number(district.price || 0).toFixed(2));
+    setDistrictFormIsAvailable(district.isAvailable !== false);
+    setIsDistrictModalOpen(true);
+  };
+
+  const handleSaveDistrictModal = async (e) => {
+    if (e) e.preventDefault();
+    if (!districtFormName.trim()) {
+      triggerMenuToast('Por favor, digite o nome do bairro.');
+      return;
+    }
+    const cleanPrice = Math.max(0, parseFloat(String(districtFormPrice).replace(',', '.')) || 0);
+    const updated = districtsList.map(d => {
+      if (d.id === editingDistrict.id) {
+        return {
+          ...d,
+          name: districtFormName.trim(),
+          price: cleanPrice,
+          isAvailable: districtFormIsAvailable
+        };
+      }
+      return d;
+    });
+
+    setDistrictsList(updated);
+    saveStoredDistricts(updated);
+    await dispatchConfigSync('DELIVERY_DISTRICTS_UPDATE', updated);
+    setIsDistrictModalOpen(false);
+    triggerMenuToast(`Bairro "${districtFormName.trim()}" atualizado com sucesso!`);
+  };
+
+  const handleToggleDistrictAvailability = async (districtId) => {
+    const updated = districtsList.map(d => {
+      if (d.id === districtId) {
+        const nextState = d.isAvailable === false ? true : false;
+        triggerMenuToast(nextState ? `Bairro "${d.name}" ativado para entregas!` : `Bairro "${d.name}" pausado (temporariamente indisponível)!`);
+        return { ...d, isAvailable: nextState };
+      }
+      return d;
+    });
+    setDistrictsList(updated);
+    saveStoredDistricts(updated);
+    await dispatchConfigSync('DELIVERY_DISTRICTS_UPDATE', updated);
+  };
+
+  const handleDeleteDistrict = async (districtId, districtName) => {
+    if (!window.confirm(`Deseja realmente remover o bairro "${districtName}" da lista de entregas?`)) return;
+    const updated = districtsList.filter(d => d.id !== districtId);
+    setDistrictsList(updated);
+    saveStoredDistricts(updated);
+    await dispatchConfigSync('DELIVERY_DISTRICTS_UPDATE', updated);
+    triggerMenuToast(`Bairro "${districtName}" removido.`);
+  };
+
+  const handleResetDefaultDistricts = async () => {
+    if (!window.confirm('Deseja restaurar a lista padrão com os 48 bairros oficiais de Ariquemes?')) return;
+    const defaultList = normalizeDistrictsList(ARIQUEMES_DISTRICTS);
+    setDistrictsList(defaultList);
+    saveStoredDistricts(defaultList);
+    await dispatchConfigSync('DELIVERY_DISTRICTS_UPDATE', defaultList);
+    triggerMenuToast('Lista padrão de bairros restaurada com sucesso!');
+  };
+
+  const filteredDistricts = useMemo(() => {
+    let list = districtsList;
+    if (districtSearch.trim()) {
+      const q = districtSearch.toLowerCase().trim();
+      list = list.filter(d => (d.name || '').toLowerCase().includes(q));
+    }
+    if (districtPriceFilter === '8') {
+      list = list.filter(d => Number(d.price) === 8 && d.isAvailable !== false);
+    } else if (districtPriceFilter === '10') {
+      list = list.filter(d => Number(d.price) === 10 && d.isAvailable !== false);
+    } else if (districtPriceFilter === '15') {
+      list = list.filter(d => Number(d.price) === 15 && d.isAvailable !== false);
+    } else if (districtPriceFilter === '20+') {
+      list = list.filter(d => Number(d.price) >= 20 && d.isAvailable !== false);
+    } else if (districtPriceFilter === 'unavailable') {
+      list = list.filter(d => d.isAvailable === false);
+    }
+    return list;
+  }, [districtsList, districtSearch, districtPriceFilter]);
+
   // Buffet Items Availability Management State
   const [buffetCategories, setBuffetCategories] = useState(() => getStoredBuffetCategories());
   const [unavailableBuffetIds, setUnavailableBuffetIds] = useState(() => getUnavailableBuffetItemIds());
   const [buffetSearchQuery, setBuffetSearchQuery] = useState('');
   const [buffetCategoryFilter, setBuffetCategoryFilter] = useState('all');
+
+  // Buffet Item Add / Edit Modal State
+  const [isBuffetItemModalOpen, setIsBuffetItemModalOpen] = useState(false);
+  const [editingBuffetItem, setEditingBuffetItem] = useState(null); // null if new, or item object
+  const [buffetItemFormCategoryId, setBuffetItemFormCategoryId] = useState('prato_principal');
+  const [buffetItemFormName, setBuffetItemFormName] = useState('');
+  const [buffetItemFormDesc, setBuffetItemFormDesc] = useState('');
+  const [buffetItemFormIsAssado, setBuffetItemFormIsAssado] = useState(false);
+  const [buffetItemFormIsAvailable, setBuffetItemFormIsAvailable] = useState(true);
 
   useEffect(() => {
     const handleBuffetSync = () => {
@@ -1477,6 +1821,155 @@ export function AdminDashboard({
       window.removeEventListener('storage', handleBuffetSync);
     };
   }, []);
+
+  const handleOpenCreateBuffetItem = (preferredCatId = 'prato_principal') => {
+    setEditingBuffetItem(null);
+    setBuffetItemFormCategoryId(preferredCatId || buffetCategories[0]?.id || 'prato_principal');
+    setBuffetItemFormName('');
+    setBuffetItemFormDesc('');
+    setBuffetItemFormIsAssado(preferredCatId === 'prato_principal');
+    setBuffetItemFormIsAvailable(true);
+    setIsBuffetItemModalOpen(true);
+  };
+
+  const handleOpenEditBuffetItem = (item, categoryId) => {
+    setEditingBuffetItem({ ...item, categoryId });
+    setBuffetItemFormCategoryId(categoryId || 'prato_principal');
+    setBuffetItemFormName(item.name || '');
+    setBuffetItemFormDesc(item.desc || '');
+    setBuffetItemFormIsAssado(Boolean(item.isAssado));
+    setBuffetItemFormIsAvailable(!unavailableBuffetIds.includes(item.id) && item.active !== false);
+    setIsBuffetItemModalOpen(true);
+  };
+
+  const handleSaveBuffetItem = async (e) => {
+    if (e) e.preventDefault();
+    if (!buffetItemFormName.trim()) {
+      triggerMenuToast('Por favor, informe o nome do prato!');
+      return;
+    }
+
+    const currentCats = getStoredBuffetCategories();
+    let updatedCats = [];
+    const targetCatId = buffetItemFormCategoryId || 'prato_principal';
+
+    if (editingBuffetItem) {
+      // Editar prato existente
+      const originalCatId = editingBuffetItem.categoryId;
+      const itemId = editingBuffetItem.id;
+      
+      const updatedItem = {
+        ...editingBuffetItem,
+        name: buffetItemFormName.trim(),
+        desc: buffetItemFormDesc.trim(),
+        isAssado: Boolean(buffetItemFormIsAssado),
+        badge: buffetItemFormIsAssado ? 'Assados' : (editingBuffetItem.badge || undefined),
+        active: buffetItemFormIsAvailable
+      };
+      delete updatedItem.categoryId;
+
+      if (originalCatId === targetCatId) {
+        // Permanece na mesma categoria
+        updatedCats = currentCats.map(cat => {
+          if (cat.id !== targetCatId) return cat;
+          return {
+            ...cat,
+            items: (cat.items || []).map(i => i.id === itemId ? updatedItem : i)
+          };
+        });
+      } else {
+        // Mudou de categoria: remove da antiga e insere na nova
+        updatedCats = currentCats.map(cat => {
+          if (cat.id === originalCatId) {
+            return {
+              ...cat,
+              items: (cat.items || []).filter(i => i.id !== itemId)
+            };
+          }
+          if (cat.id === targetCatId) {
+            return {
+              ...cat,
+              items: [...(cat.items || []), updatedItem]
+            };
+          }
+          return cat;
+        });
+      }
+
+      // Atualiza disponibilidade
+      let newUnavail = [...unavailableBuffetIds];
+      if (buffetItemFormIsAvailable) {
+        newUnavail = newUnavail.filter(id => id !== itemId);
+      } else if (!newUnavail.includes(itemId)) {
+        newUnavail.push(itemId);
+      }
+      saveUnavailableBuffetItemIds(newUnavail);
+      setUnavailableBuffetIds(newUnavail);
+      await dispatchConfigSync('BUFFET_AVAILABILITY_UPDATE', newUnavail);
+      triggerMenuToast(`Prato "${buffetItemFormName.trim()}" atualizado com sucesso!`);
+    } else {
+      // Criar novo prato
+      const newId = `buffet_prato_${Date.now()}`;
+      const newItem = {
+        id: newId,
+        name: buffetItemFormName.trim(),
+        desc: buffetItemFormDesc.trim(),
+        isAssado: Boolean(buffetItemFormIsAssado),
+        badge: buffetItemFormIsAssado ? 'Assados' : undefined,
+        active: buffetItemFormIsAvailable
+      };
+
+      let categoryFound = false;
+      updatedCats = currentCats.map(cat => {
+        if (cat.id === targetCatId) {
+          categoryFound = true;
+          return {
+            ...cat,
+            items: [...(cat.items || []), newItem]
+          };
+        }
+        return cat;
+      });
+
+      if (!categoryFound && updatedCats.length > 0) {
+        updatedCats[0].items = [...(updatedCats[0].items || []), newItem];
+      }
+
+      if (!buffetItemFormIsAvailable) {
+        const newUnavail = [...unavailableBuffetIds, newId];
+        saveUnavailableBuffetItemIds(newUnavail);
+        setUnavailableBuffetIds(newUnavail);
+        await dispatchConfigSync('BUFFET_AVAILABILITY_UPDATE', newUnavail);
+      }
+
+      triggerMenuToast(`Prato "${buffetItemFormName.trim()}" adicionado ao Buffet!`);
+    }
+
+    saveStoredBuffetCategories(updatedCats);
+    setBuffetCategories(updatedCats);
+    await dispatchConfigSync('BUFFET_CATEGORIES_UPDATE', updatedCats);
+    setIsBuffetItemModalOpen(false);
+  };
+
+  const handleDeleteBuffetItem = async (itemId, itemName) => {
+    if (!window.confirm(`Tem certeza que deseja excluir o prato "${itemName}" do Buffet?`)) return;
+
+    const currentCats = getStoredBuffetCategories();
+    const updatedCats = currentCats.map(cat => ({
+      ...cat,
+      items: (cat.items || []).filter(i => i.id !== itemId)
+    }));
+
+    const nextUnavail = unavailableBuffetIds.filter(id => id !== itemId);
+    saveStoredBuffetCategories(updatedCats);
+    setBuffetCategories(updatedCats);
+    saveUnavailableBuffetItemIds(nextUnavail);
+    setUnavailableBuffetIds(nextUnavail);
+
+    await dispatchConfigSync('BUFFET_CATEGORIES_UPDATE', updatedCats);
+    await dispatchConfigSync('BUFFET_AVAILABILITY_UPDATE', nextUnavail);
+    triggerMenuToast(`Prato "${itemName}" removido do Buffet.`);
+  };
 
   const handleToggleBuffetItemAvailability = async (itemId) => {
     const current = getUnavailableBuffetItemIds();
@@ -1585,8 +2078,8 @@ export function AdminDashboard({
     return list;
   }, [scopedProductsList, menuCategoryFilter, menuSearch]);
 
-  // Sound chime helper using Web Audio API + Speech Synthesis
-  const playChime = (isTest = false) => {
+  // LOUD Restaurant Kitchen Alert Sound Engine using Web Audio API + Maximizer + Speech Synthesis
+  const playChime = (isTest = false, customPhrase = '') => {
     try {
       if (!audioCtxRef.current) {
         audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
@@ -1596,34 +2089,75 @@ export function AdminDashboard({
         ctx.resume();
       }
 
-      // Three-tone bright restaurant order bell
       const t = ctx.currentTime;
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
 
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(659.25, t); // E5
-      osc.frequency.setValueAtTime(830.61, t + 0.12); // G#5
-      osc.frequency.setValueAtTime(987.77, t + 0.25); // B5
+      // Dynamics Compressor (Audio Maximizer & Limiter for maximum RMS loudness without distortion)
+      const compressor = ctx.createDynamicsCompressor();
+      compressor.threshold.setValueAtTime(-14, t);
+      compressor.knee.setValueAtTime(6, t);
+      compressor.ratio.setValueAtTime(16, t);
+      compressor.attack.setValueAtTime(0.002, t);
+      compressor.release.setValueAtTime(0.25, t);
+      compressor.connect(ctx.destination);
 
-      gain.gain.setValueAtTime(0.7, t);
-      gain.gain.exponentialRampToValueAtTime(0.001, t + 1.2);
+      // Master output gain (Maximum boost)
+      const masterGain = ctx.createGain();
+      masterGain.gain.setValueAtTime(1.0, t);
+      masterGain.connect(compressor);
 
-      osc.start(t);
-      osc.stop(t + 1.2);
+      // Play a piercing, rich multi-tone restaurant bell sequence (2 loud cycles: DING-DONG! ... DING-DONG!)
+      const playTone = (freq1, freq2, startTime, duration = 0.35) => {
+        // Fundamental Tone (Sine)
+        const osc1 = ctx.createOscillator();
+        const gain1 = ctx.createGain();
+        osc1.type = 'sine';
+        osc1.frequency.setValueAtTime(freq1, startTime);
+        gain1.gain.setValueAtTime(0.85, startTime);
+        gain1.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+        osc1.connect(gain1);
+        gain1.connect(masterGain);
+        osc1.start(startTime);
+        osc1.stop(startTime + duration);
 
-      // Speak notification in Portuguese
+        // Harmonic High Bell Tone (Triangle / Square for piercing through kitchen background noise)
+        const osc2 = ctx.createOscillator();
+        const gain2 = ctx.createGain();
+        osc2.type = 'triangle';
+        osc2.frequency.setValueAtTime(freq2, startTime);
+        gain2.gain.setValueAtTime(0.75, startTime);
+        gain2.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+        osc2.connect(gain2);
+        gain2.connect(masterGain);
+        osc2.start(startTime);
+        osc2.stop(startTime + duration);
+      };
+
+      // Cycle 1: High crisp ding-dong
+      playTone(784.00, 1568.00, t, 0.32); // G5 + G6
+      playTone(1046.50, 2093.00, t + 0.18, 0.45); // C6 + C7
+
+      // Cycle 2: Louder repetition (Restaurant Service Chime)
+      playTone(880.00, 1760.00, t + 0.48, 0.32); // A5 + A6
+      playTone(1174.66, 2349.32, t + 0.66, 0.65); // D6 + D7
+
+      // High-priority vocal alert at MAX volume (1.0)
       if ('speechSynthesis' in window) {
         try {
-          const phrase = isTest 
-            ? 'Som de alerta da cozinha ativado com sucesso!' 
-            : 'Atenção cozinha! Novo pedido recebido!';
+          window.speechSynthesis.cancel();
+          const phrase = customPhrase || (isTest 
+            ? 'Alerta sonoro da cozinha no volume máximo!' 
+            : 'Atenção cozinha! Novo pedido recebido!');
           const utterance = new SpeechSynthesisUtterance(phrase);
           utterance.lang = 'pt-BR';
-          utterance.rate = 1.05;
-          window.speechSynthesis.speak(utterance);
+          utterance.volume = 1.0; // 100% Volume
+          utterance.rate = 1.02;
+          utterance.pitch = 1.15; // Higher pitch cuts through ambient noise
+          
+          setTimeout(() => {
+            try {
+              window.speechSynthesis.speak(utterance);
+            } catch (e) {}
+          }, 700);
         } catch (e) {}
       }
     } catch (e) {
@@ -1695,10 +2229,57 @@ export function AdminDashboard({
     return elapsed >= 35; // 35+ minutes threshold for warning
   };
 
-  // Metrics calculations (Excluding cancelled orders!)
-  const activeOrdersList = useMemo(() => {
-    return scopedOrders.filter(o => o && normalizeOrderStatus(o) !== 'CANCELADO');
+  // Live Shift Totals for Cash Register Status
+  const currentShiftTotals = useMemo(() => {
+    return calculateShiftTotals(scopedOrders);
   }, [scopedOrders]);
+
+  // Background Auto-Closing Watcher for Cash Register (Checks every 25 seconds)
+  useEffect(() => {
+    const checkAutoCashClose = () => {
+      try {
+        const cashSettings = getCashRegisterSettings();
+        if (!cashSettings.autoCloseEnabled || !cashSettings.autoCloseTime) return;
+
+        const dateNow = new Date();
+        const currentHours = dateNow.getHours().toString().padStart(2, '0');
+        const currentMinutes = dateNow.getMinutes().toString().padStart(2, '0');
+        const currentTimeStr = `${currentHours}:${currentMinutes}`;
+        const todayDateStr = dateNow.toISOString().slice(0, 10);
+
+        // Se o horário atual bate com o horário programado e ainda não fechou hoje nesse horário
+        if (currentTimeStr === cashSettings.autoCloseTime && cashSettings.lastClosedDate !== todayDateStr) {
+          console.log('⏰ Horário programado atingido! Fechando caixa automaticamente:', currentTimeStr);
+          
+          executeCashClosing({
+            orders,
+            closedBy: 'Fechamento Automático (Sistema)',
+            closingType: 'automatic',
+            initialDrawerCash: Number(cashSettings.initialDrawerCash) || 0,
+            notes: `Fechamento diário automático programado para as ${cashSettings.autoCloseTime}.`,
+            branchId: currentBranch?.id || 'ariquemes',
+            branchName: currentBranch?.displayName || currentBranch?.name || 'Unidade Ariquemes'
+          });
+
+          playChime(true, `Atenção equipe! O caixa do dia foi encerrado automaticamente às ${cashSettings.autoCloseTime}. O relatório financeiro está salvo em finanças.`);
+        }
+      } catch (e) {
+        console.warn('Auto close check error:', e);
+      }
+    };
+
+    const interval = setInterval(checkAutoCashClose, 25000);
+    return () => clearInterval(interval);
+  }, [orders, currentBranch]);
+
+  // Metrics calculations (Excluding cancelled orders and closed shifts!)
+  const activeOrdersList = useMemo(() => {
+    return scopedOrders.filter(o => {
+      if (!o || normalizeOrderStatus(o) === 'CANCELADO') return false;
+      if (!showArchivedKdsOrders && (o.shiftClosedAt || o.isArchived)) return false;
+      return true;
+    });
+  }, [scopedOrders, showArchivedKdsOrders]);
 
   const totalRevenue = useMemo(() => {
     return activeOrdersList
@@ -1727,12 +2308,21 @@ export function AdminDashboard({
   }, [activeOrdersList]);
 
   const cancelledCount = useMemo(() => {
-    return scopedOrders.filter(o => normalizeOrderStatus(o) === 'CANCELADO').length;
-  }, [scopedOrders]);
+    return scopedOrders.filter(o => {
+      if (normalizeOrderStatus(o) !== 'CANCELADO') return false;
+      if (!showArchivedKdsOrders && (o.shiftClosedAt || o.isArchived)) return false;
+      return true;
+    }).length;
+  }, [scopedOrders, showArchivedKdsOrders]);
 
   // Filtered orders list for KDS
   const filteredOrders = useMemo(() => {
     return scopedOrders.filter(order => {
+      // Exclui pedidos de turnos anteriores já fechados da tela ativa da cozinha (a menos que o usuário clique para ver)
+      if (!showArchivedKdsOrders && (order.shiftClosedAt || order.isArchived)) {
+        return false;
+      }
+
       const orderSt = normalizeOrderStatus(order);
       const isCancelled = orderSt === 'CANCELADO';
 
@@ -1754,7 +2344,8 @@ export function AdminDashboard({
       // Search query
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
-        const matchesId = (order.orderId || '').toLowerCase().includes(q);
+        const displayNum = formatOrderNumber(order).toLowerCase();
+        const matchesId = (order.orderId || '').toLowerCase().includes(q) || displayNum.includes(q) || `#${displayNum}`.includes(q);
         const matchesName = (order.customerName || '').toLowerCase().includes(q);
         const matchesPhone = (order.customerPhone || '').replace(/\D/g, '').includes(q.replace(/\D/g, ''));
         const matchesDistrict = (order.district || '').toLowerCase().includes(q);
@@ -1800,6 +2391,7 @@ export function AdminDashboard({
     const formattedDate = order.createdAt ? new Date(order.createdAt).toLocaleString('pt-BR') : new Date().toLocaleString('pt-BR');
     const paymentMethod = order.paymentMethod || 'A Definir';
     const isPaid = order.paymentStatus === 'PAGO_APROVADO';
+    const displayNumber = formatOrderNumber(order);
 
     const branch = branchesList.find(b => b.id === (order.branchId || currentBranch?.id)) || currentBranch;
     const branchName = branch?.displayName || branch?.name || 'EL SHADDAY DELIVERY';
@@ -1810,7 +2402,7 @@ export function AdminDashboard({
       <html>
         <head>
           <meta charset="utf-8" />
-          <title>Comanda #${order.orderId} - El Shadday</title>
+          <title>Comanda #${displayNumber} - El Shadday</title>
           <style>
             @page {
               size: auto;
@@ -1836,7 +2428,7 @@ export function AdminDashboard({
             .right { text-align: right; }
             .bold { font-weight: bold; }
             .title { font-size: 13px; letter-spacing: -0.3px; margin-bottom: 2px; }
-            .comanda-id { font-size: 14px; margin: 2px 0; }
+            .comanda-id { font-size: 20px; font-weight: 900; letter-spacing: 1px; border: 2px dashed #000; padding: 5px 3px; margin: 4px 0; }
             .divider { border-top: 1px dashed #000; margin: 5px 0; }
             .item-row { margin-bottom: 4px; }
             .item-header { display: flex; justify-content: space-between; font-weight: bold; font-size: 11.5px; }
@@ -1849,7 +2441,8 @@ export function AdminDashboard({
         </head>
         <body>
           <div class="center bold title">${branchName.toUpperCase()}</div>
-          <div class="center bold comanda-id">*** COMANDA #${order.orderId} ***</div>
+          <div class="center bold comanda-id">*** COMANDA #${displayNumber} ***</div>
+          <div class="center" style="font-size: 11px; font-weight: bold; margin-bottom: 2px;">PEDIDO Nº ${displayNumber}</div>
           <div class="center" style="font-size: 10px;">Data: ${formattedDate}</div>
 
           ${order.orderStatus === 'CANCELADO' ? '<div class="cancel-badge">*** PEDIDO CANCELADO ***</div>' : ''}
@@ -2100,7 +2693,7 @@ export function AdminDashboard({
     if (autoFollowTab && targetInfo) {
       setSelectedFilter(targetInfo.tab);
       setStatusChangeToast({
-        orderId: order.orderId,
+        orderId: formatOrderNumber(order),
         newStatus,
         tabLabel: targetInfo.label
       });
@@ -2131,7 +2724,7 @@ export function AdminDashboard({
       }, 2800);
 
       setStatusChangeToast({
-        orderId: cancelModalOrder.orderId,
+        orderId: formatOrderNumber(cancelModalOrder),
         newStatus: 'CANCELADO',
         tabLabel: 'Cancelados'
       });
@@ -2486,7 +3079,7 @@ export function AdminDashboard({
     if (cust.deliveryType === 'delivery') {
       setPdvDeliveryType('delivery');
       if (cust.district || cust.districtId) {
-        const found = ARIQUEMES_DISTRICTS.find(d => 
+        const found = districtsList.find(d => 
           d.id === cust.districtId || 
           d.name.toLowerCase() === (cust.district || '').toLowerCase()
         );
@@ -2524,7 +3117,8 @@ export function AdminDashboard({
       return;
     }
 
-    const orderId = `ES-${Math.floor(1000 + Math.random() * 9000)}`;
+    const orderNumber = getNextOrderNumber(orders);
+    const orderId = String(orderNumber).padStart(2, '0');
 
     let paymentMethodText = 'PIX';
     if (pdvPaymentMethod === 'dinheiro') {
@@ -2537,6 +3131,8 @@ export function AdminDashboard({
 
     const newOrder = {
       orderId,
+      orderNumber,
+      displayNumber: '#' + orderId,
       branchId: currentBranch?.id || 'ariquemes',
       branchName: currentBranch?.displayName || currentBranch?.name || 'Unidade Ariquemes',
       createdAt: new Date().toISOString(),
@@ -2602,7 +3198,7 @@ export function AdminDashboard({
         <div className="bg-gradient-to-r from-emerald-600 via-emerald-500 to-emerald-600 text-dark-950 font-black px-4 py-3 flex items-center justify-between shadow-2xl animate-bounce-subtle z-50 sticky top-0">
           <div className="flex items-center gap-2 text-xs sm:text-sm">
             <BellRing className="w-5 h-5 animate-pulse" />
-            <span>NOVO PEDIDO CHEGOU NA COZINHA! #{newOrderAlert.orderId} - {newOrderAlert.customerName} (R$ {(newOrderAlert.total || 0).toFixed(2).replace('.', ',')})</span>
+            <span>NOVO PEDIDO CHEGOU NA COZINHA! #{formatOrderNumber(newOrderAlert)} - {newOrderAlert.customerName} (R$ {(newOrderAlert.total || 0).toFixed(2).replace('.', ',')})</span>
           </div>
           <button
             onClick={() => setNewOrderAlert(null)}
@@ -2729,234 +3325,272 @@ export function AdminDashboard({
 
         </div>
 
-        {/* Navigation Tabs */}
+        {/* Navigation Tabs with Visible Scrollbar ("Rotbar") and Scroll Chevrons */}
         {currentUser?.role !== ROLES.KITCHEN && (
-          <div className="max-w-7xl mx-auto mt-3 flex items-center gap-1.5 border-t border-dark-800 pt-2.5 overflow-x-auto scrollbar-none no-scrollbar pb-1 text-xs">
+          <div className="relative max-w-7xl mx-auto mt-3 border-t border-dark-800 pt-2">
             
-            {/* 1. COZINHA (KDS) */}
-            <button
-              type="button"
-              onClick={() => setActiveAdminTab('kds')}
-              className={`px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
-                activeAdminTab === 'kds'
-                  ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
-                  : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
-              }`}
-            >
-              <ChefHat className="w-4 h-4" />
-              <span>Cozinha</span>
-              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
-                activeAdminTab === 'kds' ? 'bg-dark-950 text-brand-gold' : 'bg-dark-900 text-slate-400'
-              }`}>
-                {activeOrdersList.length}
-              </span>
-            </button>
+            {/* Scroll Left Button */}
+            {canScrollLeft && (
+              <button
+                type="button"
+                onClick={() => handleScrollTabs('left')}
+                className="absolute left-0 top-1/2 -translate-y-1/2 z-20 p-2 rounded-xl bg-dark-900/95 hover:bg-dark-850 text-brand-gold border border-brand-gold/40 shadow-xl backdrop-blur-md cursor-pointer transition-all active:scale-90 flex items-center justify-center -translate-x-1 sm:-translate-x-2"
+                title="Rolar abas para a esquerda"
+              >
+                <ChevronLeft className="w-4 h-4 stroke-[2.5]" />
+              </button>
+            )}
 
-            {/* 2. NOVO PEDIDO (PDV) */}
-            <button
-              type="button"
-              onClick={() => setActiveAdminTab('pdv')}
-              className={`px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
-                activeAdminTab === 'pdv'
-                  ? 'bg-emerald-500 text-dark-950 font-black shadow-sm'
-                  : 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/30'
-              }`}
-            >
-              <Plus className="w-4 h-4 stroke-[3]" />
-              <span>Novo Pedido</span>
-              {pdvCart.length > 0 && (
-                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-500 text-dark-950 font-black">
-                  {pdvCart.length}
-                </span>
-              )}
-            </button>
-
-            {/* 3. CARDÁPIO */}
-            <button
-              type="button"
-              onClick={() => {
-                setActiveAdminTab('menu');
-                setMenuSubTab('products');
+            <div
+              ref={tabsNavRef}
+              onScroll={checkTabsScroll}
+              onWheel={(e) => {
+                if (e.deltaY !== 0 && tabsNavRef.current) {
+                  tabsNavRef.current.scrollLeft += e.deltaY;
+                  checkTabsScroll();
+                }
               }}
-              className={`px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
-                activeAdminTab === 'menu'
-                  ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
-                  : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
-              }`}
+              className="admin-tabs-scrollbar flex items-center gap-1.5 pb-2.5 pt-0.5 text-xs select-none scroll-smooth"
             >
-              <Utensils className="w-4 h-4" />
-              <span>Cardápio</span>
-              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
-                activeAdminTab === 'menu' ? 'bg-dark-950 text-brand-gold' : 'bg-dark-900 text-slate-400'
-              }`}>
-                {scopedProductsList.length}
-              </span>
-            </button>
+              
+              {/* 1. COZINHA (KDS) */}
+              <button
+                type="button"
+                onClick={() => setActiveAdminTab('kds')}
+                className={`px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+                  activeAdminTab === 'kds'
+                    ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
+                    : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
+                }`}
+              >
+                <ChefHat className="w-4 h-4" />
+                <span>Cozinha</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                  activeAdminTab === 'kds' ? 'bg-dark-950 text-brand-gold' : 'bg-dark-900 text-slate-400'
+                }`}>
+                  {activeOrdersList.length}
+                </span>
+              </button>
 
-            {/* 4. WHATSAPP MULTI-FILIAL */}
-            <button
-              type="button"
-              onClick={() => setActiveAdminTab('whatsapp')}
-              className={`px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
-                activeAdminTab === 'whatsapp'
-                  ? 'bg-emerald-500 text-dark-950 font-black shadow-sm'
-                  : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
-              }`}
-              title="Gerenciador de Conexões WhatsApp das Filiais"
-            >
-              <MessageSquare className="w-4 h-4 text-emerald-400" />
-              <span>WhatsApp</span>
-            </button>
+              {/* 2. NOVO PEDIDO (PDV) */}
+              <button
+                type="button"
+                onClick={() => setActiveAdminTab('pdv')}
+                className={`px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+                  activeAdminTab === 'pdv'
+                    ? 'bg-emerald-500 text-dark-950 font-black shadow-sm'
+                    : 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/30'
+                }`}
+              >
+                <Plus className="w-4 h-4 stroke-[3]" />
+                <span>Novo Pedido</span>
+                {pdvCart.length > 0 && (
+                  <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-500 text-dark-950 font-black">
+                    {pdvCart.length}
+                  </span>
+                )}
+              </button>
 
-            {/* 5. QR CODE MESA / BALCÃO */}
-            <button
-              type="button"
-              onClick={() => setActiveAdminTab('qrcode')}
-              className={`px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
-                activeAdminTab === 'qrcode'
-                  ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
-                  : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
-              }`}
-              title="QR Code e Link Oficial da Filial"
-            >
-              <QrCode className="w-4 h-4" />
-              <span>QR Code Mesa</span>
-            </button>
+              {/* 3. CARDÁPIO */}
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveAdminTab('menu');
+                  setMenuSubTab('products');
+                }}
+                className={`px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+                  activeAdminTab === 'menu'
+                    ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
+                    : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
+                }`}
+              >
+                <Utensils className="w-4 h-4" />
+                <span>Cardápio</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                  activeAdminTab === 'menu' ? 'bg-dark-950 text-brand-gold' : 'bg-dark-900 text-slate-400'
+                }`}>
+                  {scopedProductsList.length}
+                </span>
+              </button>
 
-            {/* 6. CONFIGURAÇÕES (TAXA, LOJA, CUPONS) */}
-            <button
-              type="button"
-              onClick={() => setActiveAdminTab('settings')}
-              className={`px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
-                activeAdminTab === 'settings'
-                  ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
-                  : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
-              }`}
-              title="Taxa da maquininha, dados da filial e cupons"
-            >
-              <Settings2 className="w-4 h-4" />
-              <span>Configurações</span>
-            </button>
+              {/* 4. WHATSAPP MULTI-FILIAL */}
+              <button
+                type="button"
+                onClick={() => setActiveAdminTab('whatsapp')}
+                className={`px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+                  activeAdminTab === 'whatsapp'
+                    ? 'bg-emerald-500 text-dark-950 font-black shadow-sm'
+                    : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
+                }`}
+                title="Gerenciador de Conexões WhatsApp das Filiais"
+              >
+                <MessageSquare className="w-4 h-4 text-emerald-400" />
+                <span>WhatsApp</span>
+              </button>
 
-            {/* ABAS DO MASTER (SUPER_ADMIN) */}
-            {currentUser?.role === ROLES.SUPER_ADMIN && (
-              <>
+              {/* 5. QR CODE MESA / BALCÃO */}
+              <button
+                type="button"
+                onClick={() => setActiveAdminTab('qrcode')}
+                className={`px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+                  activeAdminTab === 'qrcode'
+                    ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
+                    : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
+                }`}
+                title="QR Code e Link Oficial da Filial"
+              >
+                <QrCode className="w-4 h-4" />
+                <span>QR Code Mesa</span>
+              </button>
+
+              {/* 6. CONFIGURAÇÕES (TAXA, LOJA, CUPONS) */}
+              <button
+                type="button"
+                onClick={() => setActiveAdminTab('settings')}
+                className={`px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+                  activeAdminTab === 'settings'
+                    ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
+                    : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
+                }`}
+                title="Taxa da maquininha, dados da filial e cupons"
+              >
+                <Settings2 className="w-4 h-4" />
+                <span>Configurações</span>
+              </button>
+
+              {/* ABAS DO MASTER (SUPER_ADMIN) */}
+              {currentUser?.role === ROLES.SUPER_ADMIN && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setActiveAdminTab('master-overview')}
+                    className={`px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+                      activeAdminTab === 'master-overview'
+                        ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
+                        : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
+                    }`}
+                  >
+                    <BarChart3 className="w-4 h-4" />
+                    <span>Faturamento</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveAdminTab('branches')}
+                    className={`px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+                      activeAdminTab === 'branches'
+                        ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
+                        : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
+                    }`}
+                  >
+                    <Building2 className="w-4 h-4" />
+                    <span>Filiais</span>
+                    <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                      activeAdminTab === 'branches' ? 'bg-dark-950 text-brand-gold' : 'bg-dark-900 text-slate-400'
+                    }`}>
+                      {branchesList.length}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveAdminTab('users')}
+                    className={`px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+                      activeAdminTab === 'users'
+                        ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
+                        : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
+                    }`}
+                  >
+                    <Users className="w-4 h-4" />
+                    <span>Usuários</span>
+                  </button>
+                </>
+              )}
+
+              {/* DESEMPENHO DA FILIAL (BRANCH_ADMIN) */}
+              {currentUser?.role === ROLES.BRANCH_ADMIN && (
                 <button
                   type="button"
-                  onClick={() => setActiveAdminTab('master-overview')}
+                  onClick={() => setActiveAdminTab('branch-overview')}
                   className={`px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
-                    activeAdminTab === 'master-overview'
+                    activeAdminTab === 'branch-overview'
                       ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
                       : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
                   }`}
                 >
                   <BarChart3 className="w-4 h-4" />
-                  <span>Faturamento</span>
+                  <span>Desempenho</span>
                 </button>
+              )}
 
+              {/* BUFFET DISPONIBILIDADE (APENAS ARIQUEMES) */}
+              {currentBranch?.id === 'ariquemes' && (currentUser?.role === ROLES.SUPER_ADMIN || currentUser?.branchId === 'ariquemes') && (
                 <button
                   type="button"
-                  onClick={() => setActiveAdminTab('branches')}
+                  onClick={() => setActiveAdminTab('buffet')}
                   className={`px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
-                    activeAdminTab === 'branches'
+                    activeAdminTab === 'buffet'
+                      ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
+                      : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
+                  }`}
+                  title="Controlar disponibilidade dos pratos do Buffet (pausar se acabar na cozinha)"
+                >
+                  <Utensils className="w-4 h-4" />
+                  <span>Buffet (Pratos)</span>
+                  {unavailableBuffetIds.length > 0 ? (
+                    <span className="text-[10px] px-1.5 py-0.2 rounded-full font-black bg-rose-500 text-white animate-pulse">
+                      ⛔ {unavailableBuffetIds.length} pausados
+                    </span>
+                  ) : (
+                    <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                      activeAdminTab === 'buffet' ? 'bg-dark-950 text-brand-gold' : 'bg-dark-900 text-slate-400'
+                    }`}>
+                      Ativo
+                    </span>
+                  )}
+                </button>
+              )}
+
+              {/* GALERIA BUFFET (APENAS ARIQUEMES) */}
+              {currentBranch?.id === 'ariquemes' && (currentUser?.role === ROLES.SUPER_ADMIN || currentUser?.branchId === 'ariquemes') && (
+                <button
+                  type="button"
+                  onClick={() => setActiveAdminTab('gallery')}
+                  className={`px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+                    activeAdminTab === 'gallery'
                       ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
                       : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
                   }`}
                 >
-                  <Building2 className="w-4 h-4" />
-                  <span>Filiais</span>
-                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
-                    activeAdminTab === 'branches' ? 'bg-dark-950 text-brand-gold' : 'bg-dark-900 text-slate-400'
-                  }`}>
-                    {branchesList.length}
-                  </span>
+                  <Camera className="w-4 h-4" />
+                  <span>Galeria Buffet</span>
                 </button>
+              )}
 
+              {/* ATALHO BUFFET (APENAS ARIQUEMES) */}
+              {onSwitchToBuffet && currentBranch?.id === 'ariquemes' && (
                 <button
                   type="button"
-                  onClick={() => setActiveAdminTab('users')}
-                  className={`px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
-                    activeAdminTab === 'users'
-                      ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
-                      : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
-                  }`}
+                  onClick={onSwitchToBuffet}
+                  className="px-3 py-1.5 rounded-xl font-bold flex items-center gap-1 bg-amber-500/10 text-brand-gold hover:bg-amber-500/20 border border-brand-gold/30 transition-all cursor-pointer whitespace-nowrap text-xs flex-shrink-0"
+                  title="Acessar vitrine do Buffet El Shadday Ariquemes"
                 >
-                  <Users className="w-4 h-4" />
-                  <span>Usuários</span>
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Buffet 👑</span>
                 </button>
-              </>
-            )}
+              )}
 
-            {/* DESEMPENHO DA FILIAL (BRANCH_ADMIN) */}
-            {currentUser?.role === ROLES.BRANCH_ADMIN && (
+            </div>
+
+            {/* Scroll Right Button */}
+            {canScrollRight && (
               <button
                 type="button"
-                onClick={() => setActiveAdminTab('branch-overview')}
-                className={`px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
-                  activeAdminTab === 'branch-overview'
-                    ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
-                    : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
-                }`}
+                onClick={() => handleScrollTabs('right')}
+                className="absolute right-0 top-1/2 -translate-y-1/2 z-20 p-2 rounded-xl bg-dark-900/95 hover:bg-dark-850 text-brand-gold border border-brand-gold/40 shadow-xl backdrop-blur-md cursor-pointer transition-all active:scale-90 flex items-center justify-center translate-x-1 sm:translate-x-2 animate-pulse"
+                title="Rolar abas para a direita (ver mais opções)"
               >
-                <BarChart3 className="w-4 h-4" />
-                <span>Desempenho</span>
-              </button>
-            )}
-
-            {/* BUFFET DISPONIBILIDADE (APENAS ARIQUEMES) */}
-            {currentBranch?.id === 'ariquemes' && (currentUser?.role === ROLES.SUPER_ADMIN || currentUser?.branchId === 'ariquemes') && (
-              <button
-                type="button"
-                onClick={() => setActiveAdminTab('buffet')}
-                className={`px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
-                  activeAdminTab === 'buffet'
-                    ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
-                    : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
-                }`}
-                title="Controlar disponibilidade dos pratos do Buffet (pausar se acabar na cozinha)"
-              >
-                <Utensils className="w-4 h-4" />
-                <span>Buffet (Pratos)</span>
-                {unavailableBuffetIds.length > 0 ? (
-                  <span className="text-[10px] px-1.5 py-0.2 rounded-full font-black bg-rose-500 text-white animate-pulse">
-                    ⛔ {unavailableBuffetIds.length} pausados
-                  </span>
-                ) : (
-                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
-                    activeAdminTab === 'buffet' ? 'bg-dark-950 text-brand-gold' : 'bg-dark-900 text-slate-400'
-                  }`}>
-                    Ativo
-                  </span>
-                )}
-              </button>
-            )}
-
-            {/* GALERIA BUFFET (APENAS ARIQUEMES) */}
-            {currentBranch?.id === 'ariquemes' && (currentUser?.role === ROLES.SUPER_ADMIN || currentUser?.branchId === 'ariquemes') && (
-              <button
-                type="button"
-                onClick={() => setActiveAdminTab('gallery')}
-                className={`px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
-                  activeAdminTab === 'gallery'
-                    ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
-                    : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
-                }`}
-              >
-                <Camera className="w-4 h-4" />
-                <span>Galeria Buffet</span>
-              </button>
-            )}
-
-            {/* ATALHO BUFFET (APENAS ARIQUEMES) */}
-            {onSwitchToBuffet && currentBranch?.id === 'ariquemes' && (
-              <button
-                type="button"
-                onClick={onSwitchToBuffet}
-                className="ml-auto px-3 py-1.5 rounded-xl font-bold flex items-center gap-1 bg-amber-500/10 text-brand-gold hover:bg-amber-500/20 border border-brand-gold/30 transition-all cursor-pointer whitespace-nowrap text-xs"
-                title="Acessar vitrine do Buffet El Shadday Ariquemes"
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>Buffet 👑</span>
+                <ChevronRight className="w-4 h-4 stroke-[2.5]" />
               </button>
             )}
 
@@ -3125,6 +3759,20 @@ export function AdminDashboard({
                     {whatsAppSettings.autoNotify ? '🔔 Avisos: ON' : '🔕 Avisos: OFF'}
                   </div>
                 )}
+
+                {/* Fechar Caixa Button */}
+                <button
+                  type="button"
+                  onClick={() => setIsCashClosingModalOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-dark-950 hover:bg-dark-850 border border-brand-gold/40 text-xs font-bold transition-all cursor-pointer shadow-sm"
+                  title="Controle de Caixa: Ver resumo do turno atual ou fechar o caixa"
+                >
+                  <Lock className="w-3.5 h-3.5 text-brand-gold" />
+                  <span className="text-slate-300">Caixa: <strong className="text-brand-gold">R$ {currentShiftTotals.grossRevenue.toFixed(2).replace('.', ',')}</strong></span>
+                  <span className="text-[10px] bg-brand-gold/15 text-amber-300 px-1.5 py-0.5 rounded font-black border border-brand-gold/30">
+                    Fechar
+                  </span>
+                </button>
               </div>
 
             </div>
@@ -3213,10 +3861,106 @@ export function AdminDashboard({
                     <XCircle className="w-3.5 h-3.5" />
                     <span>Cancelados ({cancelledCount})</span>
                   </button>
+
+                  {scopedOrders.some(o => o.shiftClosedAt || o.isArchived) && (
+                    <button
+                      type="button"
+                      onClick={() => setShowArchivedKdsOrders(!showArchivedKdsOrders)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1 border ${
+                        showArchivedKdsOrders 
+                          ? 'bg-purple-600 text-white font-black shadow-sm' 
+                          : 'bg-dark-850 hover:bg-dark-800 text-purple-300 border-purple-500/30'
+                      }`}
+                      title="Clique para ver os pedidos dos caixas anteriores que já foram fechados"
+                    >
+                      <span>📦 {showArchivedKdsOrders ? 'Ocultar Caixas Fechados' : 'Ver Caixas Fechados'}</span>
+                    </button>
+                  )}
                 </div>
 
-                {/* Right controls: Auto-Aba Toggle & Search input */}
+                {/* Right controls: Grid Layout, Compact Mode, Sound Tester, Auto-Aba & Search */}
                 <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                  {/* Grid Layout Scheme Selector */}
+                  <div className="flex items-center gap-1 p-0.5 rounded-xl bg-dark-950 border border-dark-750" title="Mudar o esquema da grade de pedidos na tela">
+                    <span className="text-[10px] text-slate-500 font-bold px-1.5 uppercase tracking-wider hidden lg:inline">Grade:</span>
+                    <button
+                      type="button"
+                      onClick={() => handleSetKdsGridCols('2')}
+                      className={`px-2 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        kdsGridCols === '2'
+                          ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
+                          : 'text-slate-400 hover:text-white hover:bg-dark-800'
+                      }`}
+                      title="2 Colunas (Padrão Grande)"
+                    >
+                      2 Col
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSetKdsGridCols('3')}
+                      className={`px-2 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        kdsGridCols === '3'
+                          ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
+                          : 'text-slate-400 hover:text-white hover:bg-dark-800'
+                      }`}
+                      title="3 Colunas (Recomendado - Mais pedidos visíveis na tela)"
+                    >
+                      3 Col
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSetKdsGridCols('4')}
+                      className={`px-2 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        kdsGridCols === '4'
+                          ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
+                          : 'text-slate-400 hover:text-white hover:bg-dark-800'
+                      }`}
+                      title="4 Colunas (Mural Compacto - Máxima visão para dias de pico)"
+                    >
+                      4 Col
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSetKdsGridCols('1')}
+                      className={`px-2 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        kdsGridCols === '1'
+                          ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
+                          : 'text-slate-400 hover:text-white hover:bg-dark-800'
+                      }`}
+                      title="1 Coluna (Lista corrida)"
+                    >
+                      1 Col
+                    </button>
+                  </div>
+
+                  {/* Compact Mode Toggle */}
+                  <button
+                    type="button"
+                    onClick={handleToggleKdsCompactMode}
+                    className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 border ${
+                      kdsCompactMode
+                        ? 'bg-brand-gold/20 text-brand-gold border-brand-gold/50'
+                        : 'bg-dark-850 text-slate-400 border-dark-750 hover:bg-dark-800'
+                    }`}
+                    title="Diminui o tamanho e o espaçamento dos cartões para caber ainda mais pedidos na tela"
+                  >
+                    <span>🗜️ {kdsCompactMode ? 'Compacto: ON' : 'Compacto: OFF'}</span>
+                  </button>
+
+                  {/* Sound Test / Volume Button */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsAudioUnlocked(true);
+                      playChime(true);
+                    }}
+                    className="px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/40"
+                    title="Testar o alarme sonoro alto da cozinha"
+                  >
+                    <BellRing className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Som Alto</span>
+                  </button>
+
                   <button
                     type="button"
                     onClick={toggleAutoFollowTab}
@@ -3228,10 +3972,10 @@ export function AdminDashboard({
                     title="Quando ativado, a tela abre automaticamente a aba do novo status do pedido sempre que você avançar ou mudar seu status"
                   >
                     <RefreshCw className={`w-3.5 h-3.5 ${autoFollowTab ? 'text-brand-gold' : 'text-slate-400'}`} />
-                    <span>Auto-Mudar Aba: <strong>{autoFollowTab ? 'ATIVO' : 'OFF'}</strong></span>
+                    <span>Auto-Aba: <strong>{autoFollowTab ? 'ON' : 'OFF'}</strong></span>
                   </button>
 
-                  <div className="relative w-full sm:w-60">
+                  <div className="relative w-full sm:w-56">
                     <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                     <input
                       type="text"
@@ -3306,7 +4050,12 @@ export function AdminDashboard({
                   </button>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className={`
+                  ${kdsGridCols === '1' ? 'grid grid-cols-1 gap-3.5 max-w-2xl mx-auto' : ''}
+                  ${kdsGridCols === '2' ? 'grid grid-cols-1 md:grid-cols-2 gap-4' : ''}
+                  ${kdsGridCols === '3' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3' : ''}
+                  ${kdsGridCols === '4' ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5' : ''}
+                `}>
                   {filteredOrders.map((order) => {
                     const elapsedMin = getElapsedMinutes(order.createdAt);
                     const isDelayed = isOrderDelayed(order);
@@ -3314,11 +4063,14 @@ export function AdminDashboard({
                     const isCancelled = currentStatus === 'CANCELADO';
                     const isPaid = order.paymentStatus === 'PAGO_APROVADO';
                     const isHighlighted = highlightedOrderId === order.orderId;
+                    const orderDisplayNumber = formatOrderNumber(order);
 
                     return (
                       <div
                         key={order.orderId}
-                        className={`rounded-2xl border p-4 sm:p-5 flex flex-col justify-between transition-all duration-300 shadow-md ${
+                        className={`rounded-2xl border flex flex-col justify-between transition-all duration-300 shadow-md ${
+                          kdsCompactMode ? 'p-3' : 'p-4 sm:p-5'
+                        } ${
                           isHighlighted
                             ? 'bg-brand-gold/15 border-brand-gold ring-2 ring-brand-gold shadow-glow-gold scale-[1.01]'
                             : isCancelled
@@ -3332,12 +4084,17 @@ export function AdminDashboard({
                       >
                         <div>
                           {/* Top Header of the card */}
-                          <div className="flex items-start justify-between gap-2 border-b border-dark-800 pb-3">
+                          <div className={`flex items-start justify-between gap-2 border-b border-dark-800 ${kdsCompactMode ? 'pb-2' : 'pb-3'}`}>
                             <div>
                               <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-display font-black text-lg text-white">
-                                  #{order.orderId}
+                                <span className="font-display font-black text-xl text-brand-gold tracking-tight bg-dark-950 px-2.5 py-0.5 rounded-xl border border-brand-gold/40 shadow-sm">
+                                  #{orderDisplayNumber}
                                 </span>
+                                {order.orderId && order.orderId !== orderDisplayNumber && (
+                                  <span className="text-[10px] text-slate-500 font-mono hidden sm:inline" title="Identificador único">
+                                    ({order.orderId})
+                                  </span>
+                                )}
 
                                 {/* Status Selector Pill in Header */}
                                 {!isCancelled ? (
@@ -4356,18 +5113,30 @@ export function AdminDashboard({
                     {pdvDeliveryType === 'delivery' && (
                       <div className="space-y-2 p-2.5 rounded-xl bg-dark-950 border border-dark-800">
                         <div>
-                          <label className="text-[10px] text-slate-400 block mb-0.5">Bairro em Ariquemes:</label>
+                          <div className="flex items-center justify-between mb-0.5">
+                            <label className="text-[10px] text-slate-400">Bairro em Ariquemes:</label>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveAdminTab('settings');
+                                setSettingsSubTab('delivery-fees');
+                              }}
+                              className="text-[10px] text-brand-gold hover:underline flex items-center gap-0.5"
+                            >
+                              ⚙️ Editar Taxas
+                            </button>
+                          </div>
                           <select
                             value={pdvDistrict.id}
                             onChange={(e) => {
-                              const found = ARIQUEMES_DISTRICTS.find(d => d.id === e.target.value);
+                              const found = districtsList.find(d => d.id === e.target.value);
                               if (found) setPdvDistrict(found);
                             }}
                             className="w-full px-2.5 py-1.5 rounded-xl bg-dark-900 border border-dark-750 text-white text-xs focus:outline-none focus:border-brand-gold"
                           >
-                            {ARIQUEMES_DISTRICTS.map(d => (
-                              <option key={d.id} value={d.id}>
-                                {d.name} (+ R$ {d.price.toFixed(2)})
+                            {districtsList.map(d => (
+                              <option key={d.id} value={d.id} disabled={d.isAvailable === false}>
+                                {d.name} {d.isAvailable === false ? '(Pausado / Esgotado)' : `(+ R$ ${(Number(d.price) || 0).toFixed(2).replace('.', ',')})`}
                               </option>
                             ))}
                           </select>
@@ -4693,6 +5462,19 @@ export function AdminDashboard({
 
                   <button
                     type="button"
+                    onClick={() => setSettingsSubTab('delivery-fees')}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                      settingsSubTab === 'delivery-fees'
+                        ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
+                        : 'bg-dark-800/80 text-emerald-300 hover:text-white hover:bg-dark-800'
+                    }`}
+                  >
+                    <Bike className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>🛵 Taxas de Entrega ({districtsList.length} Bairros)</span>
+                  </button>
+
+                  <button
+                    type="button"
                     onClick={() => setSettingsSubTab('store')}
                     className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
                       settingsSubTab === 'store'
@@ -4757,6 +5539,18 @@ export function AdminDashboard({
                     >
                       <Sparkles className="w-3.5 h-3.5 text-purple-400" />
                       <span>Açaí & Acompanhamentos ({(acaiSettings.complements || []).length})</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveAdminTab('settings');
+                        setSettingsSubTab('delivery-fees');
+                      }}
+                      className="px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap bg-dark-800/80 text-emerald-300 hover:text-white hover:bg-emerald-950/40"
+                    >
+                      <Bike className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>🛵 Taxas de Entrega ({districtsList.length})</span>
                     </button>
                   </div>
 
@@ -5492,7 +6286,16 @@ export function AdminDashboard({
                                   <h5 className="text-xs sm:text-sm font-bold text-white truncate">
                                     {comp.name}
                                   </h5>
-                                  <div className="flex items-center gap-1.5 mt-1">
+                                  <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                                    {Number(comp.price) > 0 ? (
+                                      <span className="text-[10px] px-2 py-0.5 rounded-full font-black bg-amber-500/20 text-amber-300 border border-amber-500/30 font-mono">
+                                        + R$ {Number(comp.price).toFixed(2).replace('.', ',')}
+                                      </span>
+                                    ) : (
+                                      <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/25">
+                                        Grátis (Incluso)
+                                      </span>
+                                    )}
                                     {isDef && (
                                       <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30">
                                         Padrão ⭐
@@ -5513,7 +6316,7 @@ export function AdminDashboard({
                                     ? 'bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25 border border-emerald-500/30'
                                     : 'bg-amber-500/15 text-amber-300 hover:bg-amber-500/25 border border-amber-500/30'
                                 }`}
-                                title={isAvail ? 'Clique para pausar este item' : 'Clique para ativar este item'}
+                                title={isAvail ? 'Clique para pausar este item (esgotado)' : 'Clique para ativar este item (disponível)'}
                               >
                                 {isAvail ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
                                 <span>{isAvail ? 'Disponível' : 'Esgotado'}</span>
@@ -5539,7 +6342,7 @@ export function AdminDashboard({
                                   type="button"
                                   onClick={() => handleOpenEditComplement(comp)}
                                   className="p-1.5 rounded-lg bg-dark-800 hover:bg-dark-750 text-slate-300 hover:text-purple-300 transition-colors cursor-pointer"
-                                  title="Editar nome ou ícone"
+                                  title="Editar nome, preço ou ícone"
                                 >
                                   <Edit2 className="w-3.5 h-3.5" />
                                 </button>
@@ -5563,53 +6366,151 @@ export function AdminDashboard({
 
                   {/* Card 3: COBERTURAS DO AÇAÍ */}
                   <div className="p-5 sm:p-6 rounded-2xl bg-dark-850 border border-dark-750 space-y-4">
-                    <div className="border-b border-dark-800 pb-3">
-                      <h4 className="text-sm font-extrabold text-white flex items-center gap-2">
-                        <Sparkles className="w-4 h-4 text-purple-400" />
-                        Coberturas para Copos e Barca de Açaí
-                      </h4>
-                      <p className="text-xs text-slate-400 mt-0.5">
-                        Adicione ou remova opções de cobertura que o cliente pode selecionar.
-                      </p>
-                    </div>
+                    <div className="border-b border-dark-800 pb-3 flex items-center justify-between flex-wrap gap-2">
+                      <div>
+                        <h4 className="text-sm font-extrabold text-white flex items-center gap-2">
+                          <Sparkles className="w-4 h-4 text-purple-400" />
+                          Coberturas para Copos e Barca de Açaí ({(acaiSettings.coberturas || []).length})
+                        </h4>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          Configure opções de cobertura, adicione preços diferentes e pause opções esgotadas na cozinha.
+                        </p>
+                      </div>
 
-                    <div className="flex flex-wrap gap-2">
-                      {(acaiSettings.coberturas || []).map(cob => (
-                        <div
-                          key={cob}
-                          className="px-3 py-1.5 rounded-xl bg-dark-900 border border-purple-500/30 text-xs text-white font-bold flex items-center gap-2"
-                        >
-                          <span>{cob}</span>
-                          {cob !== 'Sem Cobertura' && (
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteCobertura(cob)}
-                              className="text-slate-500 hover:text-red-400 cursor-pointer transition-colors"
-                              title="Remover cobertura"
-                            >
-                              <X className="w-3 h-3" />
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Form Adicionar Cobertura */}
-                    <form onSubmit={handleAddCobertura} className="flex items-center gap-2 max-w-md pt-2">
-                      <input
-                        type="text"
-                        value={newCoberturaText}
-                        onChange={(e) => setNewCoberturaText(e.target.value)}
-                        placeholder="Ex: Cobertura de Maracujá..."
-                        className="flex-1 px-3.5 py-2 rounded-xl bg-dark-900 border border-dark-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-400"
-                      />
                       <button
-                        type="submit"
-                        className="px-4 py-2 rounded-xl bg-purple-500 hover:bg-purple-600 text-white font-bold text-xs cursor-pointer transition-colors flex items-center gap-1"
+                        type="button"
+                        onClick={handleOpenCreateCobertura}
+                        className="px-3.5 py-2 rounded-xl bg-dark-800 hover:bg-dark-750 text-purple-300 border border-purple-500/30 text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
                       >
                         <Plus className="w-3.5 h-3.5" />
-                        <span>Adicionar</span>
+                        <span>Nova Cobertura</span>
                       </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {(acaiSettings.coberturas || []).map(rawCob => {
+                        const cob = typeof rawCob === 'string' ? { id: rawCob, name: rawCob, price: 0, isAvailable: true } : rawCob;
+                        const isAvail = cob.isAvailable !== false;
+                        const isSemCob = cob.name === 'Sem Cobertura' || cob.id === 'sem-cobertura';
+                        const price = Number(cob.price) || 0;
+
+                        return (
+                          <div
+                            key={cob.id || cob.name}
+                            className={`p-3.5 rounded-2xl border transition-all flex flex-col justify-between gap-3 ${
+                              !isAvail 
+                                ? 'bg-dark-950/60 border-dark-800 opacity-60' 
+                                : 'bg-dark-900 border-dark-750 hover:border-purple-500/40 shadow-sm'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <span className="text-2xl p-1 rounded-xl bg-dark-950 border border-dark-800 flex-shrink-0">
+                                  🍯
+                                </span>
+                                <div className="min-w-0">
+                                  <h5 className="text-xs sm:text-sm font-bold text-white truncate">
+                                    {cob.name}
+                                  </h5>
+                                  <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                                    {price > 0 ? (
+                                      <span className="text-[10px] px-2 py-0.5 rounded-full font-black bg-amber-500/20 text-amber-300 border border-amber-500/30 font-mono">
+                                        + R$ {price.toFixed(2).replace('.', ',')}
+                                      </span>
+                                    ) : (
+                                      <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/25">
+                                        Grátis (Incluso)
+                                      </span>
+                                    )}
+                                    {isSemCob && (
+                                      <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-dark-800 text-slate-400 border border-dark-700">
+                                        Padrão
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="pt-2 border-t border-dark-800 flex items-center justify-between gap-2">
+                              {/* Toggle Availability */}
+                              <button
+                                type="button"
+                                onClick={() => handleToggleCoberturaAvailability(cob.id || cob.name)}
+                                className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer ${
+                                  isAvail
+                                    ? 'bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25 border border-emerald-500/30'
+                                    : 'bg-amber-500/15 text-amber-300 hover:bg-amber-500/25 border border-amber-500/30'
+                                }`}
+                                title={isAvail ? 'Clique para pausar esta cobertura (esgotado)' : 'Clique para ativar esta cobertura (disponível)'}
+                              >
+                                {isAvail ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+                                <span>{isAvail ? 'Disponível' : 'Esgotado'}</span>
+                              </button>
+
+                              <div className="flex items-center gap-1">
+                                {/* Edit */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenEditCobertura(cob)}
+                                  className="p-1.5 rounded-lg bg-dark-800 hover:bg-dark-750 text-slate-300 hover:text-purple-300 transition-colors cursor-pointer"
+                                  title="Editar nome ou preço"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+
+                                {/* Delete */}
+                                {!isSemCob && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteCobertura(cob.id || cob.name)}
+                                    className="p-1.5 rounded-lg bg-dark-800 hover:bg-red-950/40 text-slate-400 hover:text-red-400 transition-colors cursor-pointer"
+                                    title="Remover cobertura"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Quick Add Form */}
+                    <form onSubmit={handleAddCobertura} className="p-4 rounded-xl bg-dark-900 border border-dark-800 space-y-2 mt-4">
+                      <span className="text-xs font-bold text-slate-300 block">Adição Rápida de Cobertura:</span>
+                      <div className="flex flex-col sm:flex-row items-center gap-2">
+                        <input
+                          type="text"
+                          value={newCoberturaText}
+                          onChange={(e) => setNewCoberturaText(e.target.value)}
+                          placeholder="Ex: Cobertura de Maracujá..."
+                          className="flex-1 w-full px-3.5 py-2.5 rounded-xl bg-dark-950 border border-dark-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-400"
+                        />
+                        <div className="flex items-center gap-2 w-full sm:w-auto">
+                          <div className="relative w-full sm:w-32">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-500">R$</span>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.50"
+                              value={newCoberturaPrice}
+                              onChange={(e) => setNewCoberturaPrice(e.target.value)}
+                              placeholder="0,00"
+                              className="w-full pl-8 pr-2.5 py-2.5 rounded-xl bg-dark-950 border border-dark-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-400 font-mono"
+                              title="Preço adicional (0 = grátis)"
+                            />
+                          </div>
+                          <button
+                            type="submit"
+                            className="px-4 py-2.5 rounded-xl bg-purple-500 hover:bg-purple-600 text-white font-bold text-xs cursor-pointer transition-colors flex items-center justify-center gap-1.5 flex-shrink-0"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Adicionar</span>
+                          </button>
+                        </div>
+                      </div>
                     </form>
                   </div>
 
@@ -5663,11 +6564,12 @@ export function AdminDashboard({
                       <label className="block text-xs font-bold text-slate-300">
                         1. Como você deseja cobrar a taxa da maquininha?
                       </label>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                         {[
                           { id: 'percentage', label: 'Porcentagem Geral (%)', desc: 'Aplica um % fixo no valor dos itens (ex: 3.5%)' },
-                          { id: 'split', label: 'Débito e Crédito Separados', desc: 'Taxas diferentes para Débito e Crédito' },
-                          { id: 'fixed', label: 'Valor Fixo em R$', desc: 'Adiciona um valor fixo (ex: R$ 2,00 por pedido)' }
+                          { id: 'split', label: 'Débito e Crédito em %', desc: 'Taxas em % separadas para Débito e Crédito' },
+                          { id: 'split_fixed', label: 'Débito e Crédito em R$', desc: 'Valores em R$ separados para Débito e Crédito' },
+                          { id: 'fixed', label: 'Valor Fixo Geral em R$', desc: 'Adiciona um valor fixo único (ex: R$ 2,00 por pedido)' }
                         ].map(opt => (
                           <button
                             key={opt.id}
@@ -5722,12 +6624,12 @@ export function AdminDashboard({
                                 type="text"
                                 value={tempCardDebit}
                                 onChange={(e) => setTempCardDebit(e.target.value)}
-                                placeholder="Ex: 2.0"
+                                placeholder="0"
                                 className="w-full pl-3 pr-8 py-2.5 rounded-xl bg-dark-900 border border-dark-700 text-white font-mono text-base font-bold focus:outline-none focus:border-brand-gold"
                               />
                               <span className="absolute right-3 top-1/2 -translate-y-1/2 font-bold text-slate-400">%</span>
                             </div>
-                            <span className="text-[10px] text-slate-500 mt-1 block">Exemplo: 2.0%</span>
+                            <span className="text-[10px] text-slate-500 mt-1 block">Digite 0 para isento (sem taxa) ou ex: 1.5%</span>
                           </div>
 
                           <div>
@@ -5739,12 +6641,50 @@ export function AdminDashboard({
                                 type="text"
                                 value={tempCardCredit}
                                 onChange={(e) => setTempCardCredit(e.target.value)}
-                                placeholder="Ex: 4.5"
+                                placeholder="3.5"
                                 className="w-full pl-3 pr-8 py-2.5 rounded-xl bg-dark-900 border border-dark-700 text-white font-mono text-base font-bold focus:outline-none focus:border-brand-gold"
                               />
                               <span className="absolute right-3 top-1/2 -translate-y-1/2 font-bold text-slate-400">%</span>
                             </div>
-                            <span className="text-[10px] text-slate-500 mt-1 block">Exemplo: 4.5%</span>
+                            <span className="text-[10px] text-slate-500 mt-1 block">Exemplo: 3.5% ou 4.5%</span>
+                          </div>
+                        </div>
+                      )}
+
+                      {tempCardType === 'split_fixed' && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-md">
+                          <div>
+                            <label className="block text-xs text-slate-400 mb-1">
+                              Taxa do Cartão de Débito (R$):
+                            </label>
+                            <div className="relative">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-slate-400">R$</span>
+                              <input
+                                type="text"
+                                value={tempCardDebitFixed}
+                                onChange={(e) => setTempCardDebitFixed(e.target.value)}
+                                placeholder="0.00"
+                                className="w-full pl-10 pr-3 py-2.5 rounded-xl bg-dark-900 border border-dark-700 text-white font-mono text-base font-bold focus:outline-none focus:border-brand-gold"
+                              />
+                            </div>
+                            <span className="text-[10px] text-slate-500 mt-1 block">Digite 0.00 para Débito sem taxa (grátis)</span>
+                          </div>
+
+                          <div>
+                            <label className="block text-xs text-slate-400 mb-1">
+                              Taxa do Cartão de Crédito (R$):
+                            </label>
+                            <div className="relative">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-slate-400">R$</span>
+                              <input
+                                type="text"
+                                value={tempCardCreditFixed}
+                                onChange={(e) => setTempCardCreditFixed(e.target.value)}
+                                placeholder="3.00"
+                                className="w-full pl-10 pr-3 py-2.5 rounded-xl bg-dark-900 border border-dark-700 text-white font-mono text-base font-bold focus:outline-none focus:border-brand-gold"
+                              />
+                            </div>
+                            <span className="text-[10px] text-slate-500 mt-1 block">Exemplo: R$ 3,00 fixos no crédito</span>
                           </div>
                         </div>
                       )}
@@ -5810,10 +6750,12 @@ export function AdminDashboard({
                         placeholder={`Automático: ${getCardMachineNoticeText({
                           active: tempCardActive,
                           type: tempCardType,
-                          percentageRate: parseFloat(tempCardPercentage) || 3.5,
-                          fixedRate: parseFloat(tempCardFixed) || 2.0,
-                          debitRate: parseFloat(tempCardDebit) || 2.0,
-                          creditRate: parseFloat(tempCardCredit) || 4.5
+                          percentageRate: parseFloat(tempCardPercentage) || 0,
+                          fixedRate: parseFloat(tempCardFixed) || 0,
+                          debitRate: parseFloat(tempCardDebit) || 0,
+                          creditRate: parseFloat(tempCardCredit) || 0,
+                          debitFixed: parseFloat(tempCardDebitFixed) || 0,
+                          creditFixed: parseFloat(tempCardCreditFixed) || 0
                         })}`}
                         className="w-full px-3.5 py-2.5 rounded-xl bg-dark-950 border border-dark-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand-gold leading-relaxed"
                       />
@@ -5823,56 +6765,131 @@ export function AdminDashboard({
                     </div>
 
                     {/* Simulador em Tempo Real */}
-                    <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/25 space-y-3">
-                      <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
-                        <Sparkles className="w-4 h-4 text-amber-400" />
-                        Simulação em Tempo Real (Exemplo com Pedido de R$ 50,00 no Cartão):
-                      </span>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-                        <div className="bg-dark-950/70 p-2.5 rounded-lg border border-dark-800">
-                          <span className="text-slate-400 block text-[10px]">Subtotal do Pedido:</span>
-                          <span className="font-bold text-white">R$ 50,00</span>
-                        </div>
-                        <div className="bg-dark-950/70 p-2.5 rounded-lg border border-dark-800">
-                          <span className="text-slate-400 block text-[10px]">Taxa Calculada:</span>
-                          <span className="font-bold text-brand-gold">
-                            + R$ {calculateCardMachineFee(50, {
-                              active: tempCardActive,
-                              type: tempCardType,
-                              percentageRate: parseFloat(tempCardPercentage) || 0,
-                              fixedRate: parseFloat(tempCardFixed) || 0,
-                              debitRate: parseFloat(tempCardDebit) || 0,
-                              creditRate: parseFloat(tempCardCredit) || 0
-                            }, 'credito').toFixed(2).replace('.', ',')}
-                          </span>
-                        </div>
-                        <div className="bg-dark-950/70 p-2.5 rounded-lg border border-dark-800 sm:col-span-2">
-                          <span className="text-slate-400 block text-[10px]">Total a Pagar ({tempCardAutoAdd ? 'Com Taxa Somada' : 'Sem Taxa Somada'}):</span>
-                          <span className="font-extrabold text-emerald-400 text-sm">
-                            R$ {(50 + (tempCardAutoAdd ? calculateCardMachineFee(50, {
-                              active: tempCardActive,
-                              type: tempCardType,
-                              percentageRate: parseFloat(tempCardPercentage) || 0,
-                              fixedRate: parseFloat(tempCardFixed) || 0,
-                              debitRate: parseFloat(tempCardDebit) || 0,
-                              creditRate: parseFloat(tempCardCredit) || 0
-                            }, 'credito') : 0)).toFixed(2).replace('.', ',')}
-                          </span>
-                        </div>
-                      </div>
+                    {(() => {
+                      const simSettings = {
+                        active: tempCardActive,
+                        type: tempCardType,
+                        percentageRate: parseFloat(tempCardPercentage) || 0,
+                        fixedRate: parseFloat(tempCardFixed) || 0,
+                        debitRate: parseFloat(tempCardDebit) || 0,
+                        creditRate: parseFloat(tempCardCredit) || 0,
+                        debitFixed: parseFloat(tempCardDebitFixed) || 0,
+                        creditFixed: parseFloat(tempCardCreditFixed) || 0
+                      };
 
-                      <div className="pt-1 text-[11px] text-amber-200/90 leading-relaxed border-t border-amber-500/20">
-                        <strong>Como o cliente verá na sacola:</strong> {getCardMachineNoticeText({
-                          active: tempCardActive,
-                          type: tempCardType,
-                          percentageRate: parseFloat(tempCardPercentage) || 3.5,
-                          fixedRate: parseFloat(tempCardFixed) || 2.0,
-                          debitRate: parseFloat(tempCardDebit) || 2.0,
-                          creditRate: parseFloat(tempCardCredit) || 4.5,
-                          customNotice: tempCardCustomNotice
-                        })}
-                      </div>
-                    </div>
+                      const isSplitType = tempCardType === 'split' || tempCardType === 'split_fixed';
+                      const debFee = calculateCardMachineFee(50, simSettings, 'debito');
+                      const credFee = calculateCardMachineFee(50, simSettings, 'credito');
+
+                      return (
+                        <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/25 space-y-3">
+                          <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                            <Sparkles className="w-4 h-4 text-amber-400" />
+                            Simulação em Tempo Real (Exemplo com Pedido de R$ 50,00 no Cartão):
+                          </span>
+
+                          {isSplitType ? (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                              {/* Simulação Débito */}
+                              <div className={`p-3.5 rounded-xl border ${debFee === 0 ? 'bg-emerald-950/40 border-emerald-500/40' : 'bg-dark-950/70 border-dark-800'} space-y-2`}>
+                                <div className="flex items-center justify-between">
+                                  <span className="font-extrabold text-white flex items-center gap-1.5 text-xs">
+                                    💳 Pagamento no DÉBITO
+                                  </span>
+                                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-black ${debFee === 0 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-300'}`}>
+                                    {debFee === 0 ? 'Taxa Grátis (R$ 0,00)' : `+ R$ ${debFee.toFixed(2).replace('.', ',')}`}
+                                  </span>
+                                </div>
+                                <div className="space-y-1.5 text-[11px]">
+                                  <div className="flex justify-between text-slate-400">
+                                    <span>Subtotal do Pedido:</span>
+                                    <span className="text-white font-semibold">R$ 50,00</span>
+                                  </div>
+                                  <div className="flex justify-between text-slate-400">
+                                    <span>Taxa da Maquininha:</span>
+                                    <span className={`font-bold ${debFee === 0 ? 'text-emerald-400' : 'text-brand-gold'}`}>
+                                      {debFee === 0 ? 'R$ 0,00 (Sem taxa)' : `+ R$ ${debFee.toFixed(2).replace('.', ',')}`}
+                                    </span>
+                                  </div>
+                                  <div className="pt-2 border-t border-dark-800 flex justify-between items-center font-extrabold">
+                                    <span className="text-white">Total no Débito:</span>
+                                    <span className="text-emerald-400 text-sm">
+                                      R$ {(50 + (tempCardAutoAdd ? debFee : 0)).toFixed(2).replace('.', ',')}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Simulação Crédito */}
+                              <div className={`p-3.5 rounded-xl border ${credFee === 0 ? 'bg-emerald-950/40 border-emerald-500/40' : 'bg-dark-950/70 border-dark-800'} space-y-2`}>
+                                <div className="flex items-center justify-between">
+                                  <span className="font-extrabold text-white flex items-center gap-1.5 text-xs">
+                                    💳 Pagamento no CRÉDITO
+                                  </span>
+                                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-black ${credFee === 0 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-300'}`}>
+                                    {credFee === 0 ? 'Taxa Grátis (R$ 0,00)' : `+ R$ ${credFee.toFixed(2).replace('.', ',')}`}
+                                  </span>
+                                </div>
+                                <div className="space-y-1.5 text-[11px]">
+                                  <div className="flex justify-between text-slate-400">
+                                    <span>Subtotal do Pedido:</span>
+                                    <span className="text-white font-semibold">R$ 50,00</span>
+                                  </div>
+                                  <div className="flex justify-between text-slate-400">
+                                    <span>Taxa da Maquininha:</span>
+                                    <span className={`font-bold ${credFee === 0 ? 'text-emerald-400' : 'text-brand-gold'}`}>
+                                      {credFee === 0 ? 'R$ 0,00 (Sem taxa)' : `+ R$ ${credFee.toFixed(2).replace('.', ',')}`}
+                                    </span>
+                                  </div>
+                                  <div className="pt-2 border-t border-dark-800 flex justify-between items-center font-extrabold">
+                                    <span className="text-white">Total no Crédito:</span>
+                                    <span className="text-emerald-400 text-sm">
+                                      R$ {(50 + (tempCardAutoAdd ? credFee : 0)).toFixed(2).replace('.', ',')}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                              <div className="bg-dark-950/70 p-2.5 rounded-lg border border-dark-800">
+                                <span className="text-slate-400 block text-[10px]">Subtotal do Pedido:</span>
+                                <span className="font-bold text-white">R$ 50,00</span>
+                              </div>
+                              <div className="bg-dark-950/70 p-2.5 rounded-lg border border-dark-800">
+                                <span className="text-slate-400 block text-[10px]">Taxa Calculada:</span>
+                                <span className={`font-bold ${credFee === 0 ? 'text-emerald-400' : 'text-brand-gold'}`}>
+                                  {credFee === 0 ? 'R$ 0,00 (Sem taxa)' : `+ R$ ${credFee.toFixed(2).replace('.', ',')}`}
+                                </span>
+                              </div>
+                              <div className="bg-dark-950/70 p-2.5 rounded-lg border border-dark-800 sm:col-span-2">
+                                <span className="text-slate-400 block text-[10px]">Total a Pagar ({tempCardAutoAdd ? 'Com Taxa Somada' : 'Sem Taxa Somada'}):</span>
+                                <span className="font-extrabold text-emerald-400 text-sm">
+                                  R$ {(50 + (tempCardAutoAdd ? credFee : 0)).toFixed(2).replace('.', ',')}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="pt-2 text-[11px] text-amber-200/90 leading-relaxed border-t border-amber-500/20 space-y-1">
+                            {isSplitType ? (
+                              <>
+                                <div>
+                                  <strong className="text-white">Aviso exibido para Débito:</strong> {getCardMachineNoticeText(simSettings, 'debito')}
+                                </div>
+                                <div>
+                                  <strong className="text-white">Aviso exibido para Crédito:</strong> {getCardMachineNoticeText(simSettings, 'credito')}
+                                </div>
+                              </>
+                            ) : (
+                              <div>
+                                <strong className="text-white">Como o cliente verá na sacola:</strong> {getCardMachineNoticeText(simSettings)}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                     {/* Salvar */}
                     <div className="flex justify-end pt-2">
@@ -6396,6 +7413,341 @@ export function AdminDashboard({
               </>
             )}
 
+            {/* SUBTAB 4: TAXAS DE ENTREGA POR BAIRRO */}
+            {(activeAdminTab === 'settings' ? settingsSubTab === 'delivery-fees' : menuSubTab === 'delivery-fees') && (
+              <div className="mt-5 space-y-6">
+                {/* Top Header Card */}
+                <div className="p-5 sm:p-6 rounded-2xl bg-dark-850 border border-dark-750 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="flex items-start sm:items-center gap-3">
+                    <div className="w-11 h-11 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+                      <Bike className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="font-bold text-base sm:text-lg text-white">
+                          Taxas de Entrega por Bairro (Ariquemes & Região)
+                        </h3>
+                        <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold uppercase tracking-wider">
+                          100% Real & Integrado
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        Altere o valor de qualquer bairro, adicione novos locais ou pause temporariamente. Os valores são aplicados instantaneamente na sacola e no resumo do WhatsApp.
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleResetDefaultDistricts}
+                    className="px-3.5 py-2 rounded-xl bg-dark-800 hover:bg-dark-750 text-slate-300 hover:text-white border border-dark-700 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer self-start md:self-auto shrink-0"
+                    title="Restaura os 48 bairros originais de Ariquemes"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5 text-brand-gold" />
+                    <span>Restaurar 48 Bairros Padrão</span>
+                  </button>
+                </div>
+
+                {/* Summary Metric Cards */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="p-3.5 rounded-2xl bg-dark-900 border border-dark-800">
+                    <span className="text-[11px] text-slate-400 block font-medium">Total de Bairros</span>
+                    <span className="text-xl font-black text-white mt-1 block">
+                      {districtsList.length}
+                    </span>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-dark-900 border border-dark-800">
+                    <span className="text-[11px] text-emerald-400 block font-medium">Bairros Ativos</span>
+                    <span className="text-xl font-black text-emerald-400 mt-1 block">
+                      {districtsList.filter(d => d.isAvailable !== false).length}
+                    </span>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-dark-900 border border-dark-800">
+                    <span className="text-[11px] text-rose-400 block font-medium">Pausados / Esgotados</span>
+                    <span className="text-xl font-black text-rose-400 mt-1 block">
+                      {districtsList.filter(d => d.isAvailable === false).length}
+                    </span>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-dark-900 border border-dark-800">
+                    <span className="text-[11px] text-brand-gold block font-medium">Faixa de Preço</span>
+                    <span className="text-sm font-black text-brand-gold mt-1.5 block truncate">
+                      {districtsList.length > 0 
+                        ? `R$ ${Math.min(...districtsList.map(d => Number(d.price) || 0)).toFixed(2).replace('.', ',')} a R$ ${Math.max(...districtsList.map(d => Number(d.price) || 0)).toFixed(2).replace('.', ',')}`
+                        : 'R$ 0,00'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Add New District Box */}
+                <form onSubmit={handleAddNewDistrict} className="p-4 sm:p-5 rounded-2xl bg-dark-900/90 border border-brand-gold/30 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Plus className="w-4 h-4 text-brand-gold" />
+                    <h4 className="text-sm font-bold text-white">Adicionar Novo Bairro ou Localidade</h4>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="sm:col-span-2">
+                      <label className="text-[11px] text-slate-400 block mb-1">Nome do Bairro / Setor / Chácara:</label>
+                      <input
+                        type="text"
+                        value={newDistrictName}
+                        onChange={(e) => setNewDistrictName(e.target.value)}
+                        placeholder="Ex: Residencial Alphaville, Km 5, Setor 12..."
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-dark-950 border border-dark-750 text-white text-xs focus:outline-none focus:border-brand-gold"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] text-slate-400 block mb-1">Taxa de Entrega (R$):</label>
+                      <div className="relative">
+                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-500">R$</span>
+                        <input
+                          type="text"
+                          value={newDistrictPrice}
+                          onChange={(e) => setNewDistrictPrice(e.target.value)}
+                          placeholder="12,00"
+                          className="w-full pl-9 pr-3.5 py-2.5 rounded-xl bg-dark-950 border border-dark-750 text-white text-xs font-bold focus:outline-none focus:border-brand-gold"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end pt-1">
+                    <button
+                      type="submit"
+                      className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-brand-gold to-amber-400 text-dark-950 font-black text-xs hover:brightness-110 shadow-glow-gold flex items-center gap-1.5 transition-all cursor-pointer"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Cadastrar Bairro</span>
+                    </button>
+                  </div>
+                </form>
+
+                {/* Search & Filter Controls */}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2">
+                  <div className="relative flex-1 max-w-md">
+                    <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={districtSearch}
+                      onChange={(e) => setDistrictSearch(e.target.value)}
+                      placeholder="Buscar bairro por nome... (Ex: Setor 01, Apoio...)"
+                      className="w-full pl-9 pr-8 py-2 rounded-xl bg-dark-900 border border-dark-750 text-white text-xs placeholder:text-slate-500 focus:outline-none focus:border-brand-gold"
+                    />
+                    {districtSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setDistrictSearch('')}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Filter Pills */}
+                  <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-1">
+                    <button
+                      type="button"
+                      onClick={() => setDistrictPriceFilter('all')}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                        districtPriceFilter === 'all'
+                          ? 'bg-brand-gold text-dark-950 font-black'
+                          : 'bg-dark-800 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      Todos ({districtsList.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDistrictPriceFilter('8')}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                        districtPriceFilter === '8'
+                          ? 'bg-brand-gold text-dark-950 font-black'
+                          : 'bg-dark-800 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      R$ 8,00
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDistrictPriceFilter('10')}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                        districtPriceFilter === '10'
+                          ? 'bg-brand-gold text-dark-950 font-black'
+                          : 'bg-dark-800 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      R$ 10,00
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDistrictPriceFilter('15')}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                        districtPriceFilter === '15'
+                          ? 'bg-brand-gold text-dark-950 font-black'
+                          : 'bg-dark-800 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      R$ 15,00
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDistrictPriceFilter('20+')}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                        districtPriceFilter === '20+'
+                          ? 'bg-brand-gold text-dark-950 font-black'
+                          : 'bg-dark-800 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      R$ 20+
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDistrictPriceFilter('unavailable')}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                        districtPriceFilter === 'unavailable'
+                          ? 'bg-rose-500 text-white font-black'
+                          : 'bg-dark-800 text-rose-300 hover:text-white'
+                      }`}
+                    >
+                      ⚠️ Pausados ({districtsList.filter(d => d.isAvailable === false).length})
+                    </button>
+                  </div>
+                </div>
+
+                {/* Neighborhoods Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                  {filteredDistricts.length === 0 ? (
+                    <div className="col-span-full py-12 text-center text-slate-400 bg-dark-900 rounded-2xl border border-dark-800 space-y-2">
+                      <MapPin className="w-8 h-8 mx-auto text-slate-600 mb-2" />
+                      <p className="text-sm font-bold text-white">Nenhum bairro encontrado com esses filtros.</p>
+                      <p className="text-xs text-slate-500">Tente buscar por outro termo ou limpe a busca.</p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDistrictSearch('');
+                          setDistrictPriceFilter('all');
+                        }}
+                        className="mt-2 px-3 py-1.5 rounded-lg bg-dark-800 text-brand-gold text-xs font-bold hover:bg-dark-750"
+                      >
+                        Limpar Filtros
+                      </button>
+                    </div>
+                  ) : (
+                    filteredDistricts.map((district) => {
+                      const isPaused = district.isAvailable === false;
+                      return (
+                        <div
+                          key={district.id}
+                          className={`p-3.5 rounded-2xl border transition-all ${
+                            isPaused
+                              ? 'bg-dark-950/70 border-rose-900/40 opacity-75'
+                              : 'bg-dark-900 border-dark-800 hover:border-dark-700'
+                          }`}
+                        >
+                          {/* Card Header: Name & Status */}
+                          <div className="flex items-start justify-between gap-2 mb-2.5">
+                            <div className="min-w-0">
+                              <h5 className="font-bold text-sm text-white truncate" title={district.name}>
+                                {district.name}
+                              </h5>
+                              <span className="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5">
+                                <MapPin className="w-3 h-3 text-slate-500 shrink-0" />
+                                <span>ID: {district.id}</span>
+                              </span>
+                            </div>
+
+                            <span
+                              className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider shrink-0 ${
+                                isPaused
+                                  ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                                  : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                              }`}
+                            >
+                              {isPaused ? 'Pausado' : 'Ativo'}
+                            </span>
+                          </div>
+
+                          {/* Inline Price Editor */}
+                          <div className="p-2.5 rounded-xl bg-dark-950 border border-dark-800 mb-3 space-y-1">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-semibold text-slate-400">Taxa de Entrega:</span>
+                              <span className="text-[10px] text-slate-500">(Enter para salvar)</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs font-bold text-brand-gold">R$</span>
+                              <input
+                                type="text"
+                                defaultValue={Number(district.price || 0).toFixed(2).replace('.', ',')}
+                                key={`${district.id}-${district.price}`}
+                                onBlur={(e) => handleUpdateDistrictInlinePrice(district.id, e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    handleUpdateDistrictInlinePrice(district.id, e.target.value);
+                                    e.target.blur();
+                                  }
+                                }}
+                                className="w-full px-2 py-1 rounded-lg bg-dark-900 border border-dark-700 text-white font-black text-sm focus:outline-none focus:border-brand-gold focus:bg-dark-850"
+                              />
+                            </div>
+                          </div>
+
+                          {/* Actions Buttons */}
+                          <div className="flex items-center gap-1.5 pt-1 border-t border-dark-800">
+                            <button
+                              type="button"
+                              onClick={() => handleToggleDistrictAvailability(district.id)}
+                              className={`flex-1 py-1.5 px-2 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1 transition-colors cursor-pointer ${
+                                isPaused
+                                  ? 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30'
+                                  : 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                              }`}
+                              title={isPaused ? 'Reativar entrega neste bairro' : 'Pausar entrega neste bairro temporariamente'}
+                            >
+                              {isPaused ? (
+                                <>
+                                  <Check className="w-3 h-3" />
+                                  <span>Reativar</span>
+                                </>
+                              ) : (
+                                <>
+                                  <X className="w-3 h-3" />
+                                  <span>Pausar</span>
+                                </>
+                              )}
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditDistrict(district)}
+                              className="p-1.5 rounded-xl bg-dark-800 hover:bg-dark-750 text-slate-300 hover:text-white border border-dark-700 cursor-pointer transition-colors"
+                              title="Editar detalhes e nome do bairro"
+                            >
+                              <Edit className="w-3.5 h-3.5" />
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteDistrict(district.id, district.name)}
+                              className="p-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 border border-rose-500/20 cursor-pointer transition-colors"
+                              title="Remover este bairro"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            )}
+
             </div>
 
           </div>
@@ -6430,6 +7782,15 @@ export function AdminDashboard({
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleOpenCreateBuffetItem()}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-brand-gold to-amber-400 text-dark-950 text-xs font-black hover:brightness-110 shadow-glow-gold transition-all cursor-pointer active:scale-95"
+                  >
+                    <Plus className="w-4 h-4 stroke-[3]" />
+                    <span>Adicionar Novo Prato</span>
+                  </button>
+
                   {unavailableBuffetIds.length > 0 && (
                     <button
                       type="button"
@@ -6578,6 +7939,17 @@ export function AdminDashboard({
                           <p className="text-xs text-slate-400 mt-0.5">{category.description}</p>
                         )}
                       </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleOpenCreateBuffetItem(category.id)}
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-dark-900 hover:bg-dark-850 text-brand-gold border border-brand-gold/30 text-xs font-bold transition-colors cursor-pointer"
+                        title={`Adicionar novo prato em ${category.name}`}
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Adicionar em {category.name}</span>
+                        <span className="sm:hidden">+ Prato</span>
+                      </button>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -6589,28 +7961,59 @@ export function AdminDashboard({
                             className={`p-3.5 rounded-xl border transition-all flex flex-col justify-between gap-3 ${
                               isUnavailable
                                 ? 'bg-dark-900/40 border-rose-900/40 opacity-80'
-                                : 'bg-dark-900 border-dark-800 hover:border-brand-gold/40'
+                                : 'bg-dark-900 border-dark-800 hover:border-brand-gold/40 shadow-sm'
                             }`}
                           >
                             <div>
                               <div className="flex items-start justify-between gap-2">
-                                <h4 className={`text-xs sm:text-sm font-bold ${
-                                  isUnavailable ? 'text-slate-400 line-through' : 'text-white'
-                                }`}>
-                                  {item.name}
-                                </h4>
-                                {isUnavailable ? (
-                                  <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-rose-500/20 text-rose-300 border border-rose-500/30 whitespace-nowrap">
-                                    ⛔ Acabou
-                                  </span>
-                                ) : (
-                                  <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 whitespace-nowrap">
-                                    🟢 Ativo
-                                  </span>
-                                )}
+                                <div className="min-w-0 flex-1">
+                                  <h4 className={`text-xs sm:text-sm font-bold truncate ${
+                                    isUnavailable ? 'text-slate-400 line-through' : 'text-white'
+                                  }`}>
+                                    {item.name}
+                                  </h4>
+                                  {item.isAssado && (
+                                    <span className="inline-block mt-0.5 text-[9px] font-black uppercase tracking-wider px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                                      🥩 Assado na Brasa
+                                    </span>
+                                  )}
+                                </div>
+
+                                <div className="flex items-center gap-1 flex-shrink-0">
+                                  {isUnavailable ? (
+                                    <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-rose-500/20 text-rose-300 border border-rose-500/30 whitespace-nowrap">
+                                      ⛔ Acabou
+                                    </span>
+                                  ) : (
+                                    <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 whitespace-nowrap">
+                                      🟢 Ativo
+                                    </span>
+                                  )}
+
+                                  {/* Editar Prato */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenEditBuffetItem(item, category.id)}
+                                    className="p-1.5 rounded-lg bg-dark-800 hover:bg-dark-750 text-slate-300 hover:text-brand-gold transition-colors cursor-pointer"
+                                    title="Editar prato"
+                                  >
+                                    <Edit2 className="w-3.5 h-3.5" />
+                                  </button>
+
+                                  {/* Excluir Prato */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteBuffetItem(item.id, item.name)}
+                                    className="p-1.5 rounded-lg bg-dark-800 hover:bg-rose-950/40 text-slate-400 hover:text-rose-400 transition-colors cursor-pointer"
+                                    title="Remover prato do buffet"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
                               </div>
+
                               {item.desc && (
-                                <p className="text-[11px] text-slate-400 mt-1 line-clamp-2">
+                                <p className="text-[11px] text-slate-400 mt-1 line-clamp-2 leading-relaxed">
                                   {item.desc}
                                 </p>
                               )}
@@ -7113,7 +8516,7 @@ export function AdminDashboard({
                     Enviar WhatsApp ao Cliente
                   </h3>
                   <p className="text-[11px] text-slate-400">
-                    Pedido #{whatsappModalData.order.orderId} • {whatsappModalData.order.customerName}
+                    Pedido #{formatOrderNumber(whatsappModalData.order)} • {whatsappModalData.order.customerName}
                   </p>
                 </div>
               </div>
@@ -7296,7 +8699,7 @@ export function AdminDashboard({
                     Cancelar ou Excluir Pedido
                   </h3>
                   <p className="text-[11px] text-slate-400">
-                    Pedido #{cancelModalOrder.orderId} • {cancelModalOrder.customerName}
+                    Pedido #{formatOrderNumber(cancelModalOrder)} • {cancelModalOrder.customerName}
                   </p>
                 </div>
               </div>
@@ -7377,7 +8780,7 @@ export function AdminDashboard({
                     Alterar Forma de Pagamento & Troco
                   </h3>
                   <p className="text-[11px] text-slate-400">
-                    Pedido #{changePaymentModalOrder.orderId} • {changePaymentModalOrder.customerName}
+                    Pedido #{formatOrderNumber(changePaymentModalOrder)} • {changePaymentModalOrder.customerName}
                   </p>
                 </div>
               </div>
@@ -7710,7 +9113,7 @@ export function AdminDashboard({
 
             <div>
               <h3 className="text-lg font-black text-white">
-                Pedido #{pdvSuccessOrder.orderId} Lançado!
+                Pedido #{formatOrderNumber(pdvSuccessOrder)} Lançado!
               </h3>
               <p className="text-xs text-brand-gold font-medium mt-1">
                 O pedido já está visível em tempo real na fila da cozinha.
@@ -8351,6 +9754,28 @@ export function AdminDashboard({
                 </div>
               </div>
 
+              {/* Preço Adicional */}
+              <div>
+                <label className="block text-xs font-bold text-slate-200 mb-1">
+                  Preço Adicional (R$)
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">R$</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.50"
+                    value={complementFormPrice}
+                    onChange={(e) => setComplementFormPrice(e.target.value)}
+                    placeholder="0,00"
+                    className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-dark-800 border border-dark-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-400 font-mono"
+                  />
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Deixe 0,00 para acompanhamento incluso (grátis), ou digite o valor extra cobrado ao adicionar este item ao açaí.
+                </p>
+              </div>
+
               {/* Opções */}
               <div className="space-y-2 pt-2 border-t border-dark-800">
                 <label className="flex items-center gap-2.5 p-3 rounded-xl bg-dark-800/60 border border-dark-700 cursor-pointer">
@@ -8362,7 +9787,7 @@ export function AdminDashboard({
                   />
                   <div>
                     <div className="text-xs font-bold text-white">Disponível para Pedidos</div>
-                    <div className="text-[10px] text-slate-400">Desmarque caso tenha acabado na cozinha</div>
+                    <div className="text-[10px] text-slate-400">Desmarque caso tenha acabado na cozinha (ficará esgotado)</div>
                   </div>
                 </label>
 
@@ -8396,6 +9821,253 @@ export function AdminDashboard({
                 >
                   <Save className="w-4 h-4" />
                   <span>{editingComplement ? 'Salvar Acompanhamento' : 'Adicionar Acompanhamento'}</span>
+                </button>
+              </div>
+            </form>
+
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: ADICIONAR / EDITAR COBERTURA */}
+      {isCoberturaModalOpen && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-dark-950/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+          <div className="relative w-full max-w-md bg-dark-900 border border-dark-750 rounded-2xl shadow-2xl p-5 sm:p-6 space-y-4">
+            
+            <div className="flex items-center justify-between pb-3 border-b border-dark-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-purple-500/20 text-purple-400 border border-purple-500/30 flex items-center justify-center">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-display font-extrabold text-base text-white">
+                    {editingCobertura ? `Editar: ${editingCobertura.name}` : 'Nova Cobertura'}
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    {editingCobertura ? 'Altere o nome, preço ou status da cobertura' : 'Adicione uma nova opção de cobertura para o açaí'}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsCoberturaModalOpen(false)}
+                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-dark-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveCobertura} className="space-y-4 mt-4">
+              {/* Nome */}
+              <div>
+                <label className="block text-xs font-bold text-slate-200 mb-1">
+                  Nome da Cobertura *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={coberturaFormName}
+                  onChange={(e) => setCoberturaFormName(e.target.value)}
+                  placeholder="Ex: Cobertura de Nutella, Frutas Vermelhas..."
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-dark-800 border border-dark-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-400"
+                />
+              </div>
+
+              {/* Preço Adicional */}
+              <div>
+                <label className="block text-xs font-bold text-slate-200 mb-1">
+                  Preço Adicional (R$)
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">R$</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.50"
+                    value={coberturaFormPrice}
+                    onChange={(e) => setCoberturaFormPrice(e.target.value)}
+                    placeholder="0,00"
+                    className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-dark-800 border border-dark-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-400 font-mono"
+                  />
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Deixe 0,00 para cobertura inclusa (grátis), ou digite o valor extra cobrado ao cliente.
+                </p>
+              </div>
+
+              {/* Status Disponível */}
+              <div className="pt-2 border-t border-dark-800">
+                <label className="flex items-center gap-2.5 p-3 rounded-xl bg-dark-800/60 border border-dark-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={coberturaFormIsAvailable}
+                    onChange={(e) => setCoberturaFormIsAvailable(e.target.checked)}
+                    className="w-4 h-4 accent-emerald-400 cursor-pointer"
+                  />
+                  <div>
+                    <div className="text-xs font-bold text-white">Disponível para Pedidos</div>
+                    <div className="text-[10px] text-slate-400">Desmarque caso tenha acabado na cozinha (ficará esgotado)</div>
+                  </div>
+                </label>
+              </div>
+
+              {/* Footer */}
+              <div className="pt-4 border-t border-dark-800 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setIsCoberturaModalOpen(false)}
+                  className="px-4 py-2.5 rounded-xl bg-dark-800 hover:bg-dark-750 text-slate-300 text-xs font-semibold cursor-pointer"
+                >
+                  Cancelar
+                </button>
+
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-500 to-indigo-500 text-white font-black text-xs hover:brightness-110 shadow-md shadow-purple-500/20 cursor-pointer flex items-center gap-1.5"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>{editingCobertura ? 'Salvar Cobertura' : 'Adicionar Cobertura'}</span>
+                </button>
+              </div>
+            </form>
+
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: ADICIONAR / EDITAR PRATO DO BUFFET */}
+      {isBuffetItemModalOpen && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-dark-950/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+          <div className="relative w-full max-w-lg bg-dark-900 border border-dark-750 rounded-2xl shadow-2xl p-5 sm:p-6 space-y-4">
+            
+            <div className="flex items-center justify-between pb-3 border-b border-dark-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-brand-gold/20 text-brand-gold border border-brand-gold/30 flex items-center justify-center">
+                  <Utensils className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-display font-extrabold text-base text-white">
+                    {editingBuffetItem ? `Editar: ${editingBuffetItem.name}` : 'Novo Prato para o Buffet'}
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    {editingBuffetItem ? 'Altere o nome, descrição, categoria ou status do prato' : 'Cadastre um novo prato ou assado para os eventos de buffet'}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsBuffetItemModalOpen(false)}
+                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-dark-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveBuffetItem} className="space-y-4 mt-3">
+              {/* Categoria */}
+              <div>
+                <label className="block text-xs font-bold text-slate-200 mb-1">
+                  Categoria do Buffet *
+                </label>
+                <select
+                  value={buffetItemFormCategoryId}
+                  onChange={(e) => setBuffetItemFormCategoryId(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-dark-800 border border-dark-700 text-xs text-white focus:outline-none focus:border-brand-gold cursor-pointer"
+                >
+                  {buffetCategories.map(cat => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.name} ({cat.items?.length || 0} itens cadastrados)
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Nome do Prato */}
+              <div>
+                <label className="block text-xs font-bold text-slate-200 mb-1">
+                  Nome do Prato *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={buffetItemFormName}
+                  onChange={(e) => setBuffetItemFormName(e.target.value)}
+                  placeholder="Ex: Costela Bovina no Bafo, Risoto de Camarão..."
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-dark-800 border border-dark-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand-gold"
+                />
+              </div>
+
+              {/* Descrição / Ingredientes */}
+              <div>
+                <label className="block text-xs font-bold text-slate-200 mb-1">
+                  Descrição ou Ingredientes (Opcional)
+                </label>
+                <textarea
+                  rows={2}
+                  value={buffetItemFormDesc}
+                  onChange={(e) => setBuffetItemFormDesc(e.target.value)}
+                  placeholder="Ex: Assada lentamente no bafo por 8 horas, suculenta e servida com mandioca na manteiga de garrafa..."
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-dark-800 border border-dark-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand-gold leading-relaxed"
+                />
+              </div>
+
+              {/* Opções de Status e Assado */}
+              <div className="space-y-2.5 pt-2 border-t border-dark-800">
+                {/* É um Assado na Brasa */}
+                <label className="flex items-center gap-2.5 p-3 rounded-xl bg-dark-800/60 border border-dark-750 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={buffetItemFormIsAssado}
+                    onChange={(e) => setBuffetItemFormIsAssado(e.target.checked)}
+                    className="w-4 h-4 rounded text-brand-gold accent-brand-gold cursor-pointer"
+                  />
+                  <div>
+                    <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <span>🥩 É um Assado ou Preparado na Brasa?</span>
+                    </div>
+                    <div className="text-[10px] text-slate-400">
+                      Recebe destaque com selo especial de "Assados" no cardápio de buffet do cliente
+                    </div>
+                  </div>
+                </label>
+
+                {/* Disponível no Cardápio */}
+                <label className="flex items-center gap-2.5 p-3 rounded-xl bg-dark-800/60 border border-dark-750 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={buffetItemFormIsAvailable}
+                    onChange={(e) => setBuffetItemFormIsAvailable(e.target.checked)}
+                    className="w-4 h-4 rounded text-emerald-400 accent-emerald-400 cursor-pointer"
+                  />
+                  <div>
+                    <div className="text-xs font-bold text-white">
+                      Disponível para Clientes no Cardápio do Site
+                    </div>
+                    <div className="text-[10px] text-slate-400">
+                      Desmarque caso tenha acabado na cozinha para pausar este prato
+                    </div>
+                  </div>
+                </label>
+              </div>
+
+              {/* Botões do Formulário */}
+              <div className="pt-4 border-t border-dark-800 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setIsBuffetItemModalOpen(false)}
+                  className="px-4 py-2.5 rounded-xl bg-dark-800 hover:bg-dark-750 text-slate-300 text-xs font-semibold cursor-pointer"
+                >
+                  Cancelar
+                </button>
+
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-brand-gold to-amber-400 text-dark-950 font-black text-xs hover:brightness-110 shadow-glow-gold cursor-pointer flex items-center gap-1.5 transition-transform active:scale-95"
+                >
+                  <Save className="w-4 h-4 stroke-[3]" />
+                  <span>{editingBuffetItem ? 'Salvar Alterações' : 'Cadastrar Prato no Buffet'}</span>
                 </button>
               </div>
             </form>
@@ -8558,6 +10230,117 @@ export function AdminDashboard({
           </div>
         </div>
       )}
+
+      {/* MODAL: EDITAR BAIRRO & TAXA */}
+      {isDistrictModalOpen && editingDistrict && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-dark-950/80 backdrop-blur-sm animate-fade-in">
+          <div className="w-full max-w-md bg-dark-900 border border-dark-750 rounded-3xl p-5 sm:p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-dark-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-brand-gold/15 border border-brand-gold/30 flex items-center justify-center text-brand-gold">
+                  <Edit className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-sm text-white">Editar Taxa de Entrega</h4>
+                  <p className="text-[11px] text-slate-400">Atualize o nome ou o valor cobrado</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsDistrictModalOpen(false);
+                  setEditingDistrict(null);
+                }}
+                className="w-8 h-8 rounded-xl bg-dark-800 hover:bg-dark-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveDistrictModal} className="space-y-4">
+              <div>
+                <label className="text-xs font-semibold text-slate-300 block mb-1">
+                  Nome do Bairro:
+                </label>
+                <input
+                  type="text"
+                  value={districtFormName}
+                  onChange={(e) => setDistrictFormName(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-dark-950 border border-dark-750 text-white text-xs font-semibold focus:outline-none focus:border-brand-gold"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-300 block mb-1">
+                  Valor da Taxa (R$):
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-500">R$</span>
+                  <input
+                    type="text"
+                    value={districtFormPrice}
+                    onChange={(e) => setDistrictFormPrice(e.target.value)}
+                    placeholder="10,00"
+                    className="w-full pl-9 pr-3.5 py-2.5 rounded-xl bg-dark-950 border border-dark-750 text-white text-xs font-black focus:outline-none focus:border-brand-gold"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-dark-950 border border-dark-800 flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-bold text-white block">Disponibilidade para Entrega</span>
+                  <span className="text-[11px] text-slate-400">Se desativado, o cliente não poderá pedir entrega para este bairro</span>
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={districtFormIsAvailable}
+                    onChange={(e) => setDistrictFormIsAvailable(e.target.checked)}
+                    className="w-4 h-4 rounded text-emerald-500 accent-emerald-500 cursor-pointer"
+                  />
+                  <span className={`text-xs font-bold ${districtFormIsAvailable ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {districtFormIsAvailable ? 'Ativo' : 'Pausado'}
+                  </span>
+                </label>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-dark-800">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsDistrictModalOpen(false);
+                    setEditingDistrict(null);
+                  }}
+                  className="px-4 py-2 rounded-xl bg-dark-800 hover:bg-dark-750 text-slate-300 text-xs font-semibold cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-gradient-to-r from-brand-gold to-amber-400 text-dark-950 font-black text-xs hover:brightness-110 shadow-glow-gold cursor-pointer"
+                >
+                  Salvar Alterações
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: FECHAMENTO DE CAIXA / HISTÓRICO / HORÁRIO AUTOMÁTICO */}
+      <CashClosingModal
+        isOpen={isCashClosingModalOpen}
+        onClose={() => setIsCashClosingModalOpen(false)}
+        orders={scopedOrders}
+        currentUser={currentUser}
+        currentBranch={currentBranch}
+        onCashClosed={() => {
+          // Play confirmation chime
+          playChime(true, 'Caixa do dia fechado com sucesso! Relatório arquivado em finanças.');
+        }}
+      />
 
       {/* FLOATING WHATSAPP SENT NOTIFICATION TOAST */}
       {lastSentWhatsAppNotice && (

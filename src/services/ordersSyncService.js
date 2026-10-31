@@ -32,6 +32,108 @@ export function normalizeOrderStatus(orderOrStatus) {
   return 'RECEBIDO_COZINHA';
 }
 
+/**
+ * Calculate the next daily sequential order number starting from 1.
+ * Increments sequentially: 1, 2, 3...
+ */
+export function getNextOrderNumber(existingOrders = []) {
+  try {
+    const todayPrefix = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    let maxNum = 0;
+
+    // 1. Check orders passed in memory
+    if (Array.isArray(existingOrders)) {
+      existingOrders.forEach(o => {
+        if (!o) return;
+        const num = Number(o.orderNumber);
+        if (!isNaN(num) && num > maxNum && num < 1000) {
+          maxNum = num;
+        } else if (o.orderId) {
+          const clean = String(o.orderId).replace(/^ES-/, '');
+          const p = parseInt(clean, 10);
+          if (!isNaN(p) && p > maxNum && p < 1000) {
+            maxNum = p;
+          }
+        }
+      });
+    }
+
+    // 2. Check localStorage saved orders
+    try {
+      const saved = localStorage.getItem('el_shadday_all_orders');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          parsed.forEach(o => {
+            if (!o) return;
+            const num = Number(o.orderNumber);
+            if (!isNaN(num) && num > maxNum && num < 1000) {
+              maxNum = num;
+            } else if (o.orderId) {
+              const clean = String(o.orderId).replace(/^ES-/, '');
+              const p = parseInt(clean, 10);
+              if (!isNaN(p) && p > maxNum && p < 1000) {
+                maxNum = p;
+              }
+            }
+          });
+        }
+      }
+    } catch (e) {}
+
+    // 3. Check persistent daily sequence in localStorage
+    try {
+      const storedSeq = localStorage.getItem('el_shadday_daily_seq_v2');
+      if (storedSeq) {
+        const parsedSeq = JSON.parse(storedSeq);
+        if (parsedSeq?.date === todayPrefix && Number(parsedSeq?.lastNumber) > maxNum) {
+          maxNum = Number(parsedSeq.lastNumber);
+        }
+      }
+    } catch (e) {}
+
+    const next = maxNum + 1;
+    try {
+      localStorage.setItem('el_shadday_daily_seq_v2', JSON.stringify({ date: todayPrefix, lastNumber: next }));
+    } catch (e) {}
+
+    return next;
+  } catch (e) {
+    return 1;
+  }
+}
+
+/**
+ * Format order sequence for display:
+ * 1 -> "01" (or "1")
+ * 2 -> "02"
+ */
+export function formatOrderNumber(orderOrId, fallbackIndex) {
+  if (!orderOrId) return fallbackIndex ? String(fallbackIndex).padStart(2, '0') : '01';
+
+  if (typeof orderOrId === 'object') {
+    if (orderOrId.orderNumber && !isNaN(Number(orderOrId.orderNumber))) {
+      return String(orderOrId.orderNumber).padStart(2, '0');
+    }
+    const clean = String(orderOrId.orderId || '').replace(/^ES-/, '');
+    const num = parseInt(clean, 10);
+    if (!isNaN(num) && num > 0 && num < 1000) {
+      return String(num).padStart(2, '0');
+    }
+    if (fallbackIndex) {
+      return String(fallbackIndex).padStart(2, '0');
+    }
+    return String(orderOrId.orderId || '01');
+  }
+
+  const clean = String(orderOrId).replace(/^ES-/, '');
+  const num = parseInt(clean, 10);
+  if (!isNaN(num) && num > 0 && num < 1000) {
+    return String(num).padStart(2, '0');
+  }
+  return fallbackIndex ? String(fallbackIndex).padStart(2, '0') : String(orderOrId);
+}
+
 function mapSupabaseRowToOrder(row) {
   if (!row) return null;
   const normalized = normalizeOrderStatus(row.status || row.order_status);
@@ -45,8 +147,19 @@ function mapSupabaseRowToOrder(row) {
   const referenceStr = addr.reference || row.reference || '';
   const isPickup = row.delivery_type === 'balcao' || row.delivery_type === 'retirada' || addr.isPickup || districtName === 'Balcão';
 
+  let orderNum = row.order_number || row.orderNumber || null;
+  if (!orderNum) {
+    const clean = String(row.id || '').replace(/^ES-/, '');
+    const p = parseInt(clean, 10);
+    if (!isNaN(p) && p > 0 && p < 1000) {
+      orderNum = p;
+    }
+  }
+
   return {
     orderId: row.id,
+    orderNumber: orderNum,
+    displayNumber: orderNum ? String(orderNum).padStart(2, '0') : String(row.id || ''),
     branchId: row.branch_id || 'ariquemes',
     branchName: row.branch_name || 'Unidade Ariquemes',
     customerName: row.customer_name || 'Cliente',
@@ -288,6 +401,10 @@ export async function dispatchOrderDelete(orderId) {
  * Delete all orders from Supabase database and all synced devices
  */
 export async function dispatchClearAllOrders() {
+  try {
+    localStorage.removeItem('el_shadday_daily_seq_v2');
+  } catch (e) {}
+
   if (isSupabaseConfigured && supabase) {
     try {
       const { error } = await supabase.from('orders').delete().neq('id', 'placeholder_none');

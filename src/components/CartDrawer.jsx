@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   X, ShoppingBag, Trash2, Plus, Minus, MapPin, 
   ArrowRight, AlertCircle, ShieldCheck
 } from 'lucide-react';
-import { ARIQUEMES_DISTRICTS } from '../data/menuData';
+import { getStoredDistricts } from '../data/menuData';
 
 export function CartDrawer({ 
   isOpen, 
@@ -14,18 +14,28 @@ export function CartDrawer({
   onClearCart,
   onProceedToPayment 
 }) {
+  const [districtsList, setDistrictsList] = useState(() => getStoredDistricts());
   const [deliveryType, setDeliveryType] = useState('delivery'); // 'delivery' | 'retirada'
-  const [selectedDistrict, setSelectedDistrict] = useState(ARIQUEMES_DISTRICTS[0].id);
+  const [selectedDistrict, setSelectedDistrict] = useState(() => {
+    const list = getStoredDistricts();
+    return list[0]?.id || 'centro';
+  });
   const [streetAddress, setStreetAddress] = useState('');
   const [addressNumber, setAddressNumber] = useState('');
   const [reference, setReference] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
 
+  useEffect(() => {
+    const handleSync = () => setDistrictsList(getStoredDistricts());
+    window.addEventListener('delivery_districts_updated', handleSync);
+    return () => window.removeEventListener('delivery_districts_updated', handleSync);
+  }, []);
+
   if (!isOpen) return null;
 
-  const currentDistrict = ARIQUEMES_DISTRICTS.find(d => d.id === selectedDistrict) || ARIQUEMES_DISTRICTS[0];
-  const deliveryFee = deliveryType === 'delivery' ? currentDistrict.price : 0;
+  const currentDistrict = districtsList.find(d => d.id === selectedDistrict) || districtsList[0] || { price: 0, name: '' };
+  const deliveryFee = deliveryType === 'delivery' ? (Number(currentDistrict.price) || 0) : 0;
 
   const subtotal = cartItems.reduce((acc, item) => acc + (item.price * item.quantity), 0);
   const total = subtotal + deliveryFee;
@@ -312,9 +322,9 @@ export function CartDrawer({
                       onChange={(e) => setSelectedDistrict(e.target.value)}
                       className="w-full px-3 py-2.5 rounded-xl bg-dark-900 border border-dark-750 text-white text-xs focus:outline-none focus:border-brand-gold cursor-pointer"
                     >
-                      {ARIQUEMES_DISTRICTS.map((d) => (
-                        <option key={d.id} value={d.id}>
-                          {d.name} — Taxa: R$ {d.price.toFixed(2).replace('.', ',')}
+                      {districtsList.map((d) => (
+                        <option key={d.id} value={d.id} disabled={d.isAvailable === false}>
+                          {d.name} {d.isAvailable === false ? '(Pausado)' : `— Taxa: R$ ${(Number(d.price) || 0).toFixed(2).replace('.', ',')}`}
                         </option>
                       ))}
                     </select>

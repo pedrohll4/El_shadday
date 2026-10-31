@@ -19,7 +19,10 @@ export function AcaiCustomizerModal({ isOpen, onClose, acaiProduct, onAddAcaiToC
     return () => window.removeEventListener('acai_settings_updated', handleSync);
   }, []);
 
-  const availableComplements = acaiConfig.complements.filter(c => c.isAvailable !== false);
+  const availableComplements = (acaiConfig.complements || []).filter(c => c.isAvailable !== false);
+  const availableCoberturas = (acaiConfig.coberturas || [])
+    .map((cb, idx) => typeof cb === 'string' ? { id: `cob_${idx}`, name: cb, price: 0, isAvailable: true } : cb)
+    .filter(c => c.isAvailable !== false);
   const maxLimit = Number(acaiConfig.maxComplementsPerAcai) || 0; // 0 = sem limite
 
   useEffect(() => {
@@ -27,7 +30,7 @@ export function AcaiCustomizerModal({ isOpen, onClose, acaiProduct, onAddAcaiToC
       // Pré-seleciona os adicionais marcados como padrão que estejam disponíveis
       const currentConfig = getStoredAcaiSettings();
       setAcaiConfig(currentConfig);
-      const avail = currentConfig.complements.filter(c => c.isAvailable !== false);
+      const avail = (currentConfig.complements || []).filter(c => c.isAvailable !== false);
       const defaults = avail.filter(c => c.defaultSelected).map(c => c.name);
       const lim = Number(currentConfig.maxComplementsPerAcai) || 0;
       setSelectedComplements(lim > 0 ? defaults.slice(0, lim) : defaults);
@@ -41,7 +44,19 @@ export function AcaiCustomizerModal({ isOpen, onClose, acaiProduct, onAddAcaiToC
   if (!isOpen || !acaiProduct) return null;
 
   const basePrice = Number(acaiProduct.price) || 0;
-  const totalPrice = basePrice * quantity;
+  
+  // Cálculo de adicionais pagos (Acompanhamentos + Cobertura)
+  const complementsSurcharge = selectedComplements.reduce((acc, compName) => {
+    const compObj = (acaiConfig.complements || []).find(c => c.name === compName);
+    return acc + (Number(compObj?.price) || 0);
+  }, 0);
+
+  const selectedCobObj = availableCoberturas.find(c => c.name === selectedCobertura);
+  const coberturaSurcharge = Number(selectedCobObj?.price) || 0;
+  const totalExtrasSurcharge = complementsSurcharge + coberturaSurcharge;
+
+  const unitPrice = basePrice + totalExtrasSurcharge;
+  const totalPrice = unitPrice * quantity;
 
   const toggleComplement = (name) => {
     setLimitWarning('');
@@ -83,11 +98,15 @@ export function AcaiCustomizerModal({ isOpen, onClose, acaiProduct, onAddAcaiToC
 
   const handleConfirm = () => {
     const complementsText = selectedComplements.length > 0 
-      ? selectedComplements.join(', ')
+      ? selectedComplements.map(name => {
+          const compObj = (acaiConfig.complements || []).find(c => c.name === name);
+          const pr = Number(compObj?.price) || 0;
+          return pr > 0 ? `${name} (+R$ ${pr.toFixed(2).replace('.', ',')})` : name;
+        }).join(', ')
       : 'Açaí Puro (Sem adicionais)';
 
     const cobText = selectedCobertura && selectedCobertura !== 'Sem Cobertura'
-      ? ` • Cobertura: ${selectedCobertura}`
+      ? ` • Cobertura: ${selectedCobertura}${coberturaSurcharge > 0 ? ` (+R$ ${coberturaSurcharge.toFixed(2).replace('.', ',')})` : ''}`
       : '';
 
     const notesText = notes.trim() ? ` • Obs: ${notes.trim()}` : '';
@@ -95,7 +114,9 @@ export function AcaiCustomizerModal({ isOpen, onClose, acaiProduct, onAddAcaiToC
     const customAcai = {
       id: `custom-acai-${acaiProduct.id}-${Date.now()}`,
       name: `${acaiProduct.name}`,
-      price: basePrice,
+      price: unitPrice,
+      basePrice,
+      totalExtrasSurcharge,
       quantity,
       isCustomAcai: true,
       complements: selectedComplements,
@@ -187,6 +208,7 @@ export function AcaiCustomizerModal({ isOpen, onClose, acaiProduct, onAddAcaiToC
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {availableComplements.map(item => {
                 const isSelected = selectedComplements.includes(item.name);
+                const itemPrice = Number(item.price) || 0;
                 return (
                   <button
                     key={item.id}
@@ -202,10 +224,17 @@ export function AcaiCustomizerModal({ isOpen, onClose, acaiProduct, onAddAcaiToC
                       <span className="text-base">{item.icon}</span>
                       <span className="text-xs truncate">{item.name}</span>
                     </div>
-                    <div className={`w-4 h-4 rounded-md flex items-center justify-center flex-shrink-0 transition-colors ${
-                      isSelected ? 'bg-purple-500 text-dark-950' : 'border border-dark-700 bg-dark-900'
-                    }`}>
-                      {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      {itemPrice > 0 && (
+                        <span className="text-[10px] font-black font-mono text-amber-300 bg-amber-500/15 border border-amber-500/30 px-1.5 py-0.5 rounded-md">
+                          +R$ {itemPrice.toFixed(2).replace('.', ',')}
+                        </span>
+                      )}
+                      <div className={`w-4 h-4 rounded-md flex items-center justify-center flex-shrink-0 transition-colors ${
+                        isSelected ? 'bg-purple-500 text-dark-950' : 'border border-dark-700 bg-dark-900'
+                      }`}>
+                        {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                      </div>
                     </div>
                   </button>
                 );
@@ -219,20 +248,33 @@ export function AcaiCustomizerModal({ isOpen, onClose, acaiProduct, onAddAcaiToC
               2. Cobertura:
             </label>
             <div className="grid grid-cols-2 gap-2">
-              {(acaiConfig.coberturas || ['Sem Cobertura']).map(cob => (
-                <button
-                  key={cob}
-                  type="button"
-                  onClick={() => setSelectedCobertura(cob)}
-                  className={`p-2 rounded-xl border text-xs font-bold text-left transition-all cursor-pointer ${
-                    selectedCobertura === cob
-                      ? 'bg-purple-500 text-dark-950 font-black border-purple-500'
-                      : 'bg-dark-950 text-slate-300 border-dark-800 hover:border-dark-700'
-                  }`}
-                >
-                  {cob}
-                </button>
-              ))}
+              {availableCoberturas.map(cob => {
+                const cobPrice = Number(cob.price) || 0;
+                const isSelected = selectedCobertura === cob.name;
+                return (
+                  <button
+                    key={cob.id || cob.name}
+                    type="button"
+                    onClick={() => setSelectedCobertura(cob.name)}
+                    className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-between gap-2 transition-all cursor-pointer ${
+                      isSelected
+                        ? 'bg-purple-500 text-dark-950 font-black border-purple-500 shadow-md'
+                        : 'bg-dark-950 text-slate-300 border-dark-800 hover:border-dark-700'
+                    }`}
+                  >
+                    <span className="truncate">{cob.name}</span>
+                    {cobPrice > 0 && (
+                      <span className={`text-[10px] font-mono font-black px-1.5 py-0.5 rounded-md flex-shrink-0 ${
+                        isSelected 
+                          ? 'bg-dark-950/25 text-dark-950 border border-dark-950/30' 
+                          : 'text-amber-300 bg-amber-500/15 border border-amber-500/30'
+                      }`}>
+                        +R$ {cobPrice.toFixed(2).replace('.', ',')}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -253,15 +295,29 @@ export function AcaiCustomizerModal({ isOpen, onClose, acaiProduct, onAddAcaiToC
         </div>
 
         {/* Footer */}
-        <div className="p-4 sm:p-5 border-t border-dark-800 bg-dark-950 flex items-center justify-between gap-3">
+        <div className="p-4 sm:p-5 border-t border-dark-800 bg-dark-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Valor:</span>
-            <span className="text-base sm:text-lg font-black text-purple-400 font-mono">
-              R$ {totalPrice.toFixed(2).replace('.', ',')}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Valor:</span>
+              {totalExtrasSurcharge > 0 && (
+                <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.2 rounded font-bold">
+                  + R$ {totalExtrasSurcharge.toFixed(2).replace('.', ',')} adicionais
+                </span>
+              )}
+            </div>
+            <div className="flex items-baseline gap-2">
+              <span className="text-base sm:text-xl font-black text-purple-400 font-mono">
+                R$ {totalPrice.toFixed(2).replace('.', ',')}
+              </span>
+              {quantity > 1 && (
+                <span className="text-xs text-slate-400 font-mono">
+                  (R$ {unitPrice.toFixed(2).replace('.', ',')} cada)
+                </span>
+              )}
+            </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 justify-end">
             <div className="flex items-center bg-dark-900 border border-dark-750 rounded-xl p-0.5">
               <button
                 type="button"
@@ -283,10 +339,10 @@ export function AcaiCustomizerModal({ isOpen, onClose, acaiProduct, onAddAcaiToC
             <button
               type="button"
               onClick={handleConfirm}
-              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-500 to-indigo-500 text-white font-black text-xs hover:brightness-110 shadow-lg shadow-purple-500/20 cursor-pointer transition-all flex items-center gap-1.5"
+              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-500 to-indigo-500 text-white font-black text-xs hover:brightness-110 shadow-lg shadow-purple-500/20 cursor-pointer transition-all flex items-center gap-1.5 flex-shrink-0"
             >
               <Check className="w-4 h-4 stroke-[3]" />
-              <span>Adicionar Açaí</span>
+              <span>Adicionar Açaí • R$ {totalPrice.toFixed(2).replace('.', ',')}</span>
             </button>
           </div>
         </div>

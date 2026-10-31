@@ -4,7 +4,8 @@ import {
   Copy, Clock, Loader2, ArrowRight, Lock, CheckCircle2, AlertCircle, Sparkles
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { RESTAURANT_INFO, ARIQUEMES_DISTRICTS, getStoredRestaurantInfo } from '../data/menuData';
+import { RESTAURANT_INFO, getStoredRestaurantInfo, getStoredDistricts } from '../data/menuData';
+import { getNextOrderNumber } from '../services/ordersSyncService';
 
 export function CheckoutPaymentModal({ 
   isOpen, 
@@ -31,8 +32,8 @@ export function CheckoutPaymentModal({
   // Dinheiro field
   const [trocoPara, setTrocoPara] = useState(orderDetails?.cashChange || '');
 
-  const district = ARIQUEMES_DISTRICTS.find(d => d.id === orderDetails?.districtId) || ARIQUEMES_DISTRICTS[0];
-  const deliveryFee = orderDetails?.deliveryType === 'delivery' ? district.price : 0;
+  const district = (getStoredDistricts() || []).find(d => d.id === orderDetails?.districtId) || (getStoredDistricts() || [])[0] || { price: 0 };
+  const deliveryFee = orderDetails?.deliveryType === 'delivery' ? (Number(district.price) || 0) : 0;
   const subtotal = cartItems.reduce((acc, item) => acc + (item.price * item.quantity), 0);
   const total = subtotal + deliveryFee;
 
@@ -122,9 +123,12 @@ export function CheckoutPaymentModal({
     }, 2700);
 
     setTimeout(() => {
-      const orderId = `ES-${Math.floor(1000 + Math.random() * 9000)}`;
+      const orderNumber = getNextOrderNumber();
+      const orderId = String(orderNumber).padStart(2, '0');
       const completedOrder = {
         orderId,
+        orderNumber,
+        displayNumber: '#' + orderId,
         createdAt: new Date().toISOString(),
         items: cartItems,
         subtotal,

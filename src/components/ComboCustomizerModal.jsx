@@ -167,7 +167,30 @@ export function ComboCustomizerModal({
     return (acaiConfig.complements || []).filter(c => c.isAvailable !== false);
   }, [acaiConfig]);
 
+  const availableAcaiCoberturas = useMemo(() => {
+    return (acaiConfig.coberturas || [])
+      .map((cb, idx) => typeof cb === 'string' ? { id: `cob_${idx}`, name: cb, price: 0, isAvailable: true } : cb)
+      .filter(c => c.isAvailable !== false);
+  }, [acaiConfig]);
+
   const maxComboLimit = Number(acaiConfig.maxComplementsPerComboBarca) || 0;
+
+  // Calculate extras surcharge for Acai in combo (if any complement or cobertura has price > 0)
+  const acaiExtrasSurcharge = useMemo(() => {
+    if (!hasAcaiInCombo) return 0;
+    let extra = 0;
+    selectedAcaiComplements.forEach(compName => {
+      const compObj = (acaiConfig.complements || []).find(c => c.name === compName);
+      if (compObj && Number(compObj.price) > 0) {
+        extra += Number(compObj.price);
+      }
+    });
+    const cobObj = availableAcaiCoberturas.find(c => c.name === selectedAcaiCobertura);
+    if (cobObj && Number(cobObj.price) > 0) {
+      extra += Number(cobObj.price);
+    }
+    return extra;
+  }, [hasAcaiInCombo, selectedAcaiComplements, selectedAcaiCobertura, acaiConfig, availableAcaiCoberturas]);
 
   // Reset state on open
   useEffect(() => {
@@ -245,8 +268,9 @@ export function ComboCustomizerModal({
   }, [pizzasConfig, pizzaSelections]);
 
   const totalComboSurcharge = useMemo(() => {
-    return Object.values(pizzaSurcharges).reduce((acc, v) => acc + (Number(v) || 0), 0);
-  }, [pizzaSurcharges]);
+    const pizzaSur = Object.values(pizzaSurcharges).reduce((acc, v) => acc + (Number(v) || 0), 0);
+    return pizzaSur + acaiExtrasSurcharge;
+  }, [pizzaSurcharges, acaiExtrasSurcharge]);
 
   const baseComboPrice = Number(comboProduct?.price) || 0;
   const finalComboPrice = baseComboPrice + totalComboSurcharge;
@@ -331,8 +355,18 @@ export function ComboCustomizerModal({
       extras.push('Pizza P Doce Brigadeiro');
     }
     if (hasAcaiInCombo) {
-      const acaiText = selectedAcaiComplements.length > 0
-        ? `Barca de Açaí (${selectedAcaiComplements.join(', ')}${selectedAcaiCobertura && selectedAcaiCobertura !== 'Sem Cobertura' ? ` + ${selectedAcaiCobertura}` : ''})`
+      const complementsFormatted = selectedAcaiComplements.map(name => {
+        const compObj = (acaiConfig.complements || []).find(c => c.name === name);
+        const pr = Number(compObj?.price) || 0;
+        return pr > 0 ? `${name} (+R$ ${pr.toFixed(2).replace('.', ',')})` : name;
+      });
+      const cobObj = availableAcaiCoberturas.find(c => c.name === selectedAcaiCobertura);
+      const cobPrice = Number(cobObj?.price) || 0;
+      const cobFormatted = selectedAcaiCobertura && selectedAcaiCobertura !== 'Sem Cobertura'
+        ? ` + ${selectedAcaiCobertura}${cobPrice > 0 ? ` (+R$ ${cobPrice.toFixed(2).replace('.', ',')})` : ''}`
+        : '';
+      const acaiText = complementsFormatted.length > 0
+        ? `Barca de Açaí (${complementsFormatted.join(', ')}${cobFormatted})`
         : 'Barca de Açaí Tradicional';
       extras.push(acaiText);
     }
@@ -849,6 +883,7 @@ export function ComboCustomizerModal({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {availableAcaiComplements.map((item) => {
                     const isSelected = selectedAcaiComplements.includes(item.name);
+                    const itemPrice = Number(item.price) || 0;
                     return (
                       <button
                         key={item.id}
@@ -864,10 +899,17 @@ export function ComboCustomizerModal({
                           <span className="text-base">{item.icon}</span>
                           <span className="text-xs truncate">{item.name}</span>
                         </div>
-                        <div className={`w-4 h-4 rounded-md flex items-center justify-center flex-shrink-0 transition-colors ${
-                          isSelected ? 'bg-purple-500 text-dark-950' : 'border border-dark-700 bg-dark-900'
-                        }`}>
-                          {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          {itemPrice > 0 && (
+                            <span className="text-[10px] font-black font-mono text-amber-300 bg-amber-500/15 border border-amber-500/30 px-1.5 py-0.5 rounded-md">
+                              +R$ {itemPrice.toFixed(2).replace('.', ',')}
+                            </span>
+                          )}
+                          <div className={`w-4 h-4 rounded-md flex items-center justify-center flex-shrink-0 transition-colors ${
+                            isSelected ? 'bg-purple-500 text-dark-950' : 'border border-dark-700 bg-dark-900'
+                          }`}>
+                            {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                          </div>
                         </div>
                       </button>
                     );
@@ -881,20 +923,33 @@ export function ComboCustomizerModal({
                   Cobertura da Barca (Opcional):
                 </label>
                 <div className="grid grid-cols-2 gap-2">
-                  {(acaiConfig.coberturas || ['Sem Cobertura']).map(cob => (
-                    <button
-                      key={cob}
-                      type="button"
-                      onClick={() => setSelectedAcaiCobertura(cob)}
-                      className={`p-2 rounded-xl border text-xs font-bold text-left transition-all cursor-pointer ${
-                        selectedAcaiCobertura === cob
-                          ? 'bg-purple-500 text-dark-950 font-black border-purple-500'
-                          : 'bg-dark-950 text-slate-300 border-dark-800 hover:border-dark-700'
-                      }`}
-                    >
-                      {cob}
-                    </button>
-                  ))}
+                  {availableAcaiCoberturas.map(cob => {
+                    const cobPrice = Number(cob.price) || 0;
+                    const isSelected = selectedAcaiCobertura === cob.name;
+                    return (
+                      <button
+                        key={cob.id || cob.name}
+                        type="button"
+                        onClick={() => setSelectedAcaiCobertura(cob.name)}
+                        className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-between gap-2 transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-purple-500 text-dark-950 font-black border-purple-500 shadow-md'
+                            : 'bg-dark-950 text-slate-300 border-dark-800 hover:border-dark-700'
+                        }`}
+                      >
+                        <span className="truncate">{cob.name}</span>
+                        {cobPrice > 0 && (
+                          <span className={`text-[10px] font-mono font-black px-1.5 py-0.5 rounded-md flex-shrink-0 ${
+                            isSelected 
+                              ? 'bg-dark-950/25 text-dark-950 border border-dark-950/30' 
+                              : 'text-amber-300 bg-amber-500/15 border border-amber-500/30'
+                          }`}>
+                            +R$ {cobPrice.toFixed(2).replace('.', ',')}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 

@@ -42,6 +42,35 @@
   background: #cbac57;
 }
 
+/* Barra de Rolagem Horizontal Visível (Rotbar) para Abas e Menus */
+.admin-tabs-scrollbar {
+  overflow-x: auto !important;
+  scrollbar-width: thin !important;
+  scrollbar-color: #cbac57 #16161f !important;
+}
+
+.admin-tabs-scrollbar::-webkit-scrollbar {
+  height: 8px !important;
+  display: block !important;
+}
+
+.admin-tabs-scrollbar::-webkit-scrollbar-track {
+  background: #16161f !important;
+  border-radius: 9999px !important;
+  margin: 0 4px !important;
+  border: 1px solid #232330 !important;
+}
+
+.admin-tabs-scrollbar::-webkit-scrollbar-thumb {
+  background: #cbac57 !important;
+  border-radius: 9999px !important;
+  border: 1px solid #16161f !important;
+}
+
+.admin-tabs-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #f1d77e !important;
+}
+
 /* Shimmer animation for gourmet cards */
 @keyframes goldPulse {
   0%, 100% {
