@@ -1642,6 +1642,14 @@ export function AdminDashboard({
             } else if (it.flavors && it.flavors.length > 0) {
               details.push(`Sabores: ${it.flavors.join('/')}`);
             }
+            if (it.acaiComplements && it.acaiComplements.length > 0) {
+              details.push(`Barca Açaí: ${it.acaiComplements.join(', ')}`);
+            } else if (it.complements && it.complements.length > 0) {
+              details.push(`Açaí: ${it.complements.join(', ')}`);
+            }
+            if ((it.acaiCobertura || it.cobertura) && (it.acaiCobertura || it.cobertura) !== 'Sem Cobertura') {
+              details.push(`Cobertura: ${it.acaiCobertura || it.cobertura}`);
+            }
             if (it.boxOptionTitle) {
               details.push(`Opção: ${it.boxOptionTitle}`);
             }
@@ -2145,6 +2153,8 @@ export function AdminDashboard({
       isCombo: true,
       isCustomCombo: true,
       pizzaSelections: customCombo.pizzaSelections,
+      acaiComplements: customCombo.acaiComplements || [],
+      acaiCobertura: customCombo.acaiCobertura || '',
       notes: customCombo.notes || '',
       description: customCombo.description
     }]);
@@ -3362,6 +3372,32 @@ export function AdminDashboard({
                                       R$ {((it.price || 0) * (it.quantity || 1)).toFixed(2).replace('.', ',')}
                                     </span>
                                   </div>
+
+                                  {/* Pizza Selections in Combo */}
+                                  {it.pizzaSelections && it.pizzaSelections.length > 0 && (
+                                    <div className="text-[11px] text-amber-300 font-medium pl-2 mt-0.5 space-y-0.5">
+                                      {it.pizzaSelections.map((p, pIdx) => (
+                                        <div key={pIdx}>🍕 <strong>{p.pizzaTitle}:</strong> {p.flavors.join(' / ')}</div>
+                                      ))}
+                                    </div>
+                                  )}
+
+                                  {/* Standalone Pizza Flavors */}
+                                  {it.flavors && it.flavors.length > 0 && !it.pizzaSelections && (
+                                    <div className="text-[11px] text-amber-300 font-medium pl-2 mt-0.5">
+                                      🍕 <strong>Sabores:</strong> {it.flavors.join(' / ')}
+                                    </div>
+                                  )}
+
+                                  {/* Açaí Complements */}
+                                  {(it.acaiComplements?.length > 0 || it.complements?.length > 0) && (
+                                    <div className="text-[11px] text-purple-300 font-medium pl-2 mt-1 bg-purple-950/40 p-1.5 rounded border border-purple-800/40 space-y-0.5">
+                                      <div>🍧 <strong>Barca/Copo Açaí:</strong> {(it.acaiComplements || it.complements).join(', ')}</div>
+                                      {(it.acaiCobertura || it.cobertura) && (it.acaiCobertura || it.cobertura) !== 'Sem Cobertura' && (
+                                        <div>🍯 <strong>Cobertura:</strong> {it.acaiCobertura || it.cobertura}</div>
+                                      )}
+                                    </div>
+                                  )}
 
                                   {/* Custom Box details */}
                                   {it.isCustomBox && (

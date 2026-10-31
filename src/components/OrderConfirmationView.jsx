@@ -32,6 +32,22 @@ export function OrderConfirmationView({ order, onBackToMenu }) {
     message += `\n*ITENS CONFIRMADOS:*\n`;
     order.items.forEach((item, index) => {
       message += `\n${index + 1}. *${item.quantity}x ${item.name}* - R$ ${(item.price * item.quantity).toFixed(2).replace('.', ',')}\n`;
+      if (item.pizzaSelections && item.pizzaSelections.length > 0) {
+        item.pizzaSelections.forEach(p => {
+          message += `   🍕 ${p.pizzaTitle}: ${p.flavors.join(' / ')}\n`;
+        });
+        if (item.bordaGratis) {
+          message += `   🧀 Borda de Catupiry Grátis\n`;
+        }
+      } else if (item.flavors && item.flavors.length > 0) {
+        message += `   🍕 Sabores: ${item.flavors.join(' / ')}\n`;
+      }
+      if (item.acaiComplements && item.acaiComplements.length > 0) {
+        message += `   🍧 Barca de Açaí: ${item.acaiComplements.join(', ')}\n`;
+        if (item.acaiCobertura && item.acaiCobertura !== 'Sem Cobertura') {
+          message += `   🍯 Cobertura: ${item.acaiCobertura}\n`;
+        }
+      }
       if (item.isCustomBox) {
         if (item.boxOptionTitle) {
           message += `   ✨ Opção: ${item.boxOptionTitle}\n`;
@@ -256,6 +272,26 @@ export function OrderConfirmationView({ order, onBackToMenu }) {
                     <div className="font-bold text-white">
                       {item.quantity}x {item.name}
                     </div>
+                    {item.pizzaSelections && item.pizzaSelections.length > 0 && (
+                      <div className="space-y-0.5 text-[11px] text-brand-goldLight">
+                        {item.pizzaSelections.map((p, pIdx) => (
+                          <div key={pIdx}>🍕 <strong>{p.pizzaTitle}:</strong> {p.flavors.join(' / ')}</div>
+                        ))}
+                      </div>
+                    )}
+                    {item.flavors && !item.pizzaSelections && (
+                      <div className="text-[11px] text-brand-goldLight">
+                        🍕 <strong>Sabores:</strong> {item.flavors.join(' / ')}
+                      </div>
+                    )}
+                    {item.acaiComplements && item.acaiComplements.length > 0 && (
+                      <div className="text-[11px] text-purple-300 space-y-0.5">
+                        <div>🍧 <strong>Açaí:</strong> {item.acaiComplements.join(', ')}</div>
+                        {item.acaiCobertura && item.acaiCobertura !== 'Sem Cobertura' && (
+                          <div className="text-[10px] text-purple-200">🍯 <strong>Cobertura:</strong> {item.acaiCobertura}</div>
+                        )}
+                      </div>
+                    )}
                     {item.isCustomBox && (
                       <div className="space-y-0.5">
                         {item.boxOptionTitle ? (

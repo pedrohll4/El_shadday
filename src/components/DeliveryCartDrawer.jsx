@@ -116,6 +116,24 @@ export function DeliveryCartDrawer({
         if (item.bordaGratis) {
           desc += `\n   ↳ 🧀 Borda de Catupiry Grátis`;
         }
+        if (item.acaiComplements && item.acaiComplements.length > 0) {
+          desc += `\n   ↳ 🍧 *Acomp. Barca de Açaí:* ${item.acaiComplements.join(', ')}`;
+        }
+        if (item.acaiCobertura && item.acaiCobertura !== 'Sem Cobertura') {
+          desc += `\n   ↳ 🍯 *Cobertura:* ${item.acaiCobertura}`;
+        }
+        if (item.notes) {
+          desc += `\n   ↳ 📝 Obs: ${item.notes}`;
+        }
+      } else if (item.isCustomAcai || (item.acaiComplements && item.acaiComplements.length > 0)) {
+        const comps = item.acaiComplements || item.complements || [];
+        if (comps.length > 0) {
+          desc = `\n   ↳ 🍧 *Acompanhamentos:* ${comps.join(', ')}`;
+        }
+        const cob = item.acaiCobertura || item.cobertura;
+        if (cob && cob !== 'Sem Cobertura') {
+          desc += `\n   ↳ 🍯 *Cobertura:* ${cob}`;
+        }
         if (item.notes) {
           desc += `\n   ↳ 📝 Obs: ${item.notes}`;
         }
@@ -430,6 +448,30 @@ Pedido gerado via Cardápio Digital El Shadday.`;
                               🍕 <strong className="text-white">{p.pizzaTitle}:</strong> {p.flavors.join(' / ')}
                             </p>
                           ))}
+                          {item.acaiComplements && item.acaiComplements.length > 0 && (
+                            <p className="text-[11px] text-purple-300 font-medium leading-tight mt-1 pt-1 border-t border-dark-800">
+                              🍧 <strong className="text-white">Barca de Açaí:</strong> {item.acaiComplements.join(', ')}
+                              {item.acaiCobertura && item.acaiCobertura !== 'Sem Cobertura' && (
+                                <span className="text-purple-200"> • Cobertura: {item.acaiCobertura}</span>
+                              )}
+                            </p>
+                          )}
+                          {item.notes && (
+                            <p className="text-[10px] text-slate-400 italic mt-0.5">
+                              Obs: {item.notes}
+                            </p>
+                          )}
+                        </div>
+                      ) : (item.isCustomAcai || (item.acaiComplements && item.acaiComplements.length > 0)) ? (
+                        <div className="mt-1 bg-purple-950/40 p-2 rounded-lg border border-purple-800/40 space-y-0.5">
+                          <p className="text-[11px] text-purple-200 font-medium leading-tight">
+                            🍧 <strong className="text-white">Acompanhamentos:</strong> {(item.acaiComplements || item.complements || []).join(', ')}
+                          </p>
+                          {(item.acaiCobertura || item.cobertura) && (item.acaiCobertura || item.cobertura) !== 'Sem Cobertura' && (
+                            <p className="text-[10px] text-purple-300">
+                              🍯 <strong className="text-white">Cobertura:</strong> {item.acaiCobertura || item.cobertura}
+                            </p>
+                          )}
                           {item.notes && (
                             <p className="text-[10px] text-slate-400 italic mt-0.5">
                               Obs: {item.notes}

@@ -98,7 +98,26 @@ export function DesktopSidebarCart({
                     </h5>
                     
                     {/* Flavors / Customizations Breakdown */}
-                    {item.flavors && (
+                    {item.pizzaSelections && item.pizzaSelections.length > 0 && (
+                      <div className="mt-0.5 space-y-0.5">
+                        {item.pizzaSelections.map((p, pIdx) => (
+                          <p key={pIdx} className="text-[10px] text-brand-gold/90 leading-snug">
+                            🍕 <span className="text-white font-medium">{p.pizzaTitle}:</span> {p.flavors.join(' / ')}
+                          </p>
+                        ))}
+                      </div>
+                    )}
+
+                    {item.acaiComplements && item.acaiComplements.length > 0 && (
+                      <p className="text-[10px] text-purple-300 font-medium mt-0.5 leading-snug">
+                        🍧 <span className="text-white font-bold">{item.pizzaSelections ? 'Barca de Açaí:' : 'Açaí:'}</span> {item.acaiComplements.join(', ')}
+                        {item.acaiCobertura && item.acaiCobertura !== 'Sem Cobertura' && (
+                          <span className="text-purple-200"> • Cobertura: {item.acaiCobertura}</span>
+                        )}
+                      </p>
+                    )}
+
+                    {item.flavors && !item.pizzaSelections && (
                       <p className="text-[10px] text-brand-gold/90 mt-0.5 leading-snug">
                         {Array.isArray(item.flavors) ? item.flavors.join(' + ') : item.flavors}
                       </p>

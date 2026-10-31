@@ -1,25 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Sparkles, Check, Plus, Minus, Info } from 'lucide-react';
-
-const DEFAULT_COMPLEMENTS = [
-  { id: 'leite-ninho', name: 'Leite em Pó (Ninho)', defaultSelected: true },
-  { id: 'leite-condensado', name: 'Leite Condensado', defaultSelected: true },
-  { id: 'granola', name: 'Granola Crocante', defaultSelected: true },
-  { id: 'pacoca', name: 'Paçoca Rolha', defaultSelected: true },
-  { id: 'banana', name: 'Banana Fatiada Fresca', defaultSelected: true },
-  { id: 'morango', name: 'Morango Fresco', defaultSelected: false },
-  { id: 'gotas-chocolate', name: 'Gotas de Chocolate', defaultSelected: false },
-  { id: 'chocoball', name: 'Chocoball Crocante', defaultSelected: false },
-  { id: 'farinha-lactea', name: 'Farinha Láctea', defaultSelected: false },
-  { id: 'amendoim', name: 'Amendoim Triturado', defaultSelected: false }
-];
-
-const COBERTURAS = [
-  'Sem Cobertura',
-  'Cobertura de Morango',
-  'Cobertura de Chocolate',
-  'Cobertura de Caramelo'
-];
+import { OFFICIAL_ACAI_COMPLEMENTS, ACAI_COBERTURAS } from '../data/menuData';
 
 export function AcaiCustomizerModal({ isOpen, onClose, acaiProduct, onAddAcaiToCart }) {
   const [selectedComplements, setSelectedComplements] = useState([]);
@@ -29,8 +10,8 @@ export function AcaiCustomizerModal({ isOpen, onClose, acaiProduct, onAddAcaiToC
 
   useEffect(() => {
     if (isOpen && acaiProduct) {
-      // Pré-seleciona adicionais padrão da casa
-      const defaults = DEFAULT_COMPLEMENTS.filter(c => c.defaultSelected).map(c => c.name);
+      // Pré-seleciona os 5 adicionais clássicos da casa
+      const defaults = OFFICIAL_ACAI_COMPLEMENTS.filter(c => c.defaultSelected).map(c => c.name);
       setSelectedComplements(defaults);
       setSelectedCobertura('Sem Cobertura');
       setNotes('');
@@ -49,8 +30,12 @@ export function AcaiCustomizerModal({ isOpen, onClose, acaiProduct, onAddAcaiToC
     );
   };
 
+  const handleSelectDefault = () => {
+    setSelectedComplements(OFFICIAL_ACAI_COMPLEMENTS.filter(c => c.defaultSelected).map(c => c.name));
+  };
+
   const handleSelectAll = () => {
-    setSelectedComplements(DEFAULT_COMPLEMENTS.map(c => c.name));
+    setSelectedComplements(OFFICIAL_ACAI_COMPLEMENTS.map(c => c.name));
   };
 
   const handleClearAll = () => {
@@ -78,7 +63,7 @@ export function AcaiCustomizerModal({ isOpen, onClose, acaiProduct, onAddAcaiToC
       cobertura: selectedCobertura,
       notes: notes.trim(),
       image: acaiProduct.image,
-      description: `Adicionais: ${complementsText}${cobText}${notesText}`
+      description: `Acompanhamentos: ${complementsText}${cobText}${notesText}`
     };
 
     onAddAcaiToCart(customAcai);
@@ -101,7 +86,7 @@ export function AcaiCustomizerModal({ isOpen, onClose, acaiProduct, onAddAcaiToC
               </h2>
               <div className="flex items-center gap-2 mt-0.5">
                 <span className="text-xs text-purple-400 font-bold">
-                  Personalize os adicionais e coberturas
+                  11 Acompanhamentos disponíveis para copos e barcas
                 </span>
                 <span className="text-[11px] text-slate-400">• R$ {basePrice.toFixed(2).replace('.', ',')}</span>
               </div>
@@ -122,11 +107,19 @@ export function AcaiCustomizerModal({ isOpen, onClose, acaiProduct, onAddAcaiToC
           
           {/* Adicionais Inclusos */}
           <div className="space-y-2">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <label className="text-xs font-bold text-slate-200 uppercase tracking-wider block">
-                1. Escolha os Adicionais ({selectedComplements.length} selecionados):
+                1. Escolha os Acompanhamentos ({selectedComplements.length} selecionados):
               </label>
               <div className="flex items-center gap-2 text-[10px]">
+                <button
+                  type="button"
+                  onClick={handleSelectDefault}
+                  className="text-purple-400 hover:underline cursor-pointer font-bold"
+                >
+                  Padrão (5)
+                </button>
+                <span className="text-slate-600">•</span>
                 <button
                   type="button"
                   onClick={handleSelectAll}
@@ -146,7 +139,7 @@ export function AcaiCustomizerModal({ isOpen, onClose, acaiProduct, onAddAcaiToC
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {DEFAULT_COMPLEMENTS.map(item => {
+              {OFFICIAL_ACAI_COMPLEMENTS.map(item => {
                 const isSelected = selectedComplements.includes(item.name);
                 return (
                   <button
@@ -155,11 +148,14 @@ export function AcaiCustomizerModal({ isOpen, onClose, acaiProduct, onAddAcaiToC
                     onClick={() => toggleComplement(item.name)}
                     className={`p-2.5 rounded-xl border text-left flex items-center justify-between gap-2 transition-all cursor-pointer ${
                       isSelected
-                        ? 'bg-purple-500/20 border-purple-500 text-white font-bold shadow-sm'
+                        ? 'bg-purple-500/20 border-purple-500 text-white font-bold shadow-sm ring-1 ring-purple-500/50'
                         : 'bg-dark-950 border-dark-800 text-slate-300 hover:border-dark-700'
                     }`}
                   >
-                    <span className="text-xs">{item.name}</span>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-base">{item.icon}</span>
+                      <span className="text-xs truncate">{item.name}</span>
+                    </div>
                     <div className={`w-4 h-4 rounded-md flex items-center justify-center flex-shrink-0 transition-colors ${
                       isSelected ? 'bg-purple-500 text-dark-950' : 'border border-dark-700 bg-dark-900'
                     }`}>
@@ -177,7 +173,7 @@ export function AcaiCustomizerModal({ isOpen, onClose, acaiProduct, onAddAcaiToC
               2. Cobertura:
             </label>
             <div className="grid grid-cols-2 gap-2">
-              {COBERTURAS.map(cob => (
+              {ACAI_COBERTURAS.map(cob => (
                 <button
                   key={cob}
                   type="button"

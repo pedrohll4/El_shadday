@@ -174,6 +174,42 @@ export function CartDrawer({
                       </div>
                     )}
 
+                    {/* Breakdown for combos */}
+                    {item.isCombo && (
+                      <div className="mt-1 space-y-0.5 text-[10px] text-slate-300">
+                        {item.pizzaSelections && item.pizzaSelections.map((pz, idx) => (
+                          <div key={idx} className="line-clamp-1">
+                            🍕 <strong className="text-white">{pz.pizzaTitle || `Pizza ${idx + 1}`}:</strong> {pz.flavors?.join(' / ')}
+                          </div>
+                        ))}
+                        {item.acaiComplements && item.acaiComplements.length > 0 && (
+                          <div className="text-purple-300 font-semibold line-clamp-2">
+                            🍧 <strong>Barca Açaí:</strong> {item.acaiComplements.join(', ')}
+                            {item.acaiCobertura && item.acaiCobertura !== 'Sem Cobertura' ? ` (${item.acaiCobertura})` : ''}
+                          </div>
+                        )}
+                        {item.semSuinosEsfirras && (
+                          <div className="text-red-400 font-bold text-[10px]">🚫 10 Esfirras Sem Suínos</div>
+                        )}
+                        {item.notes && <div className="text-[10px] text-slate-300 italic">Obs: {item.notes}</div>}
+                      </div>
+                    )}
+
+                    {/* Breakdown for custom açaí */}
+                    {item.isCustomAcai && (
+                      <div className="mt-1 space-y-0.5 text-[10px] text-purple-300">
+                        {item.complements && item.complements.length > 0 && (
+                          <div className="line-clamp-2">
+                            🍧 <strong>Acompanhamentos:</strong> {item.complements.join(', ')}
+                          </div>
+                        )}
+                        {item.cobertura && item.cobertura !== 'Sem Cobertura' && (
+                          <div>✨ <strong>Cobertura:</strong> {item.cobertura}</div>
+                        )}
+                        {item.notes && <div className="text-[10px] text-slate-300 italic">Obs: {item.notes}</div>}
+                      </div>
+                    )}
+
                     <div className="mt-2 flex items-center justify-between">
                       <span className="text-xs font-black text-brand-gold">
                         R$ {(item.price * item.quantity).toFixed(2).replace('.', ',')}

@@ -105,18 +105,27 @@ function formatOrderItemsSummary(items = []) {
   
   return items.map(it => {
     let line = `• ${it.quantity}x *${it.name}*`;
+    const details = [];
     if (it.pizzaSelections && it.pizzaSelections.length > 0) {
       const sab = it.pizzaSelections.map(p => p.flavors?.join('/')).filter(Boolean).join(' + ');
-      if (sab) line += ` (${sab})`;
+      if (sab) details.push(sab);
     } else if (it.flavors && it.flavors.length > 0) {
-      line += ` (${it.flavors.join('/')})`;
+      details.push(it.flavors.join('/'));
     } else if (it.boxOptionTitle) {
-      line += ` (${it.boxOptionTitle}${it.notes ? ` - Obs: ${it.notes}` : ''})`;
+      details.push(it.boxOptionTitle + (it.notes ? ` - Obs: ${it.notes}` : ''));
     } else if (it.isSortido || (it.name && it.name.toLowerCase().includes('sortid')) || (it.isBox && !it.salgadasDetails)) {
-      line += ` (Sortido da Casa${it.semSuinos ? ' - Sem Suínos' : ''})`;
+      details.push(`Sortido da Casa${it.semSuinos ? ' - Sem Suínos' : ''}`);
     } else if (it.isCustomBox && !it.isSortido && it.salgadasDetails) {
       const salg = Object.entries(it.salgadasDetails).map(([f, q]) => `${q}x ${f}`).join(', ');
-      if (salg) line += ` (${salg})`;
+      if (salg) details.push(salg);
+    }
+    if (it.acaiComplements && it.acaiComplements.length > 0) {
+      details.push(`Barca: ${it.acaiComplements.join(', ')}`);
+    } else if (it.complements && it.complements.length > 0) {
+      details.push(`Acomp: ${it.complements.join(', ')}`);
+    }
+    if (details.length > 0) {
+      line += ` (${details.join(' | ')})`;
     }
     return line;
   }).join('\n');

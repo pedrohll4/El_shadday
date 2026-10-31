@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   X, Flame, Check, Sparkles, AlertCircle, Copy, 
-  ChevronRight, ArrowRight, Pizza as PizzaIcon, CheckCircle2, Package 
+  ChevronRight, ArrowRight, Pizza as PizzaIcon, CheckCircle2, Package, IceCream, ArrowLeft 
 } from 'lucide-react';
-import { getStoredPizzaFlavors } from '../data/menuData';
+import { getStoredPizzaFlavors, OFFICIAL_ACAI_COMPLEMENTS, ACAI_COBERTURAS } from '../data/menuData';
 
 // Helper to determine the pizza configuration for any combo
 export function getComboPizzasConfig(product) {
@@ -82,8 +82,11 @@ export function ComboCustomizerModal({
   comboProduct, 
   onAddComboToCart 
 }) {
+  const [activeStage, setActiveStage] = useState('pizzas'); // 'pizzas' | 'acai'
   const [activePizzaIndex, setActivePizzaIndex] = useState(0);
   const [pizzaSelections, setPizzaSelections] = useState({});
+  const [selectedAcaiComplements, setSelectedAcaiComplements] = useState([]);
+  const [selectedAcaiCobertura, setSelectedAcaiCobertura] = useState('Sem Cobertura');
   const [notes, setNotes] = useState('');
   const [validationError, setValidationError] = useState('');
   const [semSuinosEsfirras, setSemSuinosEsfirras] = useState(false);
@@ -141,10 +144,16 @@ export function ComboCustomizerModal({
   useEffect(() => {
     if (isOpen && comboProduct) {
       setFlavorsList(getStoredPizzaFlavors());
+      setActiveStage('pizzas');
       setActivePizzaIndex(0);
       setNotes('');
       setValidationError('');
       setSemSuinosEsfirras(false);
+
+      // Pre-seleciona adicionais padrão do Açaí se houver barca
+      const defaultComplements = OFFICIAL_ACAI_COMPLEMENTS.filter(c => c.defaultSelected).map(c => c.name);
+      setSelectedAcaiComplements(defaultComplements);
+      setSelectedAcaiCobertura('Sem Cobertura');
 
       // Initialize empty selection for each pizza in the combo
       const initial = {};
@@ -181,6 +190,13 @@ export function ComboCustomizerModal({
     }
   };
 
+  // Toggle complement for Açaí
+  const toggleAcaiComplement = (name) => {
+    setSelectedAcaiComplements(prev => 
+      prev.includes(name) ? prev.filter(c => c !== name) : [...prev, name]
+    );
+  };
+
   // Quick action: copy flavors from 1st pizza to 2nd pizza
   const handleCopyFromFirstPizza = () => {
     const firstPizzaFlavors = pizzaSelections[pizzasConfig[0].id] || [];
@@ -195,18 +211,13 @@ export function ComboCustomizerModal({
     }));
   };
 
-  // Check if all pizzas have at least 1 flavor
-  const allPizzasHaveFlavors = pizzasConfig.every(p => {
-    const list = pizzaSelections[p.id] || [];
-    return list.length > 0;
-  });
-
   const handleConfirm = () => {
     // Validate each pizza
     for (let i = 0; i < pizzasConfig.length; i++) {
       const p = pizzasConfig[i];
       const selected = pizzaSelections[p.id] || [];
       if (selected.length === 0) {
+        setActiveStage('pizzas');
         setActivePizzaIndex(i);
         setValidationError(`Por favor, selecione ao menos 1 sabor para a ${p.title}!`);
         return;
@@ -214,7 +225,7 @@ export function ComboCustomizerModal({
     }
 
     // Build human-friendly breakdown
-    const breakdown = pizzasConfig.map((p, idx) => {
+    const breakdown = pizzasConfig.map((p) => {
       const flavors = pizzaSelections[p.id] || [];
       return `${p.shortTitle}: ${flavors.join(' / ')}`;
     }).join(' • ');
@@ -227,7 +238,10 @@ export function ComboCustomizerModal({
       extras.push('Pizza P Doce Brigadeiro');
     }
     if (hasAcaiInCombo) {
-      extras.push('Barca de Açaí');
+      const acaiText = selectedAcaiComplements.length > 0
+        ? `Barca de Açaí (${selectedAcaiComplements.join(', ')}${selectedAcaiCobertura && selectedAcaiCobertura !== 'Sem Cobertura' ? ` + ${selectedAcaiCobertura}` : ''})`
+        : 'Barca de Açaí Tradicional';
+      extras.push(acaiText);
     }
     if (hasDydyoInCombo) {
       extras.push('Dydyo 2L');
@@ -244,6 +258,8 @@ export function ComboCustomizerModal({
         pizzaTitle: p.title,
         flavors: pizzaSelections[p.id] || []
       })),
+      acaiComplements: hasAcaiInCombo ? selectedAcaiComplements : [],
+      acaiCobertura: hasAcaiInCombo ? selectedAcaiCobertura : '',
       notes: notes.trim(),
       image: comboProduct.image,
       bordaGratis: comboProduct.bordaGratis,
@@ -269,7 +285,9 @@ export function ComboCustomizerModal({
                 {comboProduct.name}
               </h2>
               <p className="text-xs text-brand-gold font-medium">
-                {pizzasConfig.length > 1 
+                {hasAcaiInCombo
+                  ? 'Monte sua pizza com borda grátis e escolha os acompanhamentos da barca de açaí!'
+                  : pizzasConfig.length > 1 
                   ? `Monte suas ${pizzasConfig.length} pizzas individualmente com borda grátis!` 
                   : 'Escolha os sabores da sua pizza com borda de Catupiry grátis!'}
               </p>
@@ -292,19 +310,19 @@ export function ComboCustomizerModal({
           </div>
         )}
 
-        {/* Multi-Pizza Segmented Selector (When Combo has 2 or more pizzas) */}
-        {pizzasConfig.length > 1 && (
+        {/* Multi-Step Navigation: Pizzas & Barca de Açaí */}
+        {(pizzasConfig.length > 1 || hasAcaiInCombo) && (
           <div className="p-3 bg-dark-950 border-b border-dark-800">
             <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center justify-between">
-              <span>Selecione a pizza para montar:</span>
-              <span className="text-brand-gold">
-                Etapa {activePizzaIndex + 1} de {pizzasConfig.length}
+              <span>Etapas de Personalização:</span>
+              <span className="text-brand-gold font-extrabold">
+                {activeStage === 'acai' ? 'Barca de Açaí' : `Pizza (${activePizzaIndex + 1}/${pizzasConfig.length})`}
               </span>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            <div className="flex gap-2 flex-wrap">
               {pizzasConfig.map((pizza, idx) => {
-                const isSelected = activePizzaIndex === idx;
+                const isSelected = activeStage === 'pizzas' && activePizzaIndex === idx;
                 const flavorsCount = (pizzaSelections[pizza.id] || []).length;
                 const isComplete = flavorsCount > 0;
 
@@ -313,10 +331,11 @@ export function ComboCustomizerModal({
                     key={pizza.id}
                     type="button"
                     onClick={() => {
+                      setActiveStage('pizzas');
                       setActivePizzaIndex(idx);
                       setValidationError('');
                     }}
-                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer relative ${
+                    className={`flex-1 min-w-[130px] p-2.5 rounded-xl border text-left transition-all cursor-pointer relative ${
                       isSelected
                         ? 'bg-brand-gold text-dark-950 border-brand-gold shadow-glow-gold'
                         : isComplete
@@ -326,7 +345,7 @@ export function ComboCustomizerModal({
                   >
                     <div className="flex items-center justify-between gap-1">
                       <span className="font-extrabold text-xs truncate">
-                        {pizza.shortTitle}
+                        🍕 {pizza.shortTitle}
                       </span>
                       {isComplete && (
                         <CheckCircle2 className={`w-3.5 h-3.5 ${isSelected ? 'text-dark-950' : 'text-emerald-400'}`} />
@@ -341,6 +360,40 @@ export function ComboCustomizerModal({
                   </button>
                 );
               })}
+
+              {/* Aba da Barca de Açaí */}
+              {hasAcaiInCombo && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveStage('acai');
+                    setValidationError('');
+                  }}
+                  className={`flex-1 min-w-[130px] p-2.5 rounded-xl border text-left transition-all cursor-pointer relative ${
+                    activeStage === 'acai'
+                      ? 'bg-gradient-to-r from-purple-600 to-purple-500 text-white border-purple-400 shadow-md ring-1 ring-purple-400'
+                      : selectedAcaiComplements.length > 0
+                      ? 'bg-purple-950/40 border-purple-500/50 text-purple-200'
+                      : 'bg-dark-900 border-dark-800 text-slate-300 hover:border-purple-500/40'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="font-extrabold text-xs truncate flex items-center gap-1">
+                      <span>🍧</span>
+                      <span>Barca de Açaí</span>
+                    </span>
+                    {selectedAcaiComplements.length > 0 && (
+                      <CheckCircle2 className="w-3.5 h-3.5 text-purple-300" />
+                    )}
+                  </div>
+
+                  <div className="text-[10px] mt-0.5 truncate font-medium opacity-90">
+                    {selectedAcaiComplements.length > 0
+                      ? `${selectedAcaiComplements.length} acompanhamentos`
+                      : 'Escolher acompanhamentos'}
+                  </div>
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -356,88 +409,238 @@ export function ComboCustomizerModal({
             </div>
           )}
 
-          {/* Current Pizza Header & Helper */}
-          <div className="bg-dark-950/70 p-3.5 rounded-2xl border border-dark-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <div>
-              <div className="flex items-center gap-2">
-                <PizzaIcon className="w-4 h-4 text-brand-gold" />
-                <h3 className="font-display font-extrabold text-sm sm:text-base text-white">
-                  {currentPizza?.title}
-                </h3>
-              </div>
-              <p className="text-xs text-brand-goldLight mt-0.5 font-medium">
-                Escolha até {currentPizza?.maxFlavors} sabores ({currentFlavors.length}/{currentPizza?.maxFlavors} selecionados)
-              </p>
-            </div>
-
-            {/* Quick copy button if on 2nd or 3rd pizza and 1st pizza is chosen */}
-            {activePizzaIndex > 0 && (pizzaSelections[pizzasConfig[0].id] || []).length > 0 && (
-              <button
-                type="button"
-                onClick={handleCopyFromFirstPizza}
-                className="self-start sm:self-auto px-2.5 py-1.5 rounded-lg bg-dark-900 hover:bg-dark-850 text-brand-gold text-[11px] font-bold border border-brand-gold/30 flex items-center gap-1.5 transition-colors cursor-pointer"
-                title="Copiar os mesmos sabores da 1ª pizza"
-              >
-                <Copy className="w-3.5 h-3.5" />
-                <span>Repetir Sabores da 1ª Pizza</span>
-              </button>
-            )}
-          </div>
-
-          {/* Flavors Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {availableFlavors.map((flavor) => {
-              const flavorName = typeof flavor === 'object' ? flavor.name : flavor;
-              const isSelected = currentFlavors.includes(flavorName);
-              return (
-                <button
-                  key={flavor.id || flavorName}
-                  type="button"
-                  onClick={() => toggleFlavor(flavorName)}
-                  className={`p-3 rounded-xl border text-left text-xs font-semibold flex items-center justify-between gap-2 transition-all cursor-pointer ${
-                    isSelected
-                      ? 'bg-brand-gold/20 border-brand-gold text-brand-goldLight shadow-sm'
-                      : 'bg-dark-950 border-dark-800 text-slate-300 hover:border-dark-700'
-                  }`}
-                >
-                  <span className="truncate">{flavorName}</span>
-                  <div className={`w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 border ${
-                    isSelected
-                      ? 'bg-brand-gold border-brand-gold text-dark-950'
-                      : 'border-slate-600 bg-dark-900'
-                  }`}>
-                    {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+          {/* ======================================================== */}
+          {/* ETAPA 1: ESCOLHA DOS SABORES DA PIZZA                   */}
+          {/* ======================================================== */}
+          {activeStage === 'pizzas' && (
+            <div className="space-y-4">
+              
+              {/* Current Pizza Header & Helper */}
+              <div className="bg-dark-950/70 p-3.5 rounded-2xl border border-dark-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <PizzaIcon className="w-4 h-4 text-brand-gold" />
+                    <h3 className="font-display font-extrabold text-sm sm:text-base text-white">
+                      {currentPizza?.title}
+                    </h3>
                   </div>
-                </button>
-              );
-            })}
-          </div>
+                  <p className="text-xs text-brand-goldLight mt-0.5 font-medium">
+                    Escolha até {currentPizza?.maxFlavors} sabores ({currentFlavors.length}/{currentPizza?.maxFlavors} selecionados)
+                  </p>
+                </div>
 
-          {/* Next Pizza Shortcut Button if multiple pizzas */}
-          {pizzasConfig.length > 1 && activePizzaIndex < pizzasConfig.length - 1 && currentFlavors.length > 0 && (
-            <div className="pt-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setActivePizzaIndex(activePizzaIndex + 1);
-                  setValidationError('');
-                }}
-                className="w-full py-2.5 px-4 rounded-xl bg-dark-800 hover:bg-dark-750 text-brand-gold hover:text-amber-300 text-xs font-bold border border-brand-gold/30 flex items-center justify-center gap-2 transition-all cursor-pointer"
-              >
-                <span>Avançar para a {pizzasConfig[activePizzaIndex + 1].shortTitle}</span>
-                <ChevronRight className="w-4 h-4" />
-              </button>
+                {/* Quick copy button if on 2nd or 3rd pizza and 1st pizza is chosen */}
+                {activePizzaIndex > 0 && (pizzaSelections[pizzasConfig[0].id] || []).length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleCopyFromFirstPizza}
+                    className="self-start sm:self-auto px-2.5 py-1.5 rounded-lg bg-dark-900 hover:bg-dark-850 text-brand-gold text-[11px] font-bold border border-brand-gold/30 flex items-center gap-1.5 transition-colors cursor-pointer"
+                    title="Copiar os mesmos sabores da 1ª pizza"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                    <span>Repetir Sabores da 1ª Pizza</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Flavors Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {availableFlavors.map((flavor) => {
+                  const flavorName = typeof flavor === 'object' ? flavor.name : flavor;
+                  const isSelected = currentFlavors.includes(flavorName);
+                  return (
+                    <button
+                      key={flavor.id || flavorName}
+                      type="button"
+                      onClick={() => toggleFlavor(flavorName)}
+                      className={`p-3 rounded-xl border text-left text-xs font-semibold flex items-center justify-between gap-2 transition-all cursor-pointer ${
+                        isSelected
+                          ? 'bg-brand-gold/20 border-brand-gold text-brand-goldLight shadow-sm'
+                          : 'bg-dark-950 border-dark-800 text-slate-300 hover:border-dark-700'
+                      }`}
+                    >
+                      <span className="truncate">{flavorName}</span>
+                      <div className={`w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 border ${
+                        isSelected
+                          ? 'bg-brand-gold border-brand-gold text-dark-950'
+                          : 'border-slate-600 bg-dark-900'
+                      }`}>
+                        {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Botão de Avanço para a Barca de Açaí */}
+              {hasAcaiInCombo && (
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (currentFlavors.length === 0) {
+                        setValidationError('Selecione ao menos 1 sabor para a pizza antes de avançar!');
+                        return;
+                      }
+                      setActiveStage('acai');
+                      setValidationError('');
+                    }}
+                    className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-purple-600 to-brand-gold text-white font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg hover:scale-101 active:scale-98 transition-all cursor-pointer"
+                  >
+                    <span>Avançar para os Acompanhamentos da Barca de Açaí</span>
+                    <span>🍧</span>
+                    <ChevronRight className="w-4 h-4 stroke-[3]" />
+                  </button>
+                </div>
+              )}
+
+              {/* Next Pizza Shortcut Button if multiple pizzas */}
+              {pizzasConfig.length > 1 && activePizzaIndex < pizzasConfig.length - 1 && currentFlavors.length > 0 && (
+                <div className="pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActivePizzaIndex(activePizzaIndex + 1);
+                      setValidationError('');
+                    }}
+                    className="w-full py-2.5 px-4 rounded-xl bg-dark-800 hover:bg-dark-750 text-brand-gold hover:text-amber-300 text-xs font-bold border border-brand-gold/30 flex items-center justify-center gap-2 transition-all cursor-pointer"
+                  >
+                    <span>Avançar para a {pizzasConfig[activePizzaIndex + 1].shortTitle}</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
-          {/* Live Summary of Pizzas */}
+          {/* ======================================================== */}
+          {/* ETAPA 2: ESCOLHA DOS ACOMPANHAMENTOS DA BARCA DE AÇAÍ   */}
+          {/* ======================================================== */}
+          {activeStage === 'acai' && hasAcaiInCombo && (
+            <div className="space-y-4 animate-fade-in">
+              
+              {/* Header do Açaí */}
+              <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-purple-950/60 to-dark-950 border border-purple-500/40 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-purple-500/20 text-purple-300 flex items-center justify-center flex-shrink-0 border border-purple-500/30">
+                    <Sparkles className="w-5 h-5 text-purple-400" />
+                  </div>
+                  <div>
+                    <h3 className="font-display font-extrabold text-sm sm:text-base text-white">
+                      Barca de Açaí Especial Inclusa
+                    </h3>
+                    <p className="text-xs text-purple-300 font-medium">
+                      11 acompanhamentos frescos disponíveis para a sua barca
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveStage('pizzas')}
+                  className="px-2.5 py-1.5 rounded-lg bg-dark-900 hover:bg-dark-850 text-slate-300 text-[11px] font-bold border border-dark-750 flex items-center gap-1 cursor-pointer transition-colors"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>Voltar p/ Pizza</span>
+                </button>
+              </div>
+
+              {/* Seletor de Acompanhamentos do Açaí */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <label className="text-xs font-bold text-slate-200 uppercase tracking-wider block">
+                    Escolha os Acompanhamentos ({selectedAcaiComplements.length} selecionados):
+                  </label>
+                  <div className="flex items-center gap-2 text-[10px]">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedAcaiComplements(OFFICIAL_ACAI_COMPLEMENTS.filter(c => c.defaultSelected).map(c => c.name))}
+                      className="text-purple-400 hover:underline cursor-pointer font-bold"
+                    >
+                      Padrão (5)
+                    </button>
+                    <span className="text-slate-600">•</span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedAcaiComplements(OFFICIAL_ACAI_COMPLEMENTS.map(c => c.name))}
+                      className="text-purple-400 hover:underline cursor-pointer font-bold"
+                    >
+                      Marcar Todos
+                    </button>
+                    <span className="text-slate-600">•</span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedAcaiComplements([])}
+                      className="text-slate-400 hover:underline cursor-pointer"
+                    >
+                      Limpar
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {OFFICIAL_ACAI_COMPLEMENTS.map((item) => {
+                    const isSelected = selectedAcaiComplements.includes(item.name);
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => toggleAcaiComplement(item.name)}
+                        className={`p-2.5 rounded-xl border text-left flex items-center justify-between gap-2 transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-purple-500/20 border-purple-500 text-white font-bold shadow-sm ring-1 ring-purple-500/50'
+                            : 'bg-dark-950 border-dark-800 text-slate-300 hover:border-dark-700'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-base">{item.icon}</span>
+                          <span className="text-xs truncate">{item.name}</span>
+                        </div>
+                        <div className={`w-4 h-4 rounded-md flex items-center justify-center flex-shrink-0 transition-colors ${
+                          isSelected ? 'bg-purple-500 text-dark-950' : 'border border-dark-700 bg-dark-900'
+                        }`}>
+                          {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Cobertura do Açaí */}
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-200 uppercase tracking-wider block">
+                  Cobertura da Barca (Opcional):
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {ACAI_COBERTURAS.map(cob => (
+                    <button
+                      key={cob}
+                      type="button"
+                      onClick={() => setSelectedAcaiCobertura(cob)}
+                      className={`p-2 rounded-xl border text-xs font-bold text-left transition-all cursor-pointer ${
+                        selectedAcaiCobertura === cob
+                          ? 'bg-purple-500 text-dark-950 font-black border-purple-500'
+                          : 'bg-dark-950 text-slate-300 border-dark-800 hover:border-dark-700'
+                      }`}
+                    >
+                      {cob}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+            </div>
+          )}
+
+          {/* Resumo ao Vivo do Combo */}
           <div className="bg-dark-950 p-3.5 rounded-2xl border border-dark-800 space-y-2 pt-3">
             <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
               Resumo do Combo:
             </span>
 
             <div className="space-y-1.5 text-xs">
-              {pizzasConfig.map((pizza, idx) => {
+              {pizzasConfig.map((pizza) => {
                 const flavors = pizzaSelections[pizza.id] || [];
                 return (
                   <div key={pizza.id} className="flex items-start justify-between gap-2">
@@ -450,6 +653,19 @@ export function ComboCustomizerModal({
                   </div>
                 );
               })}
+
+              {hasAcaiInCombo && (
+                <div className="flex items-start justify-between gap-2 pt-1 border-t border-dark-850">
+                  <span className="text-slate-400 font-medium">
+                    🍧 Barca de Açaí:
+                  </span>
+                  <span className={`text-right font-bold ${selectedAcaiComplements.length > 0 ? 'text-purple-300' : 'text-slate-500 italic'}`}>
+                    {selectedAcaiComplements.length > 0 
+                      ? `${selectedAcaiComplements.length} adicionais selecionados` 
+                      : 'Nenhum adicional'}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -484,8 +700,8 @@ export function ComboCustomizerModal({
             </div>
           )}
 
-          {/* Outros Acompanhamentos Inclusos no Combo */}
-          {(hasDydyoInCombo || hasAcaiInCombo || hasPizzaPInCombo) && (
+          {/* Outros Acompanhamentos Inclusos no Combo (Dydyo, Pizza P) */}
+          {(hasDydyoInCombo || hasPizzaPInCombo) && (
             <div className="p-3.5 rounded-2xl bg-dark-950 border border-brand-gold/30 flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-xl bg-brand-gold/15 text-brand-gold flex items-center justify-center flex-shrink-0">
                 <Sparkles className="w-4 h-4" />
@@ -498,11 +714,6 @@ export function ComboCustomizerModal({
                   {hasPizzaPInCombo && (
                     <span className="text-[11px] font-bold text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded border border-amber-500/30">
                       🍫 1 Pizza P Doce Brigadeiro
-                    </span>
-                  )}
-                  {hasAcaiInCombo && (
-                    <span className="text-[11px] font-bold text-purple-300 bg-purple-500/20 px-2 py-0.5 rounded border border-purple-500/30">
-                      🍧 1 Barca de Açaí
                     </span>
                   )}
                   {hasDydyoInCombo && (
@@ -522,7 +733,7 @@ export function ComboCustomizerModal({
             </label>
             <input
               type="text"
-              placeholder="Ex: 1ª Pizza bem assada, 2ª Pizza sem cebola..."
+              placeholder="Ex: Pizza bem assada, sem cebola, caprichar no morango do açaí..."
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               className="w-full px-3.5 py-2.5 rounded-xl bg-dark-950 border border-dark-800 focus:border-brand-gold text-white text-xs placeholder-slate-500 focus:outline-none transition-colors"
@@ -532,26 +743,31 @@ export function ComboCustomizerModal({
         </div>
 
         {/* Modal Footer */}
-        <div className="p-4 sm:p-5 bg-dark-950 border-t border-dark-800 flex items-center justify-between gap-3">
+        <div className="p-4 sm:p-5 border-t border-dark-800 bg-dark-950 flex items-center justify-between gap-3">
           <div>
-            <span className="text-[11px] text-slate-400 block">Total do Combo:</span>
-            <span className="text-xl sm:text-2xl font-black text-brand-gold">
-              R$ {comboProduct.price.toFixed(2).replace('.', ',')}
+            <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Valor do Combo:</span>
+            <span className="text-base sm:text-lg font-black text-brand-gold font-mono">
+              R$ {Number(comboProduct.price || 0).toFixed(2).replace('.', ',')}
             </span>
           </div>
 
-          <button
-            type="button"
-            onClick={handleConfirm}
-            className={`px-6 py-3.5 rounded-xl font-extrabold text-xs sm:text-sm shadow-glow-gold transition-all duration-200 cursor-pointer flex items-center gap-2 ${
-              allPizzasHaveFlavors
-                ? 'bg-gradient-to-r from-brand-gold to-amber-400 hover:from-amber-400 hover:to-brand-gold text-dark-950 active:scale-95'
-                : 'bg-dark-800 text-slate-400 hover:text-white border border-dark-700'
-            }`}
-          >
-            <span>Adicionar Combo</span>
-            <ChevronRight className="w-4 h-4 stroke-[3]" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-3 py-2.5 rounded-xl bg-dark-850 hover:bg-dark-800 text-slate-400 font-bold text-xs cursor-pointer transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirm}
+              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-brand-gold via-amber-400 to-brand-gold hover:from-amber-400 hover:to-brand-gold text-dark-950 font-black text-xs sm:text-sm shadow-glow-gold flex items-center gap-1.5 cursor-pointer active:scale-98 transition-all"
+            >
+              <Check className="w-4 h-4 stroke-[3]" />
+              <span>Adicionar Combo</span>
+            </button>
+          </div>
         </div>
 
       </div>

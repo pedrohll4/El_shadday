@@ -204,7 +204,7 @@ export const PRODUCTS = [
     id: "combo-fm-acai",
     categoryId: "combos",
     name: "1 Pizza Família + 1 Barca de Açaí",
-    description: "Sal e doce na medida certa! 1 Pizza Família 8 fatias (até 2 sabores com borda grátis) + 1 Barca de Açaí trufada com até 5 adicionais generosos.",
+    description: "Sal e doce na medida certa! 1 Pizza Família 8 fatias (até 2 sabores com borda grátis) + 1 Barca de Açaí trufada com seus acompanhamentos favoritos à escolha.",
     price: 65.00,
     originalPrice: 65.00,
     badge: "Sal + Doce 🍧",
@@ -216,13 +216,13 @@ export const PRODUCTS = [
     id: "combo-gg-acai",
     categoryId: "combos",
     name: "1 Pizza Gigante + 1 Barca de Açaí",
-    description: "1 Pizza Gigante 12 fatias (até 3 sabores com borda de Catupiry grátis) + 1 Barca de Açaí com até 5 adicionais generosos à escolha.",
+    description: "1 Pizza Gigante 12 fatias (até 3 sabores com borda de Catupiry grátis) + 1 Barca de Açaí com acompanhamentos à escolha.",
     price: 75.00,
     originalPrice: 80.00,
     badge: "Sucesso Absoluto 🏆",
     bordaGratis: true,
     image: "https://assets.olaclick.app/companies/products/images/800/b8ac4f80-f52f-4cea-87ba-863ad904669f.jpeg",
-    details: "Pizza Gigante + Barca de Açaí com 5 adicionais."
+    details: "Pizza Gigante + Barca de Açaí com acompanhamentos."
   },
   {
     id: "combo-1gg-1fm-10esf",
@@ -594,12 +594,12 @@ export const PRODUCTS = [
     id: "barca-acai-especial",
     categoryId: "acai",
     name: "Barca de Açaí Especial",
-    description: "A famosa barca de açaí da El Shadday! Açaí cremoso de altíssima qualidade trufado, servido na barca com até 5 adicionais generosos: Leite em pó, Leite condensado, Granola, Paçoca, Banana fatiada e Coberturas.",
+    description: "A famosa barca de açaí da El Shadday! Açaí cremoso trufado de altíssima qualidade servido na barca com 11 opções de acompanhamentos à sua escolha: Frutas frescas, Leite em pó, Granola, Paçoca, Ovomaltine, M&M's e coberturas.",
     price: 35.00,
     originalPrice: 40.00,
     badge: "Sucesso da Casa 🍧",
     image: "/barca_acai.jpg",
-    details: "Açaí cremoso trufado + até 5 adicionais generosos à sua escolha."
+    details: "Açaí cremoso trufado + acompanhamentos selecionados à sua escolha."
   },
   {
     id: "acai-copo-500ml",
@@ -1244,3 +1244,25 @@ export function getCardMachineNoticeText(cardSettings) {
   const pctStr = (Number(cardSettings.percentageRate) || 0).toString().replace('.', ',');
   return `⚠️ Pagamentos no cartão possuem acréscimo de ${pctStr}% referente à taxa da maquininha cobrada pela operadora.`;
 }
+
+// 11 ACOMPANHAMENTOS OFICIAIS PARA COPOS E BARCAS DE AÇAÍ
+export const OFFICIAL_ACAI_COMPLEMENTS = [
+  { id: 'pacoca', name: 'Paçoca', icon: '🥜', defaultSelected: true },
+  { id: 'amendoim-torrado', name: 'Amendoim torrado', icon: '🥜', defaultSelected: false },
+  { id: 'leite-em-po', name: 'Leite em pó', icon: '🥛', defaultSelected: true },
+  { id: 'granola-crocante', name: 'Granola crocante', icon: '🥣', defaultSelected: true },
+  { id: 'morango-fresco', name: 'Morango fresco', icon: '🍓', defaultSelected: true },
+  { id: 'banana-fatiada', name: 'Banana fatiada', icon: '🍌', defaultSelected: true },
+  { id: 'kiwi-fresco', name: 'Kiwi fresco', icon: '🥝', defaultSelected: false },
+  { id: 'chocoball', name: 'Chocoball', icon: '🍫', defaultSelected: false },
+  { id: 'ovomaltine', name: 'Ovomaltine', icon: '✨', defaultSelected: false },
+  { id: 'mms', name: "M&M's", icon: '🍬', defaultSelected: false },
+  { id: 'granulado-nobre', name: 'Granulado nobre', icon: '🍫', defaultSelected: false }
+];
+
+export const ACAI_COBERTURAS = [
+  'Sem Cobertura',
+  'Cobertura de Morango',
+  'Cobertura de Chocolate',
+  'Cobertura de Caramelo'
+];
