@@ -57,8 +57,9 @@ import {
   clearCustomSupabaseConfig 
 } from '../services/supabaseClient';
 import { dispatchConfigSync } from '../services/configSyncService';
+import { uploadMediaToSupabaseStorage } from '../services/storageService';
 import { ImageUploader } from './ImageUploader';
-import { isVideoUrl, getVideoPosterUrl } from '../utils/imageCompressor';
+import { isVideoUrl, getVideoPosterUrl, compressImageFile } from '../utils/imageCompressor';
 import { ROLES, ROLE_LABELS, getCurrentUser } from '../services/authService';
 import { getStoredBranches } from '../data/branchesData';
 import { MasterFinancialView } from './admin/MasterFinancialView';
@@ -605,6 +606,7 @@ export function AdminDashboard({
   const [flavorFormCategory, setFlavorFormCategory] = useState('salgadas');
   const [flavorFormDescription, setFlavorFormDescription] = useState('');
   const [flavorFormImage, setFlavorFormImage] = useState('');
+  const [isUploadingFlavorImage, setIsUploadingFlavorImage] = useState(false);
   const [flavorFormIsAvailable, setFlavorFormIsAvailable] = useState(true);
 
   // Açaí Complements & Settings State
@@ -1186,6 +1188,41 @@ export function AdminDashboard({
   };
 
   // Handlers for Pizza Flavors
+  const handleUploadFlavorImageFile = async (file) => {
+    if (!file) return;
+    setIsUploadingFlavorImage(true);
+    try {
+      // 1. Tenta hospedar diretamente no Supabase Storage (Nuvem)
+      const storageUrl = await uploadMediaToSupabaseStorage(file, 'flavors');
+      if (storageUrl) {
+        setFlavorFormImage(storageUrl);
+        triggerMenuToast('Foto enviada para o banco Supabase com sucesso!');
+        return;
+      }
+
+      // 2. Fallback: comprime em WebP leve otimizado para salvar no banco
+      const comp = await compressImageFile(file, {
+        maxWidth: 500,
+        maxHeight: 500,
+        quality: 0.80,
+        mimeType: 'image/webp'
+      });
+      if (comp?.dataUrl) {
+        setFlavorFormImage(comp.dataUrl);
+        triggerMenuToast('Foto otimizada e pronta para salvar!');
+      }
+    } catch (err) {
+      console.warn('Erro ao processar imagem do sabor:', err);
+      const reader = new FileReader();
+      reader.onload = (re) => {
+        if (re.target?.result) setFlavorFormImage(re.target.result);
+      };
+      reader.readAsDataURL(file);
+    } finally {
+      setIsUploadingFlavorImage(false);
+    }
+  };
+
   const handleOpenCreateFlavor = () => {
     setEditingFlavor(null);
     setFlavorFormName('');
@@ -8134,27 +8171,26 @@ export function AdminDashboard({
                       Aparecerá nos combos de pizza e na montagem individual
                     </p>
                     <div className="flex items-center gap-2 flex-wrap">
-                      <label className="px-2.5 py-1 rounded-lg bg-dark-800 hover:bg-dark-750 text-slate-200 border border-dark-700 text-[11px] font-bold cursor-pointer transition-colors flex items-center gap-1">
-                        <Camera className="w-3.5 h-3.5 text-brand-gold" />
-                        <span>Carregar do Aparelho</span>
+                      <label className="px-2.5 py-1 rounded-lg bg-dark-800 hover:bg-dark-750 text-slate-200 border border-dark-700 text-[11px] font-bold cursor-pointer transition-colors flex items-center gap-1.5">
+                        {isUploadingFlavorImage ? (
+                          <RefreshCw className="w-3.5 h-3.5 text-brand-gold animate-spin" />
+                        ) : (
+                          <Camera className="w-3.5 h-3.5 text-brand-gold" />
+                        )}
+                        <span>{isUploadingFlavorImage ? 'Salvando na Nuvem...' : 'Carregar do Aparelho'}</span>
                         <input
                           type="file"
                           accept="image/*"
+                          disabled={isUploadingFlavorImage}
                           className="hidden"
                           onChange={(e) => {
                             const file = e.target.files?.[0];
-                            if (file) {
-                              const reader = new FileReader();
-                              reader.onload = (re) => {
-                                if (re.target?.result) setFlavorFormImage(re.target.result);
-                              };
-                              reader.readAsDataURL(file);
-                            }
+                            if (file) handleUploadFlavorImageFile(file);
                           }}
                         />
                       </label>
 
-                      {flavorFormImage && (
+                      {flavorFormImage && !isUploadingFlavorImage && (
                         <button
                           type="button"
                           onClick={() => setFlavorFormImage('')}
