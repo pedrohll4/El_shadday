@@ -133,13 +133,23 @@ export function ProductCard({
       <div className="flex-shrink-0 flex flex-col justify-between items-end">
         
         {/* Rounded Image Thumbnail */}
-        <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl overflow-hidden relative bg-dark-950 border border-white/10 group-hover:border-brand-gold/40 transition-colors shadow-inner">
-          <img
-            src={product.image}
-            alt={product.name}
-            className="w-full h-full object-cover group-hover:scale-106 transition-transform duration-500"
-            loading="lazy"
-          />
+        <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl overflow-hidden relative bg-dark-950 border border-white/10 group-hover:border-brand-gold/40 transition-colors shadow-inner flex items-center justify-center">
+          {product.image ? (
+            <img
+              src={product.image}
+              alt={product.name}
+              className="w-full h-full object-cover group-hover:scale-106 transition-transform duration-500"
+              loading="lazy"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none';
+              }}
+            />
+          ) : (
+            <div className="flex flex-col items-center justify-center text-slate-600 gap-1 p-2 text-center">
+              <PizzaIcon className="w-8 h-8 text-brand-gold/40" />
+              <span className="text-[9px] text-slate-500 font-medium">Sem foto</span>
+            </div>
+          )}
         </div>
 
         {/* Action Button: Customizable vs Direct +/- */}

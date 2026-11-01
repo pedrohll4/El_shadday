@@ -657,7 +657,7 @@ export function ComboCustomizerModal({
                   const isSelected = currentFlavors.includes(flavorName);
                   const isDisabled = !isSelected && currentFlavors.length >= currentPizza.maxFlavors;
                   const extraPrice = getFlavorSurchargeForPizza(currentPizzaBase, flavor);
-                  const imageSrc = flavor.image || `/flavors/${flavor.id || 'calabresa'}.png`;
+                  const imageSrc = flavor.image || '';
 
                   return (
                     <button
@@ -675,15 +675,19 @@ export function ComboCustomizerModal({
                     >
                       {/* Left: Transparent Cutout Pizza Flavor Image */}
                       <div className="relative w-14 h-14 sm:w-16 sm:h-16 flex-shrink-0 flex items-center justify-center rounded-xl bg-dark-900/80 border border-dark-800/80 p-1 group-hover:scale-105 transition-transform">
-                        <img
-                          src={imageSrc}
-                          alt={flavorName}
-                          className="w-full h-full object-contain filter drop-shadow-md"
-                          loading="lazy"
-                          onError={(e) => {
-                            e.currentTarget.style.display = 'none';
-                          }}
-                        />
+                        {imageSrc ? (
+                          <img
+                            src={imageSrc}
+                            alt={flavorName}
+                            className="w-full h-full object-contain filter drop-shadow-md"
+                            loading="lazy"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                            }}
+                          />
+                        ) : (
+                          <Pizza className="w-6 h-6 sm:w-7 sm:h-7 text-brand-gold/60" />
+                        )}
                       </div>
 
                       {/* Center Info */}

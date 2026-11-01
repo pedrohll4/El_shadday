@@ -255,6 +255,15 @@ export async function fetchCloudConfigHistory() {
               latestStore = parsed.data;
             } else if (parsed.type === 'PIZZA_FLAVORS_UPDATE' && Array.isArray(parsed.data)) {
               latestFlavors = parsed.data;
+            } else if (parsed.type === 'PIZZA_FLAVORS_UPDATE_PING' || parsed.type === 'PIZZA_FLAVORS_PING') {
+              if (isSupabaseConfigured && supabase) {
+                try {
+                  const { data: csData } = await supabase.from('company_settings').select('pizza_flavors').eq('id', 'el_shadday_config').single();
+                  if (Array.isArray(csData?.pizza_flavors)) {
+                    latestFlavors = csData.pizza_flavors;
+                  }
+                } catch (e) {}
+              }
             } else if (parsed.type === 'ACAI_SETTINGS_UPDATE' && parsed.data) {
               saveStoredAcaiSettings(parsed.data);
             } else if (parsed.type === 'BUFFET_CATEGORIES_UPDATE' && Array.isArray(parsed.data)) {
@@ -363,6 +372,15 @@ export function subscribeToConfigEvents({ onProductsUpdate, onGalleryUpdate, onP
             } else if (data.type === 'PIZZA_FLAVORS_UPDATE' && Array.isArray(data.data)) {
               saveStoredPizzaFlavors(data.data);
               if (onPizzaFlavorsUpdate) onPizzaFlavorsUpdate(data.data);
+            } else if (data.type === 'PIZZA_FLAVORS_UPDATE_PING' || data.type === 'PIZZA_FLAVORS_PING') {
+              if (isSupabaseConfigured && supabase) {
+                supabase.from('company_settings').select('pizza_flavors').eq('id', 'el_shadday_config').single().then(({ data: csData }) => {
+                  if (Array.isArray(csData?.pizza_flavors)) {
+                    saveStoredPizzaFlavors(csData.pizza_flavors);
+                    if (onPizzaFlavorsUpdate) onPizzaFlavorsUpdate(csData.pizza_flavors);
+                  }
+                }).catch(() => {});
+              }
             } else if (data.type === 'BUFFET_CATEGORIES_UPDATE' && Array.isArray(data.data)) {
               saveStoredBuffetCategories(data.data);
               if (onBuffetCategoriesUpdate) onBuffetCategoriesUpdate(data.data);

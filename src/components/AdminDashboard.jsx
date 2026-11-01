@@ -10,7 +10,7 @@ import {
   Utensils, ToggleLeft, ToggleRight, Save, Layers, CheckSquare,
   Pizza, ArrowUpRight, Info, CreditCard, Play, Film,
   Building2, Users, Crown, Sliders, BarChart3, Star, QrCode,
-  Settings2, Smartphone, Banknote, Shuffle, Lock
+  Settings2, Smartphone, Banknote, Shuffle, Lock, ImageOff
 } from 'lucide-react';
 import { 
   RESTAURANT_INFO, 
@@ -1050,7 +1050,7 @@ export function AdminDashboard({
       badge: prodFormBadge.trim() || (prodFormIsPromo ? 'Promoção 🔥' : ''),
       description: prodFormDescription.trim(),
       details: prodFormDetails.trim(),
-      image: prodFormImage.trim() || 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&auto=format&fit=crop&q=80',
+      image: prodFormImage.trim(),
       isAvailable: prodFormIsAvailable,
       isPromo: prodFormIsPromo,
       isHighlight: !!prodFormIsHighlight,
@@ -1354,6 +1354,10 @@ export function AdminDashboard({
 
   const handleSaveFlavor = async (e) => {
     e.preventDefault();
+    if (isUploadingFlavorImage) {
+      alert('Aguarde o envio da foto para a nuvem terminar antes de salvar o sabor.');
+      return;
+    }
     if (!flavorFormName.trim()) {
       alert('Informe o nome do sabor.');
       return;
@@ -1370,7 +1374,7 @@ export function AdminDashboard({
       price: priceNum,
       category: flavorFormCategory,
       description: flavorFormDescription.trim(),
-      image: flavorFormImage.trim() || (editingFlavor?.image || ''),
+      image: flavorFormImage.trim(),
       isAvailable: flavorFormIsAvailable
     };
 
@@ -1638,6 +1642,25 @@ export function AdminDashboard({
     saveStoredPizzaFlavors(updated);
     dispatchConfigSync('PIZZA_FLAVORS_UPDATE', updated);
     triggerMenuToast('Sabor de pizza excluído.');
+  };
+
+  const handleRemoveFlavorPhoto = (flavorId) => {
+    const target = pizzaFlavors.find(f => f.id === flavorId);
+    if (!window.confirm(`Deseja remover a foto do sabor "${target?.name || ''}"?`)) return;
+    const updated = pizzaFlavors.map(f => f.id === flavorId ? { ...f, image: '' } : f);
+    setPizzaFlavors(updated);
+    saveStoredPizzaFlavors(updated);
+    dispatchConfigSync('PIZZA_FLAVORS_UPDATE', updated);
+    triggerMenuToast(`Foto do sabor "${target?.name || ''}" removida com sucesso!`);
+  };
+
+  const handleClearAllFlavorPhotos = () => {
+    if (!window.confirm('Deseja remover as fotos de todos os sabores de pizza? Os nomes, categorias e preços serão mantidos intactos.')) return;
+    const updated = pizzaFlavors.map(f => ({ ...f, image: '' }));
+    setPizzaFlavors(updated);
+    saveStoredPizzaFlavors(updated);
+    dispatchConfigSync('PIZZA_FLAVORS_UPDATE', updated);
+    triggerMenuToast('Todas as fotos dos sabores foram removidas com sucesso!');
   };
 
   const handleResetFlavorsToDefault = () => {
@@ -5376,6 +5399,18 @@ export function AdminDashboard({
                           <span>+ Novo Sabor de Pizza</span>
                         </button>
 
+                        {pizzaFlavors.some(f => Boolean(f.image)) && (
+                          <button
+                            type="button"
+                            onClick={handleClearAllFlavorPhotos}
+                            className="px-3 py-2 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 hover:text-white text-xs font-semibold border border-amber-500/40 flex items-center gap-1.5 transition-colors cursor-pointer"
+                            title="Remover as fotos de todos os sabores de pizza"
+                          >
+                            <ImageOff className="w-3.5 h-3.5 text-amber-400" />
+                            <span>Limpar Fotos dos Sabores</span>
+                          </button>
+                        )}
+
                         {pizzaFlavors.length > 0 && (
                           <button
                             type="button"
@@ -6094,11 +6129,22 @@ export function AdminDashboard({
                             </button>
 
                             <div className="flex items-center gap-1.5">
+                              {flavor.image && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveFlavorPhoto(flavor.id)}
+                                  className="p-2 rounded-xl bg-dark-800 hover:bg-rose-950/40 text-slate-400 hover:text-rose-400 transition-colors cursor-pointer"
+                                  title="Remover foto deste sabor"
+                                >
+                                  <ImageOff className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+
                               <button
                                 type="button"
                                 onClick={() => handleOpenEditFlavor(flavor)}
                                 className="p-2 rounded-xl bg-dark-800 hover:bg-dark-750 text-slate-300 hover:text-brand-gold transition-colors cursor-pointer"
-                                title="Editar nome, preço ou ingredientes"
+                                title="Editar nome, foto ou preço"
                               >
                                 <Edit2 className="w-3.5 h-3.5" />
                               </button>
@@ -9668,10 +9714,17 @@ export function AdminDashboard({
 
                 <button
                   type="submit"
-                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-brand-gold to-amber-400 text-dark-950 font-black text-xs hover:brightness-110 shadow-glow-gold cursor-pointer flex items-center gap-1.5"
+                  disabled={isUploadingFlavorImage}
+                  className={`px-5 py-2.5 rounded-xl bg-gradient-to-r from-brand-gold to-amber-400 text-dark-950 font-black text-xs hover:brightness-110 shadow-glow-gold cursor-pointer flex items-center gap-1.5 ${
+                    isUploadingFlavorImage ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
                 >
-                  <Save className="w-4 h-4" />
-                  <span>{editingFlavor ? 'Salvar Sabor' : 'Cadastrar Sabor'}</span>
+                  {isUploadingFlavorImage ? (
+                    <RefreshCw className="w-4 h-4 animate-spin text-dark-950" />
+                  ) : (
+                    <Save className="w-4 h-4" />
+                  )}
+                  <span>{isUploadingFlavorImage ? 'Enviando foto...' : editingFlavor ? 'Salvar Sabor' : 'Cadastrar Sabor'}</span>
                 </button>
               </div>
 

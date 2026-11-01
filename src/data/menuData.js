@@ -1030,7 +1030,8 @@ export function normalizeProductsList(prods) {
 }
 
 export function normalizePizzaFlavors(flavors) {
-  if (!Array.isArray(flavors) || flavors.length === 0) return INITIAL_PIZZA_FLAVORS;
+  if (!Array.isArray(flavors)) return INITIAL_PIZZA_FLAVORS;
+  if (flavors.length === 0) return [];
   const hasDoces = flavors.some(f => f && typeof f === 'object' && f.category === 'doces');
   let normalized = flavors.map((item, idx) => {
     if (!item) return null;
@@ -1043,29 +1044,41 @@ export function normalizePizzaFlavors(flavors) {
         price: found ? found.price : 40.00,
         category: found ? found.category : 'salgadas',
         description: found ? found.description : '',
-        image: found?.image || `/flavors/${found?.id || generatedId}.png`,
+        image: found?.image || '',
         isAvailable: true
       };
     }
     const id = item.id || `flavor-${Date.now()}-${idx}`;
     const itemName = item.name || '';
     const found = INITIAL_PIZZA_FLAVORS.find(f => f.id === id || (f.name && itemName && f.name.toLowerCase() === itemName.toLowerCase()));
+
+    // Respeita a imagem escolhida ou removida (string vazia '' = sem foto).
+    // Nunca ressuscita found.image se o usuário tiver apagado a foto.
+    let itemImage = '';
+    if (typeof item.image === 'string') {
+      itemImage = item.image.trim();
+    } else if (item.image === null || item.image === false) {
+      itemImage = '';
+    } else if (found?.image) {
+      itemImage = found.image;
+    }
+
     return {
       id: found?.id || id,
       name: itemName || found?.name || 'Sabor Especial',
       price: typeof item.price === 'number' ? item.price : (parseFloat(item.price) || (found ? found.price : 40.00)),
       category: item.category || found?.category || 'salgadas',
       description: item.description || found?.description || '',
-      image: item.image || found?.image || `/flavors/${found?.id || id}.png`,
+      image: itemImage,
       isAvailable: item.isAvailable !== false
     };
   }).filter(Boolean);
 
-  if (!hasDoces) {
+  if (!hasDoces && flavors.length > 0) {
     const docesFlavors = INITIAL_PIZZA_FLAVORS.filter(f => f.category === 'doces');
     normalized = [...normalized, ...docesFlavors];
   }
-  return normalized.length > 0 ? normalized : INITIAL_PIZZA_FLAVORS;
+  return normalized;
 }
 
 export function getStoredProducts() {
@@ -1171,17 +1184,17 @@ export function saveStoredRestaurantInfo(info) {
 export function getStoredPizzaFlavors() {
   try {
     const saved = localStorage.getItem("el_shadday_pizza_flavors_v4") || localStorage.getItem("el_shadday_pizza_flavors_v3");
-    if (saved) {
+    if (saved !== null) {
       const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed) && parsed.length > 0) {
+      if (Array.isArray(parsed)) {
         return normalizePizzaFlavors(parsed);
       }
     }
 
     const savedV2 = localStorage.getItem("el_shadday_pizza_flavors_v2");
-    if (savedV2) {
+    if (savedV2 !== null) {
       const parsed = JSON.parse(savedV2);
-      if (Array.isArray(parsed) && parsed.length > 0) {
+      if (Array.isArray(parsed)) {
         return normalizePizzaFlavors(parsed);
       }
     }
