@@ -1218,6 +1218,81 @@ export function saveStoredPizzaFlavors(flavors) {
   }
 }
 
+export function normalizeCategoriesList(raw) {
+  if (!Array.isArray(raw) || raw.length === 0) {
+    return CATEGORIES.map((c, i) => ({ ...c, order: i, visible: true }));
+  }
+
+  const seenIds = new Set();
+  const result = [];
+
+  for (let i = 0; i < raw.length; i++) {
+    const item = raw[i];
+    const catId = typeof item === 'string' ? item : item?.id;
+    if (!catId || seenIds.has(catId)) continue;
+    seenIds.add(catId);
+
+    const defaultCat = CATEGORIES.find(c => c.id === catId);
+    if (defaultCat) {
+      result.push({
+        ...defaultCat,
+        ...(typeof item === 'object' ? item : {}),
+        id: defaultCat.id,
+        order: result.length,
+        visible: item?.visible !== false
+      });
+    } else if (typeof item === 'object' && item.name) {
+      result.push({
+        id: catId,
+        name: item.name,
+        icon: item.icon || 'Flame',
+        tag: item.tag || '',
+        order: result.length,
+        visible: item.visible !== false
+      });
+    }
+  }
+
+  // Garante que todas as categorias padrão existam
+  CATEGORIES.forEach(c => {
+    if (!seenIds.has(c.id)) {
+      result.push({ ...c, order: result.length, visible: true });
+    }
+  });
+
+  return result;
+}
+
+export function getStoredCategories() {
+  try {
+    const saved = localStorage.getItem("el_shadday_delivery_categories_v2") || localStorage.getItem("el_shadday_delivery_categories");
+    if (saved !== null) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return normalizeCategoriesList(parsed);
+      }
+    }
+  } catch (e) {
+    console.error("Error reading stored delivery categories:", e);
+  }
+  return CATEGORIES.map((c, i) => ({ ...c, order: i, visible: true }));
+}
+
+export function saveStoredCategories(categories) {
+  try {
+    const normalized = normalizeCategoriesList(categories);
+    localStorage.setItem("el_shadday_delivery_categories_v2", JSON.stringify(normalized));
+    localStorage.setItem("el_shadday_delivery_categories", JSON.stringify(normalized));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent("delivery_categories_updated", { detail: normalized }));
+    }
+    return normalized;
+  } catch (e) {
+    console.error("Error saving delivery categories:", e);
+    return categories;
+  }
+}
+
 export function normalizeDistrictsList(raw) {
   if (!Array.isArray(raw) || raw.length === 0) {
     return ARIQUEMES_DISTRICTS.map(d => ({

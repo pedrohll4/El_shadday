@@ -15,7 +15,10 @@ import {
   saveStoredPizzaFlavors,
   normalizeProductsList,
   normalizePizzaFlavors,
-  saveStoredAcaiSettings
+  saveStoredAcaiSettings,
+  getStoredCategories,
+  saveStoredCategories,
+  normalizeCategoriesList
 } from './data/menuData';
 import { saveStoredBuffetGallery, isFakeGalleryItem, saveUnavailableBuffetItemIds } from './buffet/buffetData';
 import { supabase, isSupabaseConfigured } from './services/supabaseClient';
@@ -235,7 +238,12 @@ export default function App() {
     } catch (e) {}
   }, [cartItems]);
 
-  const [activeCategory, setActiveCategory] = useState(CATEGORIES[0].id);
+  const [categories, setCategories] = useState(() => getStoredCategories());
+  const [activeCategory, setActiveCategory] = useState(() => {
+    const cats = getStoredCategories();
+    const visible = cats.filter(c => c.visible !== false);
+    return visible[0]?.id || CATEGORIES[0].id;
+  });
   const [searchQuery, setSearchQuery] = useState('');
 
   // Dynamic Menu, Promos and Store Info
@@ -266,10 +274,18 @@ export default function App() {
         setRestaurantInfo(getStoredRestaurantInfo());
       }
     };
+    const handleCategoriesSync = (e) => {
+      if (e?.detail && Array.isArray(e.detail)) {
+        setCategories(e.detail);
+      } else {
+        setCategories(getStoredCategories());
+      }
+    };
 
     window.addEventListener('delivery_products_updated', handleProductsSync);
     window.addEventListener('delivery_promos_updated', handlePromosSync);
     window.addEventListener('delivery_restaurant_info_updated', handleInfoSync);
+    window.addEventListener('delivery_categories_updated', handleCategoriesSync);
     window.addEventListener('storage', handleProductsSync);
 
     let channelSettings = null;
@@ -322,6 +338,11 @@ export default function App() {
                 saveUnavailableBuffetItemIds(data.promo_settings.buffet_unavailable_items);
               }
             }
+            if (Array.isArray(data.delivery_categories)) {
+              const normCats = normalizeCategoriesList(data.delivery_categories);
+              setCategories(normCats);
+              saveStoredCategories(normCats);
+            }
             if (data.card_machine_notice !== undefined || data.name) {
               const currentStore = getStoredRestaurantInfo();
               const updatedStore = {
@@ -357,6 +378,11 @@ export default function App() {
           .on('postgres_changes', { event: '*', schema: 'public', table: 'company_settings' }, (payload) => {
             const freshData = payload.new;
             if (freshData) {
+              if (Array.isArray(freshData.delivery_categories)) {
+                const normCats = normalizeCategoriesList(freshData.delivery_categories);
+                setCategories(normCats);
+                saveStoredCategories(normCats);
+              }
               if (Array.isArray(freshData.buffet_gallery)) {
                 const cleanGal = freshData.buffet_gallery.filter(p => !isFakeGalleryItem(p));
                 saveStoredBuffetGallery(cleanGal);
@@ -401,6 +427,9 @@ export default function App() {
           saveStoredPizzaFlavors(normFlavors);
           window.dispatchEvent(new CustomEvent("pizza_flavors_updated", { detail: normFlavors }));
         }
+        if (Array.isArray(cloudCfg.delivery_categories)) {
+          setCategories(normalizeCategoriesList(cloudCfg.delivery_categories));
+        }
       }
     });
 
@@ -412,6 +441,11 @@ export default function App() {
       onPizzaFlavorsUpdate: (flavors) => {
         const normFlavors = normalizePizzaFlavors(flavors);
         window.dispatchEvent(new CustomEvent("pizza_flavors_updated", { detail: normFlavors }));
+      },
+      onDeliveryCategoriesUpdate: (freshCats) => {
+        if (Array.isArray(freshCats)) {
+          setCategories(normalizeCategoriesList(freshCats));
+        }
       }
     });
 
@@ -419,6 +453,7 @@ export default function App() {
       window.removeEventListener('delivery_products_updated', handleProductsSync);
       window.removeEventListener('delivery_promos_updated', handlePromosSync);
       window.removeEventListener('delivery_restaurant_info_updated', handleInfoSync);
+      window.removeEventListener('delivery_categories_updated', handleCategoriesSync);
       window.removeEventListener('storage', handleProductsSync);
       if (channelSettings && supabase) {
         try {
@@ -911,8 +946,9 @@ export default function App() {
 
     const handleScrollObserver = () => {
       const scrollPosition = window.scrollY + 200;
+      const visibleCategories = categories.filter(c => c.visible !== false);
 
-      for (const cat of CATEGORIES) {
+      for (const cat of visibleCategories) {
         const el = document.getElementById(`section-${cat.id}`);
         if (el) {
           const top = el.offsetTop;
@@ -927,7 +963,7 @@ export default function App() {
 
     window.addEventListener('scroll', handleScrollObserver, { passive: true });
     return () => window.removeEventListener('scroll', handleScrollObserver);
-  }, [searchQuery, appView]);
+  }, [searchQuery, appView, categories]);
 
   // Branch-scoped menu products (Ariquemes vs Porto Velho)
   const branchProducts = useMemo(() => {
@@ -1176,6 +1212,7 @@ export default function App() {
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
           onScrollToBuffet={handleOpenBuffetSubpage}
+          categories={categories}
           products={branchProducts}
           showBuffet={selectedBranchId === 'ariquemes'}
         />
@@ -1256,10 +1293,12 @@ export default function App() {
                 )}
               </section>
             ) : (
-              /* CONTINUOUS FLOW MODE: All categories displayed in full sequence! */
-              CATEGORIES.map((cat) => {
-                const categoryProducts = branchProducts.filter(p => p.categoryId === cat.id && p.isAvailable !== false);
-                if (categoryProducts.length === 0) return null;
+              /* CONTINUOUS FLOW MODE: All categories displayed in configured sequence! */
+              (Array.isArray(categories) && categories.length > 0 ? categories : CATEGORIES)
+                .filter(cat => cat.visible !== false)
+                .map((cat) => {
+                  const categoryProducts = branchProducts.filter(p => p.categoryId === cat.id && p.isAvailable !== false);
+                  if (categoryProducts.length === 0) return null;
 
                 return (
                   <section 

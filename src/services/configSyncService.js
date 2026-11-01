@@ -7,7 +7,7 @@
  */
 
 import { supabase, isSupabaseConfigured } from './supabaseClient';
-import { saveStoredProducts, saveStoredPromoSettings, saveStoredRestaurantInfo, saveStoredPizzaFlavors, saveStoredAcaiSettings, saveStoredDistricts } from '../data/menuData';
+import { saveStoredProducts, saveStoredPromoSettings, saveStoredRestaurantInfo, saveStoredPizzaFlavors, saveStoredAcaiSettings, saveStoredDistricts, saveStoredCategories } from '../data/menuData';
 import { saveStoredBuffetGallery, saveUnavailableBuffetItemIds, getUnavailableBuffetItemIds, saveStoredBuffetCategories } from '../buffet/buffetData';
 
 const CONFIG_TOPIC = 'el-shadday-config-sync-ariquemes-v2';
@@ -88,6 +88,12 @@ export async function dispatchConfigSync(type, data) {
         await supabase.from('company_settings').upsert({
           id: 'el_shadday_config',
           delivery_districts: data,
+          updated_at: new Date().toISOString()
+        });
+      } else if (type === 'DELIVERY_CATEGORIES_UPDATE') {
+        await supabase.from('company_settings').upsert({
+          id: 'el_shadday_config',
+          delivery_categories: data,
           updated_at: new Date().toISOString()
         });
       } else if (type === 'BUFFET_AVAILABILITY_UPDATE') {
@@ -177,6 +183,9 @@ export async function fetchCloudConfigHistory() {
         const promos = data.promo_settings || null;
         const buffetCats = Array.isArray(data.buffet_categories) && data.buffet_categories.length > 0 ? data.buffet_categories : null;
         const deliveryDistricts = Array.isArray(data.delivery_districts) && data.delivery_districts.length > 0 ? data.delivery_districts : null;
+        const deliveryCategories = Array.isArray(data.delivery_categories) && data.delivery_categories.length > 0 
+          ? data.delivery_categories 
+          : (Array.isArray(data.categories) && data.categories.length > 0 ? data.categories : null);
         
         if (products) saveStoredProducts(products);
         saveStoredBuffetGallery(gallery);
@@ -184,6 +193,7 @@ export async function fetchCloudConfigHistory() {
         if (acaiSettings) saveStoredAcaiSettings(acaiSettings);
         if (buffetCats) saveStoredBuffetCategories(buffetCats);
         if (deliveryDistricts) saveStoredDistricts(deliveryDistricts);
+        if (deliveryCategories) saveStoredCategories(deliveryCategories);
         if (promos) {
           saveStoredPromoSettings(promos);
           if (Array.isArray(promos.buffet_unavailable_items)) {
@@ -309,7 +319,7 @@ export async function fetchCloudConfigHistory() {
 /**
  * Subscribe to real-time configuration events (changes made on PC push to phone live)
  */
-export function subscribeToConfigEvents({ onProductsUpdate, onGalleryUpdate, onPromosUpdate, onStoreUpdate, onPizzaFlavorsUpdate, onBuffetAvailabilityUpdate, onBuffetCategoriesUpdate, onDeliveryDistrictsUpdate } = {}) {
+export function subscribeToConfigEvents({ onProductsUpdate, onGalleryUpdate, onPromosUpdate, onStoreUpdate, onPizzaFlavorsUpdate, onBuffetAvailabilityUpdate, onBuffetCategoriesUpdate, onDeliveryDistrictsUpdate, onDeliveryCategoriesUpdate } = {}) {
   let eventSource = null;
   let isCleanedUp = false;
 
@@ -387,6 +397,9 @@ export function subscribeToConfigEvents({ onProductsUpdate, onGalleryUpdate, onP
             } else if (data.type === 'DELIVERY_DISTRICTS_UPDATE' && Array.isArray(data.data)) {
               saveStoredDistricts(data.data);
               if (onDeliveryDistrictsUpdate) onDeliveryDistrictsUpdate(data.data);
+            } else if (data.type === 'DELIVERY_CATEGORIES_UPDATE' && Array.isArray(data.data)) {
+              saveStoredCategories(data.data);
+              if (onDeliveryCategoriesUpdate) onDeliveryCategoriesUpdate(data.data);
             }
           }
         } catch (e) {}
@@ -427,6 +440,8 @@ export function subscribeToConfigEvents({ onProductsUpdate, onGalleryUpdate, onP
       if (onBuffetCategoriesUpdate) onBuffetCategoriesUpdate(data.data);
     } else if (data.type === 'DELIVERY_DISTRICTS_UPDATE' && Array.isArray(data.data)) {
       if (onDeliveryDistrictsUpdate) onDeliveryDistrictsUpdate(data.data);
+    } else if (data.type === 'DELIVERY_CATEGORIES_UPDATE' && Array.isArray(data.data)) {
+      if (onDeliveryCategoriesUpdate) onDeliveryCategoriesUpdate(data.data);
     }
   };
 

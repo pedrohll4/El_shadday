@@ -21,9 +21,13 @@ export function CategoryNav({
   searchQuery, 
   onSearchChange,
   onScrollToBuffet,
+  categories = CATEGORIES,
   products,
   showBuffet = true
 }) {
+  const categoriesList = Array.isArray(categories) && categories.length > 0 ? categories : CATEGORIES;
+  const visibleCategories = categoriesList.filter(cat => cat.visible !== false);
+
   return (
     <div className="sticky top-[108px] sm:top-20 z-30 bg-dark-950/90 backdrop-blur-xl border-b border-white/5 py-3 shadow-xl transition-all w-full max-w-full">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-2.5">
@@ -61,7 +65,7 @@ export function CategoryNav({
 
         {/* Horizontal Category Chips */}
         <div className="flex items-center gap-2 overflow-x-auto pb-1 pt-0.5 no-scrollbar scroll-smooth">
-          {CATEGORIES.map((cat) => {
+          {visibleCategories.map((cat) => {
             const Icon = ICONS_MAP[cat.icon] || Flame;
             const isActive = activeCategory === cat.id;
             const allProds = Array.isArray(products) ? products : [];

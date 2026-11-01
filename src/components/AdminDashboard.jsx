@@ -10,7 +10,8 @@ import {
   Utensils, ToggleLeft, ToggleRight, Save, Layers, CheckSquare,
   Pizza, ArrowUpRight, Info, CreditCard, Play, Film,
   Building2, Users, Crown, Sliders, BarChart3, Star, QrCode,
-  Settings2, Smartphone, Banknote, Shuffle, Lock, ImageOff
+  Settings2, Smartphone, Banknote, Shuffle, Lock, ImageOff,
+  GripVertical, ArrowUp, ArrowDown, ChevronsUp, HeartHandshake, IceCream, Soup, Wine
 } from 'lucide-react';
 import { 
   RESTAURANT_INFO, 
@@ -36,7 +37,10 @@ import {
   calculateCardMachineFee,
   getCardMachineNoticeText,
   normalizeProductsList,
-  normalizePizzaFlavors
+  normalizePizzaFlavors,
+  getStoredCategories,
+  saveStoredCategories,
+  normalizeCategoriesList
 } from '../data/menuData';
 import { PizzaCustomizerModal } from './PizzaCustomizerModal';
 import { BoxBuilderModal } from './BoxBuilderModal';
@@ -91,6 +95,18 @@ import {
   backfillCustomersFromOrders, 
   getAllCustomers 
 } from '../services/customerService';
+
+const CATEGORY_ICONS_MAP = {
+  Flame,
+  Package,
+  Utensils,
+  HeartHandshake,
+  Pizza,
+  Wine,
+  IceCream,
+  Soup,
+  Layers
+};
 
 export function AdminDashboard({ 
   orders = [], 
@@ -642,10 +658,14 @@ export function AdminDashboard({
   const [promoSettings, setPromoSettings] = useState(() => getStoredPromoSettings());
   const [restaurantSettings, setRestaurantSettings] = useState(() => getStoredRestaurantInfo());
 
-  // Sub-navigation in Menu Tab: 'products' | 'flavors'
+  // Sub-navigation in Menu Tab: 'products' | 'categories' | 'flavors' | 'acai'
   const [menuSubTab, setMenuSubTab] = useState('products');
   // Sub-navigation in Settings Tab: 'card-fee' | 'store' | 'promos'
   const [settingsSubTab, setSettingsSubTab] = useState('card-fee');
+
+  // Delivery Categories / Topics Order State
+  const [deliveryCategories, setDeliveryCategories] = useState(() => getStoredCategories());
+  const [draggedCategoryIndex, setDraggedCategoryIndex] = useState(null);
 
   // Search & Filter in Products list
   const [menuSearch, setMenuSearch] = useState('');
@@ -841,11 +861,17 @@ export function AdminDashboard({
       }
     };
 
+    const handleCategoriesSync = (e) => {
+      if (e?.detail && Array.isArray(e.detail)) setDeliveryCategories(e.detail);
+      else setDeliveryCategories(getStoredCategories());
+    };
+
     window.addEventListener('delivery_products_updated', handleProductsSync);
     window.addEventListener('delivery_promos_updated', handlePromosSync);
     window.addEventListener('delivery_restaurant_info_updated', handleStoreSync);
     window.addEventListener('pizza_flavors_updated', handleFlavorsSync);
     window.addEventListener('acai_settings_updated', handleAcaiSync);
+    window.addEventListener('delivery_categories_updated', handleCategoriesSync);
     window.addEventListener('storage', handleProductsSync);
 
     let channelCompanySettingsAdmin = null;
@@ -872,6 +898,11 @@ export function AdminDashboard({
               const normFlavors = normalizePizzaFlavors(data.pizza_flavors);
               setPizzaFlavors(normFlavors);
               saveStoredPizzaFlavors(normFlavors);
+            }
+            if (Array.isArray(data.delivery_categories)) {
+              const normCats = normalizeCategoriesList(data.delivery_categories);
+              setDeliveryCategories(normCats);
+              saveStoredCategories(normCats);
             }
             if (data.acai_settings) {
               const normAcai = saveStoredAcaiSettings(data.acai_settings);
@@ -934,6 +965,11 @@ export function AdminDashboard({
                 setPizzaFlavors(normFlavors);
                 saveStoredPizzaFlavors(normFlavors);
               }
+              if (Array.isArray(fresh.delivery_categories)) {
+                const normCats = normalizeCategoriesList(fresh.delivery_categories);
+                setDeliveryCategories(normCats);
+                saveStoredCategories(normCats);
+              }
               if (fresh.acai_settings) {
                 const normAcai = saveStoredAcaiSettings(fresh.acai_settings);
                 setAcaiSettings(normAcai);
@@ -958,6 +994,7 @@ export function AdminDashboard({
       window.removeEventListener('delivery_restaurant_info_updated', handleStoreSync);
       window.removeEventListener('pizza_flavors_updated', handleFlavorsSync);
       window.removeEventListener('acai_settings_updated', handleAcaiSync);
+      window.removeEventListener('delivery_categories_updated', handleCategoriesSync);
       window.removeEventListener('storage', handleProductsSync);
       if (channelCompanySettingsAdmin && supabase) {
         supabase.removeChannel(channelCompanySettingsAdmin);
@@ -1813,6 +1850,98 @@ export function AdminDashboard({
     }
     return list;
   }, [districtsList, districtSearch, districtPriceFilter]);
+
+  // Handlers for Category / Topics Reordering
+  const handleDragStartCategory = (e, index) => {
+    setDraggedCategoryIndex(index);
+    try {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', String(index));
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleDragOverCategory = (e, index) => {
+    e.preventDefault();
+    try {
+      e.dataTransfer.dropEffect = 'move';
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleDropCategory = async (e, targetIndex) => {
+    e.preventDefault();
+    if (draggedCategoryIndex === null || draggedCategoryIndex === targetIndex) {
+      setDraggedCategoryIndex(null);
+      return;
+    }
+
+    const updated = [...deliveryCategories];
+    const [moved] = updated.splice(draggedCategoryIndex, 1);
+    updated.splice(targetIndex, 0, moved);
+
+    setDeliveryCategories(updated);
+    saveStoredCategories(updated);
+    await dispatchConfigSync('DELIVERY_CATEGORIES_UPDATE', updated);
+    setDraggedCategoryIndex(null);
+    triggerMenuToast(`Tópico "${moved.name}" posicionado em ${targetIndex + 1}º lugar!`);
+  };
+
+  const handleDragEndCategory = () => {
+    setDraggedCategoryIndex(null);
+  };
+
+  const handleMoveCategory = async (index, direction) => {
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= deliveryCategories.length) return;
+
+    const updated = [...deliveryCategories];
+    const [moved] = updated.splice(index, 1);
+    updated.splice(targetIndex, 0, moved);
+
+    setDeliveryCategories(updated);
+    saveStoredCategories(updated);
+    await dispatchConfigSync('DELIVERY_CATEGORIES_UPDATE', updated);
+    triggerMenuToast(`Tópico "${moved.name}" movido para ${targetIndex + 1}º lugar!`);
+  };
+
+  const handleMoveCategoryToTop = async (index) => {
+    if (index === 0) return;
+    const updated = [...deliveryCategories];
+    const [moved] = updated.splice(index, 1);
+    updated.unshift(moved);
+
+    setDeliveryCategories(updated);
+    saveStoredCategories(updated);
+    await dispatchConfigSync('DELIVERY_CATEGORIES_UPDATE', updated);
+    triggerMenuToast(`Tópico "${moved.name}" colocado no 1º lugar do cardápio!`);
+  };
+
+  const handleToggleCategoryVisibility = async (categoryId) => {
+    const updated = deliveryCategories.map(c => {
+      if (c.id === categoryId) {
+        const nextState = c.visible === false ? true : false;
+        triggerMenuToast(nextState ? `Tópico "${c.name}" agora está visível no cardápio!` : `Tópico "${c.name}" ocultado do cardápio!`);
+        return { ...c, visible: nextState };
+      }
+      return c;
+    });
+
+    setDeliveryCategories(updated);
+    saveStoredCategories(updated);
+    await dispatchConfigSync('DELIVERY_CATEGORIES_UPDATE', updated);
+  };
+
+  const handleResetCategoriesOrder = async () => {
+    if (!window.confirm('Deseja restaurar a ordem padrão dos tópicos do cardápio?')) return;
+    const defaultList = normalizeCategoriesList(CATEGORIES);
+    setDeliveryCategories(defaultList);
+    saveStoredCategories(defaultList);
+    await dispatchConfigSync('DELIVERY_CATEGORIES_UPDATE', defaultList);
+    triggerMenuToast('Ordem padrão dos tópicos restaurada com sucesso!');
+  };
 
   // Buffet Items Availability Management State
   const [buffetCategories, setBuffetCategories] = useState(() => getStoredBuffetCategories());
@@ -4720,7 +4849,7 @@ export function AdminDashboard({
                     >
                       Todos
                     </button>
-                    {CATEGORIES.map(cat => (
+                    {deliveryCategories.map(cat => (
                       <button
                         key={cat.id}
                         type="button"
@@ -5378,11 +5507,13 @@ export function AdminDashboard({
                       <h2 className="font-display font-extrabold text-base sm:text-lg text-white flex items-center gap-2">
                         <span>Cardápio & Preços da {currentBranch?.name || 'Filial'}</span>
                         <span className="text-[10px] px-2 py-0.5 rounded-full bg-brand-gold/20 text-brand-gold border border-brand-gold/30 font-bold">
-                          {menuSubTab === 'flavors' ? `${pizzaFlavors.length} sabores` : `${productsList.length} itens`}
+                          {menuSubTab === 'flavors' ? `${pizzaFlavors.length} sabores` : menuSubTab === 'categories' ? `${deliveryCategories.length} tópicos` : `${productsList.length} itens`}
                         </span>
                       </h2>
                       <p className="text-xs text-slate-400">
-                        Crie novos itens, edite preços de pizzas e sabores individuais, pause produtos esgotados.
+                        {menuSubTab === 'categories' 
+                          ? 'Defina a ordem e quais tópicos/categorias aparecem primeiro no cardápio do cliente.'
+                          : 'Crie novos itens, edite preços de pizzas e sabores individuais, pause produtos esgotados.'}
                       </p>
                     </div>
                   </div>
@@ -5431,6 +5562,18 @@ export function AdminDashboard({
                         >
                           <RotateCcw className="w-3.5 h-3.5 text-brand-gold" />
                           <span>Restaurar Sabores Padrão</span>
+                        </button>
+                      </>
+                    ) : menuSubTab === 'categories' ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={handleResetCategoriesOrder}
+                          className="px-3.5 py-2.5 rounded-xl bg-dark-800 hover:bg-dark-750 text-slate-300 hover:text-white text-xs font-semibold border border-dark-700 flex items-center gap-1.5 transition-colors cursor-pointer"
+                          title="Restaurar a ordem original dos tópicos do cardápio"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5 text-brand-gold" />
+                          <span>Restaurar Ordem Padrão</span>
                         </button>
                       </>
                     ) : (
@@ -5565,6 +5708,19 @@ export function AdminDashboard({
 
                     <button
                       type="button"
+                      onClick={() => setMenuSubTab('categories')}
+                      className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                        menuSubTab === 'categories'
+                          ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
+                          : 'bg-dark-800/80 text-amber-300 hover:text-white hover:bg-dark-800'
+                      }`}
+                    >
+                      <Layers className="w-3.5 h-3.5 text-amber-400" />
+                      <span>🗂️ Ordem dos Tópicos ({deliveryCategories.length})</span>
+                    </button>
+
+                    <button
+                      type="button"
                       onClick={() => setMenuSubTab('acai')}
                       className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
                         menuSubTab === 'acai'
@@ -5680,7 +5836,7 @@ export function AdminDashboard({
                       <span>Pausados/Esgotados ({scopedProductsList.filter(p => p.isAvailable === false).length})</span>
                     </button>
 
-                    {CATEGORIES.map(cat => (
+                    {deliveryCategories.map(cat => (
                       <button
                         key={cat.id}
                         type="button"
@@ -5942,6 +6098,252 @@ export function AdminDashboard({
                       </button>
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* SUBTAB: ORDEM DOS TÓPICOS / CATEGORIAS DO CARDÁPIO */}
+              {activeAdminTab === 'menu' && menuSubTab === 'categories' && (
+                <div className="mt-5 space-y-5 animate-fade-in">
+                  {/* Informational Callout */}
+                  <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-amber-500/10 via-brand-gold/15 to-amber-500/10 border border-brand-gold/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-2xl bg-brand-gold/20 text-brand-gold flex items-center justify-center border border-brand-gold/30 flex-shrink-0 mt-0.5">
+                        <Layers className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className="font-display font-extrabold text-sm sm:text-base text-white flex items-center gap-2">
+                          <span>Organização dos Tópicos do Cardápio</span>
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-brand-gold/20 text-brand-gold font-bold border border-brand-gold/30">
+                            Arrastar & Soltar
+                          </span>
+                        </h3>
+                        <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                          Arraste os tópicos usando o ícone <strong className="text-brand-gold font-mono">⠿</strong> ou utilize os botões de subir/descer para definir quais categorias aparecem primeiro no cardápio do cliente (ex: você pode mover <strong>Caixas de Esfirras</strong> para o topo). As alterações sincronizam automaticamente com os clientes!
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleResetCategoriesOrder}
+                      className="px-3.5 py-2 rounded-xl bg-dark-800 hover:bg-dark-750 text-slate-300 hover:text-white border border-dark-700 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer self-start sm:self-auto whitespace-nowrap"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5 text-brand-gold" />
+                      <span>Restaurar Ordem Padrão</span>
+                    </button>
+                  </div>
+
+                  {/* Visual Live Preview Bar */}
+                  <div className="bg-dark-850/80 rounded-2xl border border-dark-800 p-4">
+                    <div className="flex items-center justify-between gap-2 mb-2.5">
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-brand-gold" />
+                        <span className="text-xs font-bold text-slate-200">
+                          Prévia da Ordem no Cardápio do Cliente:
+                        </span>
+                      </div>
+                      <span className="text-[11px] text-slate-400">
+                        {deliveryCategories.filter(c => c.visible !== false).length} tópicos visíveis
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2 overflow-x-auto pb-1.5 pt-0.5 scrollbar-none no-scrollbar">
+                      {deliveryCategories
+                        .filter(cat => cat.visible !== false)
+                        .map((cat, idx) => {
+                          const IconComp = CATEGORY_ICONS_MAP[cat.icon] || Package;
+                          return (
+                            <div
+                              key={cat.id}
+                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold whitespace-nowrap transition-all ${
+                                idx === 0
+                                  ? 'bg-brand-gold/20 border-brand-gold text-brand-gold shadow-sm'
+                                  : 'bg-dark-800/90 border-dark-700 text-slate-300'
+                              }`}
+                            >
+                              <span className="w-4 h-4 rounded-full bg-dark-900/80 text-[10px] flex items-center justify-center font-mono font-bold text-slate-400">
+                                {idx + 1}
+                              </span>
+                              <IconComp className="w-3.5 h-3.5" />
+                              <span>{cat.name}</span>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  </div>
+
+                  {/* List of Reorderable Categories */}
+                  <div className="space-y-2.5">
+                    {deliveryCategories.map((cat, index) => {
+                      const IconComp = CATEGORY_ICONS_MAP[cat.icon] || Package;
+                      const itemCount = scopedProductsList.filter(p => p.categoryId === cat.id).length;
+                      const isFirst = index === 0;
+                      const isLast = index === deliveryCategories.length - 1;
+                      const isDragging = draggedCategoryIndex === index;
+                      const isHidden = cat.visible === false;
+
+                      return (
+                        <div
+                          key={cat.id}
+                          draggable
+                          onDragStart={(e) => handleDragStartCategory(e, index)}
+                          onDragOver={(e) => handleDragOverCategory(e, index)}
+                          onDrop={(e) => handleDropCategory(e, index)}
+                          onDragEnd={handleDragEndCategory}
+                          className={`group flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 sm:p-4 rounded-2xl border transition-all cursor-move select-none ${
+                            isDragging
+                              ? 'opacity-40 border-dashed border-brand-gold scale-[0.99] bg-dark-800/40'
+                              : isHidden
+                              ? 'bg-dark-850/50 border-dark-800/60 opacity-60'
+                              : isFirst
+                              ? 'bg-gradient-to-r from-brand-gold/10 via-dark-850 to-dark-850 border-brand-gold/40 shadow-sm'
+                              : 'bg-dark-850 hover:bg-dark-800/90 border-dark-800 hover:border-dark-700'
+                          }`}
+                        >
+                          {/* Left: Drag Handle, Number, Icon & Details */}
+                          <div className="flex items-center gap-3">
+                            {/* Grip Handle */}
+                            <div 
+                              className="text-slate-500 hover:text-brand-gold cursor-grab active:cursor-grabbing p-1 transition-colors"
+                              title="Clique e arraste para reposicionar"
+                            >
+                              <GripVertical className="w-5 h-5" />
+                            </div>
+
+                            {/* Position Badge */}
+                            <div
+                              className={`w-8 h-8 rounded-xl font-mono text-xs font-black flex items-center justify-center border shadow-xs ${
+                                isFirst
+                                  ? 'bg-brand-gold text-dark-950 border-brand-gold font-black'
+                                  : 'bg-dark-800 text-slate-300 border-dark-700'
+                              }`}
+                              title={`Posição ${index + 1}`}
+                            >
+                              {index + 1}º
+                            </div>
+
+                            {/* Category Icon */}
+                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center border ${
+                              isFirst
+                                ? 'bg-brand-gold/15 text-brand-gold border-brand-gold/30'
+                                : 'bg-dark-800 text-slate-300 border-dark-700'
+                            }`}>
+                              <IconComp className="w-5 h-5" />
+                            </div>
+
+                            {/* Name and Tag / Item Count */}
+                            <div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <h4 className="font-display font-extrabold text-sm sm:text-base text-white">
+                                  {cat.name}
+                                </h4>
+                                {isFirst && (
+                                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-brand-gold text-dark-950 font-black flex items-center gap-1 shadow-xs">
+                                    ⭐ 1º do Cardápio (Topo)
+                                  </span>
+                                )}
+                                {isHidden && (
+                                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-400 font-bold border border-rose-500/30">
+                                    Oculto no Cardápio
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-400">
+                                <span>{itemCount} {itemCount === 1 ? 'produto cadastrado' : 'produtos cadastrados'}</span>
+                                {cat.tag && (
+                                  <>
+                                    <span>•</span>
+                                    <span className="text-slate-400 italic font-sans">{cat.tag}</span>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Right: Action Buttons */}
+                          <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                            {/* Move to Top */}
+                            {!isFirst && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleMoveCategoryToTop(index);
+                                }}
+                                className="px-2.5 py-1.5 rounded-xl bg-brand-gold/15 hover:bg-brand-gold/25 text-brand-gold border border-brand-gold/30 text-xs font-bold flex items-center gap-1 transition-all cursor-pointer active:scale-95"
+                                title="Mover diretamente para o 1º lugar (topo)"
+                              >
+                                <ChevronsUp className="w-3.5 h-3.5" />
+                                <span className="hidden sm:inline">Topo</span>
+                              </button>
+                            )}
+
+                            {/* Move Up */}
+                            <button
+                              type="button"
+                              disabled={isFirst}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleMoveCategory(index, 'up');
+                              }}
+                              className={`p-2 rounded-xl border text-xs font-semibold flex items-center justify-center transition-all cursor-pointer ${
+                                isFirst
+                                  ? 'opacity-30 border-dark-800 text-slate-600 cursor-not-allowed'
+                                  : 'bg-dark-800 hover:bg-dark-750 text-slate-300 hover:text-white border-dark-700 active:scale-95'
+                              }`}
+                              title="Subir uma posição"
+                            >
+                              <ArrowUp className="w-4 h-4" />
+                            </button>
+
+                            {/* Move Down */}
+                            <button
+                              type="button"
+                              disabled={isLast}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleMoveCategory(index, 'down');
+                              }}
+                              className={`p-2 rounded-xl border text-xs font-semibold flex items-center justify-center transition-all cursor-pointer ${
+                                isLast
+                                  ? 'opacity-30 border-dark-800 text-slate-600 cursor-not-allowed'
+                                  : 'bg-dark-800 hover:bg-dark-750 text-slate-300 hover:text-white border-dark-700 active:scale-95'
+                              }`}
+                              title="Descer uma posição"
+                            >
+                              <ArrowDown className="w-4 h-4" />
+                            </button>
+
+                            {/* Toggle Visibility */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleToggleCategoryVisibility(cat.id);
+                              }}
+                              className={`px-2.5 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                                isHidden
+                                  ? 'bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border-rose-500/30'
+                                  : 'bg-dark-800 hover:bg-dark-750 text-slate-300 hover:text-white border-dark-700'
+                              }`}
+                              title={isHidden ? 'Exibir no cardápio do cliente' : 'Ocultar temporariamente do cardápio'}
+                            >
+                              {isHidden ? (
+                                <>
+                                  <EyeOff className="w-3.5 h-3.5 text-rose-400" />
+                                  <span className="hidden sm:inline">Oculto</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Eye className="w-3.5 h-3.5 text-emerald-400" />
+                                  <span className="hidden sm:inline">Visível</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
 
@@ -9276,7 +9678,7 @@ export function AdminDashboard({
                     onChange={(e) => setProdFormCategory(e.target.value)}
                     className="w-full px-3.5 py-2.5 rounded-xl bg-dark-800 border border-dark-700 text-xs text-white focus:outline-none focus:border-brand-gold cursor-pointer"
                   >
-                    {CATEGORIES.map(c => (
+                    {deliveryCategories.map(c => (
                       <option key={c.id} value={c.id}>{c.name}</option>
                     ))}
                   </select>
