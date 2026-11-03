@@ -96,12 +96,17 @@ export function BranchSelectorModal({
                         {isActive ? (
                           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                            {branch.badge}
+                            {branch.badge || 'Aberta para Pedidos'}
+                          </span>
+                        ) : branch.status === 'closed' ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-red-500/20 text-red-300 border border-red-500/30">
+                            <span className="w-1.5 h-1.5 rounded-full bg-red-400"></span>
+                            {branch.badge || 'Fechada Temporariamente'}
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
                             <AlertTriangle className="w-3 h-3 text-amber-400" />
-                            {branch.badge}
+                            {branch.badge || 'Em Construção 🚧'}
                           </span>
                         )}
                       </div>

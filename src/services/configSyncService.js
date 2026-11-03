@@ -64,6 +64,7 @@ export async function dispatchConfigSync(type, data) {
           card_machine_notice: data.cardMachineNotice,
           card_machine_notice_active: data.cardMachineNoticeActive,
           card_machine_settings: data.cardMachineSettings,
+          delivery_active: data.isOpen !== false,
           updated_at: new Date().toISOString()
         });
       } else if (type === 'PIZZA_FLAVORS_UPDATE') {

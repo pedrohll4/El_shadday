@@ -12,7 +12,10 @@ export function RestaurantStoreHeader({
   deliveryMode = 'delivery',
   onToggleDeliveryMode,
   onScrollToCategory,
-  onOpenBuffet
+  onOpenBuffet,
+  isStoreOpen = true,
+  openingHours,
+  closedMessage
 }) {
   const handleScrollToMenu = () => {
     if (onScrollToCategory) {
@@ -51,6 +54,32 @@ export function RestaurantStoreHeader({
               <span>Assadas no Forno a Lenha • Massas Frescas & Fininhas</span>
             </div>
 
+            {/* Closed Alert Banner */}
+            {!isStoreOpen && (
+              <div className="w-full p-4 rounded-2xl bg-gradient-to-r from-red-950/90 via-red-900/80 to-amber-950/90 border border-red-500/40 shadow-xl flex flex-col sm:flex-row items-center sm:items-start gap-3.5 text-center sm:text-left animate-fade-in">
+                <div className="w-10 h-10 rounded-xl bg-red-500/20 text-red-400 border border-red-500/40 flex items-center justify-center shrink-0 text-xl">
+                  ⛔
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-red-500/30 text-red-300 border border-red-500/40">
+                      Estabelecimento Fechado
+                    </span>
+                    <span className="text-[11px] text-red-200 font-bold">
+                      Pedidos online pausados no momento
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-200 mt-1">
+                    {closedMessage || 'No momento não estamos aceitando pedidos pelo site. Você pode navegar pelo cardápio completo!'}
+                  </p>
+                  <div className="mt-1.5 flex items-center justify-center sm:justify-start gap-1.5 text-xs text-brand-gold font-bold">
+                    <Clock className="w-3.5 h-3.5 text-brand-gold shrink-0" />
+                    <span>Horário de Atendimento: {openingHours || activeBranch?.openingHours || RESTAURANT_INFO.openingHours}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Main Headline */}
             <h1 className="font-display font-black text-3xl sm:text-4xl lg:text-5xl text-white tracking-tight leading-[1.15]">
               Esfihas & Pizzas <br className="hidden sm:inline" />
@@ -68,11 +97,18 @@ export function RestaurantStoreHeader({
             {/* Quick Metrics Bar (Clean Glassmorphism Pills) */}
             <div className="flex flex-wrap items-center justify-center lg:justify-start gap-2 pt-1 text-xs">
               
-              {/* Delivery Time */}
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-dark-900/90 border border-white/10 text-slate-200 shadow-sm">
-                <Clock className="w-3.5 h-3.5 text-brand-gold" />
-                <span className="font-bold text-white">{RESTAURANT_INFO.deliveryTime}</span>
-              </div>
+              {/* Delivery Time or Closed Pill */}
+              {isStoreOpen ? (
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-dark-900/90 border border-white/10 text-slate-200 shadow-sm">
+                  <Clock className="w-3.5 h-3.5 text-brand-gold" />
+                  <span className="font-bold text-white">{activeBranch?.deliveryTime || RESTAURANT_INFO.deliveryTime}</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-red-500/15 border border-red-500/40 text-red-300 shadow-sm">
+                  <Clock className="w-3.5 h-3.5 text-red-400" />
+                  <span className="font-extrabold text-[11px]">Fechado • {openingHours || activeBranch?.openingHours || RESTAURANT_INFO.openingHours}</span>
+                </div>
+              )}
 
               {/* Rating */}
               <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-dark-900/90 border border-white/10 text-slate-200 shadow-sm">

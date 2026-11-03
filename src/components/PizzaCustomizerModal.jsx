@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { X, Pizza, Check, Sparkles, AlertCircle, Info, Search, Flame, ArrowUpRight } from 'lucide-react';
 import { getStoredPizzaFlavors, calculatePizzaPrice, INITIAL_PIZZA_FLAVORS } from '../data/menuData';
 
-export function PizzaCustomizerModal({ isOpen, onClose, pizzaProduct, onAddPizzaToCart, flavors }) {
+export function PizzaCustomizerModal({ isOpen, onClose, pizzaProduct, onAddPizzaToCart, flavors, isStoreOpen = true }) {
   const [flavorsList, setFlavorsList] = useState(() => {
     if (flavors && Array.isArray(flavors) && flavors.length > 0) return flavors;
     const stored = getStoredPizzaFlavors();
@@ -186,6 +186,13 @@ export function PizzaCustomizerModal({ isOpen, onClose, pizzaProduct, onAddPizza
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {/* Closed Store Alert */}
+        {!isStoreOpen && (
+          <div className="bg-red-950/90 border-b border-red-500/30 px-4 py-2 flex items-center justify-center gap-2 text-xs font-bold text-red-200">
+            <span>⛔ Estabelecimento Fechado • Apenas visualização de sabores (pedidos pausados)</span>
+          </div>
+        )}
 
         {/* Borda Grátis Banner */}
         {pizzaProduct.bordaGratis && (
@@ -415,15 +422,17 @@ export function PizzaCustomizerModal({ isOpen, onClose, pizzaProduct, onAddPizza
             <button
               type="button"
               onClick={handleConfirm}
-              disabled={!isComplete}
+              disabled={!isComplete || !isStoreOpen}
               className={`px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center gap-1.5 transition-all ${
-                isComplete
+                !isStoreOpen
+                  ? 'bg-dark-800 text-slate-500 border border-red-500/30 cursor-not-allowed'
+                  : isComplete
                   ? 'bg-brand-gold hover:bg-amber-400 text-dark-950 shadow-glow-gold cursor-pointer hover:scale-102'
                   : 'bg-dark-800 text-slate-500 cursor-not-allowed'
               }`}
             >
               <Check className="w-4 h-4 stroke-[3]" />
-              <span>Adicionar Pizza</span>
+              <span>{!isStoreOpen ? '⛔ Fechado para Pedidos' : 'Adicionar Pizza'}</span>
             </button>
           </div>
         </div>

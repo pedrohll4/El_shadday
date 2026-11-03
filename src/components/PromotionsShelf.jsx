@@ -6,7 +6,9 @@ export function PromotionsShelf({
   onOpenPizzaCustomizer, 
   onOpenComboCustomizer,
   onAddToCart,
-  products = []
+  products = [],
+  isStoreOpen = true,
+  onBlockedByClosed
 }) {
   if (!products || !Array.isArray(products) || products.length === 0) {
     return null;
@@ -22,6 +24,11 @@ export function PromotionsShelf({
   }
 
   const handleAction = (product) => {
+    const isCustomizable = product.isBox || product.isPizzaCustomizer || product.categoryId === 'combos';
+    if (!isStoreOpen && !isCustomizable) {
+      if (onBlockedByClosed) onBlockedByClosed(product);
+      return;
+    }
     if (product.isBox) {
       onOpenBoxBuilder(product);
     } else if (product.isPizzaCustomizer) {
@@ -124,10 +131,16 @@ export function PromotionsShelf({
 
                 <button
                   type="button"
-                  className="px-3 py-1.5 rounded-xl bg-brand-gold hover:bg-amber-400 text-dark-950 font-black text-xs flex items-center gap-1 shadow-sm transition-transform active:scale-95 group-hover:scale-103"
+                  className={`px-3 py-1.5 rounded-xl font-black text-xs flex items-center gap-1 shadow-sm transition-transform active:scale-95 group-hover:scale-103 ${
+                    !isStoreOpen
+                      ? 'bg-red-950/60 text-red-300 border border-red-500/30'
+                      : 'bg-brand-gold hover:bg-amber-400 text-dark-950'
+                  }`}
                 >
                   <span>
-                    {product.isBox ? 'Montar' : product.isPizzaCustomizer ? 'Escolher' : product.categoryId === 'combos' ? 'Combo' : 'Pedir'}
+                    {!isStoreOpen
+                      ? (product.isBox ? 'Ver Caixa' : product.isPizzaCustomizer ? 'Ver Pizza' : product.categoryId === 'combos' ? 'Ver Combo' : 'Fechado')
+                      : (product.isBox ? 'Montar' : product.isPizzaCustomizer ? 'Escolher' : product.categoryId === 'combos' ? 'Combo' : 'Pedir')}
                   </span>
                   <ArrowRight className="w-3 h-3 stroke-[3]" />
                 </button>

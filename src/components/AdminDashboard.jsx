@@ -761,6 +761,13 @@ export function AdminDashboard({
   const [tempStorePixKey, setTempStorePixKey] = useState(restaurantSettings.pixKey || '69992228682');
   const [tempStorePixName, setTempStorePixName] = useState(restaurantSettings.pixName || 'El Shadday Delivery');
   const [tempStoreOpeningHours, setTempStoreOpeningHours] = useState(restaurantSettings.openingHours || '');
+  const [tempStoreIsOpen, setTempStoreIsOpen] = useState(restaurantSettings.isOpen !== false);
+  const [tempStoreClosedMessage, setTempStoreClosedMessage] = useState(
+    restaurantSettings.closedMessage || 'Estamos fechados no momento. Não estamos aceitando novos pedidos pelo site agora. Confira nossos horários de funcionamento!'
+  );
+  const [tempStoreReopenTime, setTempStoreReopenTime] = useState(
+    restaurantSettings.reopenTime || '18:00'
+  );
   const [tempStoreCardMachineNotice, setTempStoreCardMachineNotice] = useState(
     restaurantSettings.cardMachineNotice !== undefined 
       ? restaurantSettings.cardMachineNotice 
@@ -824,6 +831,9 @@ export function AdminDashboard({
         if (data.pixKey !== undefined) setTempStorePixKey(data.pixKey);
         if (data.pixName !== undefined) setTempStorePixName(data.pixName);
         if (data.openingHours !== undefined) setTempStoreOpeningHours(data.openingHours);
+        if (data.isOpen !== undefined) setTempStoreIsOpen(data.isOpen !== false);
+        if (data.closedMessage !== undefined) setTempStoreClosedMessage(data.closedMessage);
+        if (data.reopenTime !== undefined) setTempStoreReopenTime(data.reopenTime);
         if (data.cardMachineNotice !== undefined) setTempStoreCardMachineNotice(data.cardMachineNotice);
         if (data.cardMachineNoticeActive !== undefined) setTempStoreCardMachineNoticeActive(data.cardMachineNoticeActive);
         if (data.cardMachineSettings) {
@@ -1272,7 +1282,7 @@ export function AdminDashboard({
   };
 
   const handleSaveStoreSettings = (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
     const newStore = {
       ...restaurantSettings,
       name: tempStoreName.trim(),
@@ -1283,13 +1293,50 @@ export function AdminDashboard({
       pixKey: tempStorePixKey.trim(),
       pixName: tempStorePixName.trim(),
       openingHours: tempStoreOpeningHours.trim(),
+      isOpen: tempStoreIsOpen,
+      closedMessage: tempStoreClosedMessage.trim(),
+      reopenTime: tempStoreReopenTime.trim(),
       cardMachineNotice: tempStoreCardMachineNotice.trim(),
       cardMachineNoticeActive: tempStoreCardMachineNoticeActive
     };
     setRestaurantSettings(newStore);
     saveStoredRestaurantInfo(newStore);
     dispatchConfigSync('STORE_UPDATE', newStore);
-    triggerMenuToast('Dados do restaurante e taxa da maquininha atualizados com sucesso!');
+
+    // Sync with active/current branch
+    try {
+      if (currentBranch?.id) {
+        updateBranch(currentBranch.id, {
+          openingHours: tempStoreOpeningHours.trim(),
+          status: tempStoreIsOpen ? 'active' : 'closed',
+          deliveryTime: tempStoreDeliveryTime.trim()
+        });
+      }
+    } catch (err) {}
+
+    triggerMenuToast('Configurações da loja, horários e status atualizados com sucesso!');
+  };
+
+  const handleQuickToggleStoreStatus = () => {
+    const nextIsOpen = !(restaurantSettings.isOpen !== false);
+    const newStore = {
+      ...restaurantSettings,
+      isOpen: nextIsOpen
+    };
+    setRestaurantSettings(newStore);
+    setTempStoreIsOpen(nextIsOpen);
+    saveStoredRestaurantInfo(newStore);
+    dispatchConfigSync('STORE_UPDATE', newStore);
+
+    try {
+      if (currentBranch?.id) {
+        updateBranch(currentBranch.id, {
+          status: nextIsOpen ? 'active' : 'closed'
+        });
+      }
+    } catch (err) {}
+
+    triggerMenuToast(nextIsOpen ? '🟢 Estabelecimento ABERTO para pedidos online!' : '🔴 Estabelecimento FECHADO para pedidos online!');
   };
 
   const handleSaveCardMachineSettings = (e) => {
@@ -3443,6 +3490,29 @@ export function AdminDashboard({
                 <span className="font-bold text-white">{currentUser.name}</span>
               </div>
             )}
+
+            {/* Quick Open/Closed Status Toggle */}
+            <div className="flex items-center gap-1.5 bg-dark-950 px-2.5 py-1.5 rounded-2xl border border-dark-750 shadow-sm">
+              <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${restaurantSettings.isOpen !== false ? 'bg-emerald-400 animate-pulse' : 'bg-red-500'}`} />
+              <div className="hidden sm:flex flex-col text-left mr-1 leading-none">
+                <span className="text-[9px] uppercase font-bold text-slate-400">Loja</span>
+                <span className={`text-[11px] font-black ${restaurantSettings.isOpen !== false ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {restaurantSettings.isOpen !== false ? 'Aberta' : 'Fechada'}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={handleQuickToggleStoreStatus}
+                className={`px-2.5 py-1 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1 ${
+                  restaurantSettings.isOpen !== false
+                    ? 'bg-red-500/15 hover:bg-red-500/25 text-red-300 border border-red-500/40 hover:scale-102'
+                    : 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/50 hover:scale-102 animate-pulse'
+                }`}
+                title={restaurantSettings.isOpen !== false ? "Clique para fechar a loja e pausar pedidos no site" : "Clique para abrir a loja e liberar pedidos no site"}
+              >
+                <span>{restaurantSettings.isOpen !== false ? '🔴 Fechar Loja' : '🟢 Abrir Loja'}</span>
+              </button>
+            </div>
 
             <button
               onClick={handleUnlockAndTestAudio}
@@ -7537,16 +7607,202 @@ export function AdminDashboard({
               {/* SUBTAB 3: DADOS DO RESTAURANTE & WHATSAPP */}
               {(activeAdminTab === 'settings' ? settingsSubTab === 'store' : menuSubTab === 'store') && (
                 <>
-                  <form onSubmit={handleSaveStoreSettings} className="mt-5 p-5 rounded-2xl bg-dark-800/60 border border-dark-700 space-y-4">
+                  <form onSubmit={handleSaveStoreSettings} className="mt-5 p-5 rounded-2xl bg-dark-800/60 border border-dark-700 space-y-5">
                   <div className="flex items-center gap-2 pb-3 border-b border-dark-700">
                     <Store className="w-5 h-5 text-brand-gold" />
                     <div>
-                      <h3 className="text-sm font-bold text-white">Dados da Loja & WhatsApp de Pedidos</h3>
-                      <p className="text-xs text-slate-400">Configure o número para onde os pedidos caem e os dados de pagamento PIX.</p>
+                      <h3 className="text-sm font-bold text-white">Status, Horários & Dados da Loja</h3>
+                      <p className="text-xs text-slate-400">Controle se a loja está aberta ou fechada, horários de funcionamento e dados de pagamento.</p>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* SEÇÃO 1: STATUS DE ATENDIMENTO (ABERTO OU FECHADO) & HORÁRIOS */}
+                  <div className="p-4 sm:p-5 rounded-2xl bg-dark-900/90 border border-dark-700/80 space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-dark-800">
+                      <div className="flex items-center gap-2.5">
+                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
+                          tempStoreIsOpen ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                        }`}>
+                          <Clock className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-sm text-white flex items-center gap-2">
+                            <span>Status de Atendimento da Loja</span>
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${
+                              tempStoreIsOpen 
+                                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
+                                : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                            }`}>
+                              {tempStoreIsOpen ? '🟢 Aberto para Pedidos' : '🔴 Fechado no Momento'}
+                            </span>
+                          </h4>
+                          <p className="text-[11px] text-slate-400">
+                            Quando fechado, o site exibe o aviso de fechamento e não deixa os clientes finalizarem pedidos.
+                          </p>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setTempStoreIsOpen(!tempStoreIsOpen)}
+                        className={`px-3.5 py-1.5 rounded-xl font-black text-xs transition-all cursor-pointer shadow-sm flex items-center gap-1.5 ${
+                          tempStoreIsOpen
+                            ? 'bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/40'
+                            : 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 animate-pulse'
+                        }`}
+                      >
+                        <span>{tempStoreIsOpen ? '🔴 Alterar para FECHADO' : '🟢 Alterar para ABERTO'}</span>
+                      </button>
+                    </div>
+
+                    {/* Dual Selection Cards */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div
+                        onClick={() => setTempStoreIsOpen(true)}
+                        className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-start gap-3 ${
+                          tempStoreIsOpen
+                            ? 'bg-emerald-950/40 border-emerald-500/50 shadow-md ring-1 ring-emerald-500/30'
+                            : 'bg-dark-950/60 border-dark-750 hover:border-dark-700 opacity-60'
+                        }`}
+                      >
+                        <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${
+                          tempStoreIsOpen ? 'bg-emerald-500 text-dark-950' : 'border border-slate-600'
+                        }`}>
+                          {tempStoreIsOpen && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                        </div>
+                        <div>
+                          <h5 className="font-bold text-xs text-white flex items-center gap-1.5">
+                            <span>🟢 Estabelecimento Aberto</span>
+                          </h5>
+                          <p className="text-[11px] text-slate-300 mt-1 leading-relaxed">
+                            O cardápio está liberado. Clientes podem montar pizzas, esfirras, combos e enviar pedidos via WhatsApp normalmente.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div
+                        onClick={() => setTempStoreIsOpen(false)}
+                        className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-start gap-3 ${
+                          !tempStoreIsOpen
+                            ? 'bg-red-950/40 border-red-500/50 shadow-md ring-1 ring-red-500/30'
+                            : 'bg-dark-950/60 border-dark-750 hover:border-dark-700 opacity-60'
+                        }`}
+                      >
+                        <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${
+                          !tempStoreIsOpen ? 'bg-red-500 text-white' : 'border border-slate-600'
+                        }`}>
+                          {!tempStoreIsOpen && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                        </div>
+                        <div>
+                          <h5 className="font-bold text-xs text-white flex items-center gap-1.5">
+                            <span>🔴 Estabelecimento Fechado</span>
+                          </h5>
+                          <p className="text-[11px] text-slate-300 mt-1 leading-relaxed">
+                            Pausa os pedidos. O site exibirá aviso de loja fechada, mostrará os horários de funcionamento e impedirá os clientes de pedir.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* HORÁRIOS DE FUNCIONAMENTO */}
+                    <div className="pt-3 border-t border-dark-800 space-y-3">
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-xs font-semibold text-slate-300">
+                            Horário de Funcionamento (Visível no site para os clientes):
+                          </label>
+                          <span className="text-[10px] text-brand-gold font-bold">
+                            💡 Modelos rápidos:
+                          </span>
+                        </div>
+                        <input
+                          type="text"
+                          value={tempStoreOpeningHours}
+                          onChange={(e) => setTempStoreOpeningHours(e.target.value)}
+                          placeholder="Ex: Terça a Domingo: 18:00 às 23:30 (Segunda fechado)"
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-dark-950 border border-dark-700 text-xs text-white placeholder-slate-500 focus:border-brand-gold focus:outline-none"
+                        />
+                      </div>
+
+                      {/* Quick Schedule Templates */}
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="text-[10px] text-slate-400 font-bold mr-1">Modelos Rápidos:</span>
+                        {[
+                          'Terça a Domingo: 18:00 às 23:30',
+                          'Terça a Domingo: 18:00 às 23:30 (Segunda fechado)',
+                          'Todos os dias: 18:00 às 23:30',
+                          'Segunda a Sábado: 18:00 às 23:30',
+                          'Terça a Sexta: 09:00 às 11:30 e 18:00 às 23:30 | Sáb e Dom: 18:00 às 23:30'
+                        ].map((tpl, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => setTempStoreOpeningHours(tpl)}
+                            className="px-2.5 py-1 rounded-lg text-[10px] font-semibold bg-dark-950 hover:bg-dark-850 text-slate-300 hover:text-white border border-dark-750 hover:border-brand-gold/40 transition-colors cursor-pointer"
+                          >
+                            {tpl.length > 35 ? tpl.slice(0, 32) + '...' : tpl}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Configurações extras quando estiver fechado */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+                        <div className="sm:col-span-2">
+                          <label className="block text-xs font-semibold text-slate-300 mb-1">
+                            Mensagem para os Clientes quando a Loja estiver Fechada:
+                          </label>
+                          <textarea
+                            rows={2}
+                            value={tempStoreClosedMessage}
+                            onChange={(e) => setTempStoreClosedMessage(e.target.value)}
+                            placeholder="Ex: Estamos fechados no momento. Não estamos aceitando novos pedidos pelo site agora."
+                            className="w-full px-3.5 py-2 rounded-xl bg-dark-950 border border-dark-700 text-xs text-white placeholder-slate-500 focus:border-brand-gold focus:outline-none"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-300 mb-1">
+                            Previsão de Reabertura (Opcional):
+                          </label>
+                          <input
+                            type="text"
+                            value={tempStoreReopenTime}
+                            onChange={(e) => setTempStoreReopenTime(e.target.value)}
+                            placeholder="Ex: Hoje às 18:00"
+                            className="w-full px-3.5 py-2 rounded-xl bg-dark-950 border border-dark-700 text-xs text-white placeholder-slate-500 focus:border-brand-gold focus:outline-none"
+                          />
+                          <p className="text-[10px] text-slate-400 mt-1">
+                            Aparece no aviso quando o cliente tentar pedir.
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Live Preview Card */}
+                      <div className="p-3.5 rounded-xl bg-dark-950 border border-dark-800 space-y-1.5">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                          👀 Pré-visualização do Aviso no Site {!tempStoreIsOpen ? '(Ativo Agora)' : '(Quando Fechar)'}:
+                        </span>
+                        <div className="p-3 rounded-xl bg-gradient-to-r from-red-950/80 via-red-900/60 to-amber-950/80 border border-red-500/30 text-xs text-red-200 flex items-start gap-2.5">
+                          <span className="text-lg">⛔</span>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-bold text-red-300">
+                              Estabelecimento Fechado • Pedidos Online Pausados
+                            </p>
+                            <p className="text-[11px] text-red-200/90 mt-0.5">
+                              {tempStoreClosedMessage || 'No momento não estamos aceitando pedidos pelo site.'}
+                            </p>
+                            <p className="text-[11px] text-brand-gold font-bold mt-1">
+                              🕒 Horário: {tempStoreOpeningHours || 'Terça a Domingo: 18:00 às 23:30'}
+                              {tempStoreReopenTime ? ` • Reabre: ${tempStoreReopenTime}` : ''}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
                     <div>
                       <label className="block text-xs font-semibold text-slate-300 mb-1">Nome da Loja:</label>
                       <input
@@ -7619,17 +7875,6 @@ export function AdminDashboard({
                         value={tempStoreAddress}
                         onChange={(e) => setTempStoreAddress(e.target.value)}
                         placeholder="Ex: Rua Maceió, 2333 - Setor 03, Ariquemes - RO"
-                        className="w-full px-3.5 py-2 rounded-xl bg-dark-900 border border-dark-700 text-xs text-white"
-                      />
-                    </div>
-
-                    <div className="sm:col-span-2">
-                      <label className="block text-xs font-semibold text-slate-300 mb-1">Horário de Funcionamento:</label>
-                      <input
-                        type="text"
-                        value={tempStoreOpeningHours}
-                        onChange={(e) => setTempStoreOpeningHours(e.target.value)}
-                        placeholder="Ex: Terça a Domingo: 09:00 às 23:00 (Segunda fechado)"
                         className="w-full px-3.5 py-2 rounded-xl bg-dark-900 border border-dark-700 text-xs text-white"
                       />
                     </div>

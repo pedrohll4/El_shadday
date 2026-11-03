@@ -145,7 +145,7 @@ export const isCarneFlavor = (flavorName) => {
   return str.includes('carne');
 };
 
-export function BoxBuilderModal({ isOpen, onClose, onAddBoxToCart, initialBox = null }) {
+export function BoxBuilderModal({ isOpen, onClose, onAddBoxToCart, initialBox = null, isStoreOpen = true }) {
   const [selectedOptionId, setSelectedOptionId] = useState(BOX_SORTIDO_OPTIONS[0].id);
   const [selectedDydyo, setSelectedDydyo] = useState('Dydyo Guaraná 2L');
   const [notes, setNotes] = useState('');
@@ -231,6 +231,13 @@ export function BoxBuilderModal({ isOpen, onClose, onAddBoxToCart, initialBox = 
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {/* Closed Store Alert */}
+        {!isStoreOpen && (
+          <div className="bg-red-950/90 border-b border-red-500/30 px-4 py-2 flex items-center justify-center gap-2 text-xs font-bold text-red-200">
+            <span>⛔ Estabelecimento Fechado • Apenas visualização da caixa (pedidos pausados)</span>
+          </div>
+        )}
 
         {/* Scrollable Content */}
         <div className="flex-1 overflow-y-auto overscroll-contain p-4 sm:p-5 space-y-4">
@@ -440,10 +447,15 @@ export function BoxBuilderModal({ isOpen, onClose, onAddBoxToCart, initialBox = 
             <button
               type="button"
               onClick={handleConfirm}
-              className="flex-1 sm:flex-none px-6 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 bg-gradient-to-r from-brand-gold to-amber-500 hover:from-amber-400 hover:to-brand-gold text-dark-950 shadow-glow-gold cursor-pointer hover:scale-102 active:scale-98 transition-all"
+              disabled={!isStoreOpen}
+              className={`flex-1 sm:flex-none px-6 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all ${
+                !isStoreOpen
+                  ? 'bg-dark-800 text-slate-500 border border-red-500/30 cursor-not-allowed'
+                  : 'bg-gradient-to-r from-brand-gold to-amber-500 hover:from-amber-400 hover:to-brand-gold text-dark-950 shadow-glow-gold cursor-pointer hover:scale-102 active:scale-98'
+              }`}
             >
               <Check className="w-4 h-4 stroke-[3]" />
-              <span>Adicionar Caixa ({totalCount} un)</span>
+              <span>{!isStoreOpen ? '⛔ Fechado para Pedidos' : `Adicionar Caixa (${totalCount} un)`}</span>
             </button>
           </div>
         </div>

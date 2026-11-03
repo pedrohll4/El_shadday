@@ -12,7 +12,9 @@ export function Header({
   onOpenBranchModal,
   onScrollToBuffet,
   onOpenAdmin,
-  currentUser
+  currentUser,
+  isStoreOpen = true,
+  openingHours
 }) {
   return (
     <header className="sticky top-0 z-40 bg-dark-950/90 backdrop-blur-xl border-b border-white/5 transition-all duration-300 w-full max-w-full shadow-[0_4px_20px_rgba(0,0,0,0.5)]">
@@ -39,10 +41,20 @@ export function Header({
                   <span className="font-display font-black text-xl tracking-tight text-white group-hover:text-brand-gold transition-colors">
                     EL SHADDAY
                   </span>
-                  <span className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                    <span>Aberto Agora</span>
-                  </span>
+                  {isStoreOpen ? (
+                    <span className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                      <span>Aberto Agora</span>
+                    </span>
+                  ) : (
+                    <span 
+                      className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-red-500/20 text-red-300 border border-red-500/40"
+                      title={openingHours ? `Fechado no momento • Horário: ${openingHours}` : 'Fechado no momento'}
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-red-400"></span>
+                      <span>Fechado Agora</span>
+                    </span>
+                  )}
                 </div>
                 
                 <span className="text-[11px] text-slate-400 font-medium">
@@ -149,7 +161,14 @@ export function Header({
                   <span className="font-display font-black text-base text-white tracking-tight truncate">
                     EL SHADDAY
                   </span>
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse flex-shrink-0"></span>
+                  {isStoreOpen ? (
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse flex-shrink-0" title="Aberto Agora"></span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-[9px] font-extrabold px-1.5 py-0.5 rounded-md bg-red-500/25 text-red-300 border border-red-500/40" title={openingHours ? `Horário: ${openingHours}` : 'Fechado'}>
+                      <span className="w-1.5 h-1.5 rounded-full bg-red-400 flex-shrink-0"></span>
+                      <span>Fechado</span>
+                    </span>
+                  )}
                 </div>
                 <span className="text-[10px] text-slate-400 truncate">
                   Esfihas & Pizzas

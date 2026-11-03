@@ -89,7 +89,8 @@ export function ComboCustomizerModal({
   isOpen, 
   onClose, 
   comboProduct, 
-  onAddComboToCart 
+  onAddComboToCart,
+  isStoreOpen = true
 }) {
   const [activeStage, setActiveStage] = useState('pizzas'); // 'pizzas' | 'acai'
   const [activePizzaIndex, setActivePizzaIndex] = useState(0);
@@ -437,6 +438,13 @@ export function ComboCustomizerModal({
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {/* Closed Store Alert */}
+        {!isStoreOpen && (
+          <div className="bg-red-950/90 border-b border-red-500/30 px-4 py-2 flex items-center justify-center gap-2 text-xs font-bold text-red-200">
+            <span>⛔ Estabelecimento Fechado • Apenas visualização do combo (pedidos pausados)</span>
+          </div>
+        )}
 
         {/* Borda Catupiry Banner */}
         {comboProduct.bordaGratis && (
@@ -1151,10 +1159,15 @@ export function ComboCustomizerModal({
             <button
               type="button"
               onClick={handleConfirm}
-              className="flex-1 sm:flex-none px-5 py-2.5 rounded-xl bg-gradient-to-r from-brand-gold via-amber-400 to-brand-gold hover:from-amber-400 hover:to-brand-gold text-dark-950 font-black text-xs sm:text-sm shadow-glow-gold flex items-center justify-center gap-1.5 cursor-pointer active:scale-98 transition-all"
+              disabled={!isStoreOpen}
+              className={`flex-1 sm:flex-none px-5 py-2.5 rounded-xl font-black text-xs sm:text-sm flex items-center justify-center gap-1.5 transition-all ${
+                !isStoreOpen
+                  ? 'bg-dark-800 text-slate-500 border border-red-500/30 cursor-not-allowed'
+                  : 'bg-gradient-to-r from-brand-gold via-amber-400 to-brand-gold hover:from-amber-400 hover:to-brand-gold text-dark-950 shadow-glow-gold cursor-pointer active:scale-98'
+              }`}
             >
               <Check className="w-4 h-4 stroke-[3]" />
-              <span>Adicionar Combo • R$ {finalComboPrice.toFixed(2).replace('.', ',')}</span>
+              <span>{!isStoreOpen ? '⛔ Fechado para Pedidos' : `Adicionar Combo • R$ ${finalComboPrice.toFixed(2).replace('.', ',')}`}</span>
             </button>
           </div>
         </div>

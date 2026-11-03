@@ -246,12 +246,14 @@ export function BranchManagementView({
                     className={`px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider transition-colors cursor-pointer flex items-center gap-1.5 ${
                       isActive
                         ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30'
+                        : b.status === 'closed'
+                        ? 'bg-red-500/20 text-red-400 border border-red-500/40 hover:bg-red-500/30'
                         : 'bg-amber-500/20 text-amber-400 border border-amber-500/40 hover:bg-amber-500/30'
                     }`}
-                    title="Clique para alternar o status da filial"
+                    title="Clique para alternar o status da filial (Aberta / Fechada)"
                   >
-                    <span className={`w-2 h-2 rounded-full ${isActive ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
-                    <span>{b.badge || (isActive ? 'Aberta' : 'Em Construção 🚧')}</span>
+                    <span className={`w-2 h-2 rounded-full ${isActive ? 'bg-emerald-400 animate-pulse' : b.status === 'closed' ? 'bg-red-400' : 'bg-amber-400'}`} />
+                    <span>{b.badge || (isActive ? 'Aberta para Pedidos' : b.status === 'closed' ? 'Fechada Temporariamente' : 'Em Construção 🚧')}</span>
                   </button>
                 </div>
 

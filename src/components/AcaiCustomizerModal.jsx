@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Sparkles, Check, Plus, Minus, Info, AlertCircle } from 'lucide-react';
 import { getStoredAcaiSettings } from '../data/menuData';
 
-export function AcaiCustomizerModal({ isOpen, onClose, acaiProduct, onAddAcaiToCart }) {
+export function AcaiCustomizerModal({ isOpen, onClose, acaiProduct, onAddAcaiToCart, isStoreOpen = true }) {
   const [acaiConfig, setAcaiConfig] = useState(() => getStoredAcaiSettings());
   const [selectedComplements, setSelectedComplements] = useState([]);
   const [selectedCobertura, setSelectedCobertura] = useState('Sem Cobertura');
@@ -161,6 +161,13 @@ export function AcaiCustomizerModal({ isOpen, onClose, acaiProduct, onAddAcaiToC
             <X className="w-4 h-4" />
           </button>
         </div>
+
+        {/* Closed Store Alert */}
+        {!isStoreOpen && (
+          <div className="bg-red-950/90 border-b border-red-500/30 px-4 py-2 flex items-center justify-center gap-2 text-xs font-bold text-red-200">
+            <span>⛔ Estabelecimento Fechado • Apenas visualização (pedidos pausados)</span>
+          </div>
+        )}
 
         {/* Content body */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
@@ -339,10 +346,15 @@ export function AcaiCustomizerModal({ isOpen, onClose, acaiProduct, onAddAcaiToC
             <button
               type="button"
               onClick={handleConfirm}
-              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-500 to-indigo-500 text-white font-black text-xs hover:brightness-110 shadow-lg shadow-purple-500/20 cursor-pointer transition-all flex items-center gap-1.5 flex-shrink-0"
+              disabled={!isStoreOpen}
+              className={`px-5 py-2.5 rounded-xl text-white font-black text-xs shadow-lg flex items-center gap-1.5 flex-shrink-0 transition-all ${
+                !isStoreOpen
+                  ? 'bg-dark-800 text-slate-500 border border-red-500/30 cursor-not-allowed shadow-none'
+                  : 'bg-gradient-to-r from-purple-500 to-indigo-500 hover:brightness-110 shadow-purple-500/20 cursor-pointer'
+              }`}
             >
               <Check className="w-4 h-4 stroke-[3]" />
-              <span>Adicionar Açaí • R$ {totalPrice.toFixed(2).replace('.', ',')}</span>
+              <span>{!isStoreOpen ? '⛔ Fechado para Pedidos' : `Adicionar Açaí • R$ ${totalPrice.toFixed(2).replace('.', ',')}`}</span>
             </button>
           </div>
         </div>

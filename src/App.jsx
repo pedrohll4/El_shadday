@@ -18,7 +18,8 @@ import {
   saveStoredAcaiSettings,
   getStoredCategories,
   saveStoredCategories,
-  normalizeCategoriesList
+  normalizeCategoriesList,
+  isStoreOpen
 } from './data/menuData';
 import { saveStoredBuffetGallery, isFakeGalleryItem, saveUnavailableBuffetItemIds } from './buffet/buffetData';
 import { supabase, isSupabaseConfigured } from './services/supabaseClient';
@@ -34,6 +35,7 @@ import { ComboCustomizerModal } from './components/ComboCustomizerModal';
 import { AcaiCustomizerModal } from './components/AcaiCustomizerModal';
 import { BranchSelectorModal } from './components/BranchSelectorModal';
 import { ConstructionModal } from './components/ConstructionModal';
+import { StoreClosedModal } from './components/StoreClosedModal';
 import { DeliveryCartDrawer } from './components/DeliveryCartDrawer';
 import { OrderSuccessModal } from './components/OrderSuccessModal';
 import { BuffetSection } from './components/BuffetSection';
@@ -219,6 +221,7 @@ export default function App() {
   });
 
   const [isConstructionModalOpen, setIsConstructionModalOpen] = useState(false);
+  const [isStoreClosedModalOpen, setIsStoreClosedModalOpen] = useState(false);
   const [deliveryMode, setDeliveryMode] = useState('delivery');
 
   // Cart & Menu State
@@ -343,7 +346,7 @@ export default function App() {
               setCategories(normCats);
               saveStoredCategories(normCats);
             }
-            if (data.card_machine_notice !== undefined || data.name) {
+            if (data.card_machine_notice !== undefined || data.name || data.delivery_active !== undefined) {
               const currentStore = getStoredRestaurantInfo();
               const updatedStore = {
                 ...currentStore,
@@ -353,6 +356,7 @@ export default function App() {
                 ...(data.address ? { address: data.address } : {}),
                 ...(data.pix_key ? { pixKey: data.pix_key } : {}),
                 ...(data.pix_name ? { pixName: data.pix_name } : {}),
+                ...(data.delivery_active !== undefined ? { isOpen: data.delivery_active } : {}),
                 ...(data.card_machine_notice !== undefined ? { cardMachineNotice: data.card_machine_notice } : {}),
                 ...(data.card_machine_notice_active !== undefined ? { cardMachineNoticeActive: data.card_machine_notice_active } : {}),
                 ...(data.card_machine_settings ? { cardMachineSettings: data.card_machine_settings } : {})
@@ -407,6 +411,15 @@ export default function App() {
                 if (Array.isArray(freshData.promo_settings.buffet_unavailable_items)) {
                   saveUnavailableBuffetItemIds(freshData.promo_settings.buffet_unavailable_items);
                 }
+              }
+              if (freshData.delivery_active !== undefined) {
+                const currentStore = getStoredRestaurantInfo();
+                const updatedStore = {
+                  ...currentStore,
+                  isOpen: freshData.delivery_active
+                };
+                setRestaurantInfo(updatedStore);
+                saveStoredRestaurantInfo(updatedStore);
               }
             }
           })
@@ -655,6 +668,19 @@ export default function App() {
     return branches.find(b => b.id === selectedBranchId) || branches[0] || BRANCHES[0];
   }, [branches, selectedBranchId]);
 
+  // Store Open / Closed Status
+  const storeIsOpen = useMemo(() => {
+    return isStoreOpen(restaurantInfo, activeBranch);
+  }, [restaurantInfo, activeBranch]);
+
+  const currentOpeningHours = useMemo(() => {
+    return restaurantInfo?.openingHours || activeBranch?.openingHours || 'Terça a Domingo: 18:00 às 23:30';
+  }, [restaurantInfo, activeBranch]);
+
+  const currentClosedMessage = useMemo(() => {
+    return restaurantInfo?.closedMessage || 'Estamos fechados no momento. Não estamos aceitando novos pedidos pelo site agora.';
+  }, [restaurantInfo]);
+
   // Branch switch handler
   const handleSelectBranch = (branchId) => {
     const branch = branches.find(b => b.id === branchId);
@@ -676,6 +702,10 @@ export default function App() {
 
   // Cart Handlers
   const handleAddToCart = (product) => {
+    if (!storeIsOpen) {
+      setIsStoreClosedModalOpen(true);
+      return;
+    }
     setCartItems(prev => {
       const existing = prev.find(item => item.id === product.id);
       if (existing) {
@@ -1161,6 +1191,8 @@ export default function App() {
         onScrollToBuffet={handleOpenBuffetSubpage}
         onOpenAdmin={handleOpenAdminTrigger}
         currentUser={currentUser}
+        isStoreOpen={storeIsOpen}
+        openingHours={currentOpeningHours}
       />
 
       {/* 1.1 Top Promotional Announcement Banner */}
@@ -1184,7 +1216,21 @@ export default function App() {
         onToggleDeliveryMode={setDeliveryMode}
         onScrollToCategory={handleSelectCategory}
         onOpenBuffet={handleOpenBuffetSubpage}
+        isStoreOpen={storeIsOpen}
+        openingHours={currentOpeningHours}
+        closedMessage={currentClosedMessage}
       />
+
+      {/* 2.05 Estabelecimento Fechado Alert Strip */}
+      {!storeIsOpen && (
+        <div className="bg-red-950/90 border-y border-red-500/40 py-2.5 px-4 text-center animate-fade-in shadow-inner">
+          <div className="max-w-7xl mx-auto flex items-center justify-center gap-2 text-xs text-red-200 flex-wrap">
+            <span className="w-2.5 h-2.5 rounded-full bg-red-400 animate-ping"></span>
+            <span className="font-black text-red-300 uppercase tracking-wider">Estabelecimento Fechado no Momento:</span>
+            <span>Novos pedidos online pausados. Horário de funcionamento: <strong className="text-white">{currentOpeningHours}</strong></span>
+          </div>
+        </div>
+      )}
 
       {/* 2.1 Promotions & Highlights Shelf */}
       <PromotionsShelf
@@ -1202,6 +1248,8 @@ export default function App() {
           setIsComboCustomizerOpen(true);
         }}
         onAddToCart={handleAddToCart}
+        isStoreOpen={storeIsOpen}
+        onBlockedByClosed={() => setIsStoreClosedModalOpen(true)}
       />
 
       {/* 3. Category Navigation & Search */}
@@ -1286,6 +1334,8 @@ export default function App() {
                             setSelectedAcaiForCustomizer(prod);
                             setIsAcaiModalOpen(true);
                           }}
+                          isStoreOpen={storeIsOpen}
+                          onBlockedByClosed={() => setIsStoreClosedModalOpen(true)}
                         />
                       );
                     })}
@@ -1358,6 +1408,8 @@ export default function App() {
                               setSelectedAcaiForCustomizer(prod);
                               setIsAcaiModalOpen(true);
                             }}
+                            isStoreOpen={storeIsOpen}
+                            onBlockedByClosed={() => setIsStoreClosedModalOpen(true)}
                           />
                         );
                       })}
@@ -1379,6 +1431,8 @@ export default function App() {
             activeBranch={activeBranch}
             deliveryMode={deliveryMode}
             deliveryFee={8}
+            isStoreOpen={storeIsOpen}
+            openingHours={currentOpeningHours}
           />
 
         </div>
@@ -1479,6 +1533,19 @@ export default function App() {
         onOrderFinished={handleOrderFinished}
         activeBranch={activeBranch}
         initialDeliveryType={deliveryMode}
+        isStoreOpen={storeIsOpen}
+        openingHours={currentOpeningHours}
+        closedMessage={currentClosedMessage}
+      />
+
+      {/* Store Closed Informative Modal */}
+      <StoreClosedModal
+        isOpen={isStoreClosedModalOpen}
+        onClose={() => setIsStoreClosedModalOpen(false)}
+        openingHours={currentOpeningHours}
+        closedMessage={currentClosedMessage}
+        reopenTime={restaurantInfo?.reopenTime}
+        whatsapp={activeBranch?.whatsapp || restaurantInfo?.phone}
       />
 
       {/* Order Success & Pix Proof Modal */}
@@ -1506,6 +1573,7 @@ export default function App() {
         onAddBoxToCart={handleAddBoxToCart}
         initialBox={selectedBoxForBuilder}
         products={products}
+        isStoreOpen={storeIsOpen}
       />
 
       {/* Pizza Customizer Modal */}
@@ -1514,6 +1582,7 @@ export default function App() {
         onClose={() => setIsPizzaCustomizerOpen(false)}
         pizzaProduct={selectedPizzaForCustomizer}
         onAddPizzaToCart={handleAddPizzaToCart}
+        isStoreOpen={storeIsOpen}
       />
 
       {/* Combo Customizer Modal (Handles Multi-Pizza selection) */}
@@ -1522,6 +1591,7 @@ export default function App() {
         onClose={() => setIsComboCustomizerOpen(false)}
         comboProduct={selectedComboForCustomizer}
         onAddComboToCart={handleAddComboToCart}
+        isStoreOpen={storeIsOpen}
       />
 
       {/* Acai Customizer Modal */}
@@ -1530,6 +1600,7 @@ export default function App() {
         onClose={() => setIsAcaiModalOpen(false)}
         acaiProduct={selectedAcaiForCustomizer}
         onAddAcaiToCart={handleAddAcaiToCart}
+        isStoreOpen={storeIsOpen}
       />
 
     </div>

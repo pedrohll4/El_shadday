@@ -47,7 +47,11 @@ export function createBranch(branchData) {
     displayName: branchData.displayName || `${branchData.city || branchData.name} - RO`,
     subtitle: branchData.subtitle || 'Filial Delivery & Balcão',
     status: branchData.status || 'active', // 'active' | 'construction' | 'closed'
-    badge: branchData.status === 'active' ? 'Aberta para Pedidos' : 'Em Construção 🚧',
+    badge: branchData.status === 'active' 
+      ? 'Aberta para Pedidos' 
+      : branchData.status === 'closed' 
+      ? 'Fechada Temporariamente' 
+      : 'Em Construção 🚧',
     address: branchData.address || 'Endereço em cadastramento',
     phone: branchData.phone ? branchData.phone.replace(/\D/g, '') : '5569992228682',
     phoneFormatted: branchData.phoneFormatted || branchData.phone || '(69) 99222-8682',
@@ -96,7 +100,7 @@ export function toggleBranchStatus(branchId) {
   const branch = branches.find(b => b.id === branchId);
   if (!branch) throw new Error('Filial não encontrada.');
 
-  const nextStatus = branch.status === 'active' ? 'construction' : 'active';
+  const nextStatus = branch.status === 'active' ? 'closed' : 'active';
   return updateBranch(branchId, { status: nextStatus });
 }
 

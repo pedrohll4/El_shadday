@@ -9,7 +9,9 @@ export function DesktopSidebarCart({
   onOpenCheckout,
   activeBranch,
   deliveryMode = 'delivery',
-  deliveryFee = 8
+  deliveryFee = 8,
+  isStoreOpen = true,
+  openingHours
 }) {
   const subtotal = cartItems.reduce((acc, item) => acc + (item.price * item.quantity), 0);
   const currentFee = deliveryMode === 'delivery' ? deliveryFee : 0;
@@ -224,15 +226,41 @@ export function DesktopSidebarCart({
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={onOpenCheckout}
-              className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-emerald-600 via-emerald-500 to-emerald-600 hover:from-emerald-500 hover:to-emerald-400 text-white font-black text-sm shadow-lg flex items-center justify-center gap-2 cursor-pointer transition-transform active:scale-98"
-            >
-              <MessageCircle className="w-4 h-4" />
-              <span>Finalizar Pedido</span>
-              <ArrowRight className="w-4 h-4 stroke-[3]" />
-            </button>
+            {!isStoreOpen ? (
+              <div className="space-y-2">
+                <div className="p-3 rounded-xl bg-red-950/70 border border-red-500/30 text-xs text-red-200">
+                  <p className="font-bold flex items-center gap-1.5 text-red-300">
+                    <span>⚠️ Estabelecimento Fechado</span>
+                  </p>
+                  <p className="mt-1 text-[11px] text-red-200/90 leading-relaxed">
+                    Não estamos aceitando pedidos no momento.
+                  </p>
+                  {openingHours && (
+                    <p className="mt-1 text-[10px] text-brand-gold font-bold">
+                      🕒 Horário: {openingHours}
+                    </p>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  disabled
+                  className="w-full py-3.5 px-4 rounded-2xl bg-dark-800 text-slate-500 font-black text-sm border border-red-500/30 flex items-center justify-center gap-2 cursor-not-allowed select-none opacity-80"
+                >
+                  <span>⛔ Estabelecimento Fechado</span>
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={onOpenCheckout}
+                className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-emerald-600 via-emerald-500 to-emerald-600 hover:from-emerald-500 hover:to-emerald-400 text-white font-black text-sm shadow-lg flex items-center justify-center gap-2 cursor-pointer transition-transform active:scale-98"
+              >
+                <MessageCircle className="w-4 h-4" />
+                <span>Finalizar Pedido</span>
+                <ArrowRight className="w-4 h-4 stroke-[3]" />
+              </button>
+            )}
           </div>
         )}
 

@@ -19,7 +19,10 @@ export function DeliveryCartDrawer({
   onClearCart,
   onOrderFinished,
   activeBranch,
-  initialDeliveryType = 'delivery'
+  initialDeliveryType = 'delivery',
+  isStoreOpen = true,
+  openingHours,
+  closedMessage
 }) {
   const [deliveryType, setDeliveryType] = useState(initialDeliveryType); // 'delivery' | 'retirada'
   const [storeInfo, setStoreInfo] = useState(() => getStoredRestaurantInfo());
@@ -97,6 +100,10 @@ export function DeliveryCartDrawer({
   };
 
   const handleFinalizeWhatsAppOrder = () => {
+    if (!isStoreOpen) {
+      setErrorMessage(`O estabelecimento está fechado no momento. Horário de funcionamento: ${openingHours || storeInfo?.openingHours || 'Terça a Domingo: 18:00 às 23:30'}`);
+      return;
+    }
     if (cartItems.length === 0) {
       setErrorMessage('Sua sacola está vazia! Adicione itens do cardápio.');
       return;
@@ -386,6 +393,15 @@ Pedido gerado via Cardápio Digital El Shadday.`;
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {/* Closed Warning Strip */}
+        {!isStoreOpen && (
+          <div className="px-4 py-2.5 bg-red-950/90 border-b border-red-500/30 flex items-center gap-2 text-xs text-red-200">
+            <span className="w-2 h-2 rounded-full bg-red-400 shrink-0 animate-ping"></span>
+            <span className="font-black text-red-300">LOJA FECHADA:</span>
+            <span className="truncate">Pedidos online pausados. Horário: {openingHours || storeInfo?.openingHours || '18:00 às 23:30'}</span>
+          </div>
+        )}
 
         {/* Scrollable Content */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-6">
@@ -1194,14 +1210,38 @@ Pedido gerado via Cardápio Digital El Shadday.`;
             </div>
 
             {/* Main Action Button */}
-            <button
-              type="button"
-              onClick={handleFinalizeWhatsAppOrder}
-              className="w-full py-4 px-5 rounded-2xl bg-gradient-to-r from-emerald-600 via-emerald-500 to-emerald-600 hover:from-emerald-500 hover:to-emerald-400 text-white font-extrabold text-sm sm:text-base shadow-lg transition-all duration-300 hover:scale-[1.01] active:scale-98 flex items-center justify-center gap-2 cursor-pointer"
-            >
-              <MessageCircle className="w-5 h-5" />
-              <span>Finalizar Pedido via WhatsApp</span>
-            </button>
+            {!isStoreOpen ? (
+              <div className="space-y-2">
+                <div className="p-3.5 rounded-2xl bg-red-950/80 border border-red-500/40 text-xs text-red-200 text-center sm:text-left">
+                  <p className="font-black text-red-300 text-sm flex items-center justify-center sm:justify-start gap-1.5">
+                    <span>⛔ Estabelecimento Fechado</span>
+                  </p>
+                  <p className="mt-1 text-xs text-red-200/90 leading-relaxed">
+                    {closedMessage || 'No momento não estamos aceitando pedidos pelo site. Aguardamos você em nosso horário de funcionamento!'}
+                  </p>
+                  <p className="mt-1.5 text-xs text-brand-gold font-bold">
+                    🕒 Horário: {openingHours || storeInfo?.openingHours || 'Terça a Domingo: 18:00 às 23:30'}
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  disabled
+                  className="w-full py-4 px-5 rounded-2xl bg-dark-800 text-slate-500 font-extrabold text-sm sm:text-base border border-red-500/30 flex items-center justify-center gap-2 cursor-not-allowed select-none opacity-80"
+                >
+                  <span>⛔ Loja Fechada (Pedidos Pausados)</span>
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={handleFinalizeWhatsAppOrder}
+                className="w-full py-4 px-5 rounded-2xl bg-gradient-to-r from-emerald-600 via-emerald-500 to-emerald-600 hover:from-emerald-500 hover:to-emerald-400 text-white font-extrabold text-sm sm:text-base shadow-lg transition-all duration-300 hover:scale-[1.01] active:scale-98 flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <MessageCircle className="w-5 h-5" />
+                <span>Finalizar Pedido via WhatsApp</span>
+              </button>
+            )}
 
             <p className="text-center text-[10px] text-slate-400">
               Ao clicar, você enviará os dados do pedido e o comprovante no WhatsApp da pizzaria.

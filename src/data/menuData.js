@@ -8,7 +8,10 @@ export const RESTAURANT_INFO = {
   address: "Av Canaã, 4065 - Ariquemes - RO, 76875-818",
   mapsUrl: "https://www.google.com/maps/search/?api=1&query=-9.9130722,-63.0289001",
   deliveryTime: "45 - 75 min",
-  openingHours: "Terça a Sexta: 09:00 às 11:30 e 16:00 às 23:00 | Sábado: 18:00 às 23:00 | Domingo: 16:00 às 23:00 (Segunda fechado)",
+  openingHours: "Terça a Domingo: 18:00 às 23:30",
+  isOpen: true,
+  closedMessage: "Estamos fechados no momento. Não estamos aceitando novos pedidos pelo site agora. Confira nossos horários de funcionamento!",
+  reopenTime: "18:00",
   pixKey: "69992228682",
   pixType: "Telefone / Celular",
   pixName: "El Shadday Esfirraria",
@@ -1158,6 +1161,10 @@ export function getStoredRestaurantInfo() {
         return { 
           ...RESTAURANT_INFO, 
           ...parsed,
+          isOpen: parsed.isOpen !== undefined ? parsed.isOpen : RESTAURANT_INFO.isOpen,
+          closedMessage: parsed.closedMessage || RESTAURANT_INFO.closedMessage,
+          reopenTime: parsed.reopenTime || RESTAURANT_INFO.reopenTime,
+          openingHours: parsed.openingHours || RESTAURANT_INFO.openingHours,
           cardMachineSettings: mergedSettings,
           cardMachineNotice: parsed.cardMachineNotice !== undefined ? parsed.cardMachineNotice : RESTAURANT_INFO.cardMachineNotice,
           cardMachineNoticeActive: parsed.cardMachineNoticeActive !== undefined ? parsed.cardMachineNoticeActive : RESTAURANT_INFO.cardMachineNoticeActive
@@ -1168,6 +1175,14 @@ export function getStoredRestaurantInfo() {
     console.error("Error reading restaurant info:", e);
   }
   return RESTAURANT_INFO;
+}
+
+export function isStoreOpen(restaurantInfo, branch) {
+  if (branch) {
+    if (branch.status === 'closed' || branch.status === 'construction') return false;
+  }
+  if (restaurantInfo && restaurantInfo.isOpen === false) return false;
+  return true;
 }
 
 export function saveStoredRestaurantInfo(info) {

@@ -10,7 +10,9 @@ export function ProductCard({
   onOpenAcaiCustomizer,
   onUpdateQuantity,
   cartQuantity = 0,
-  cartItem = null
+  cartItem = null,
+  isStoreOpen = true,
+  onBlockedByClosed
 }) {
   const isBox = product.isBox;
   const isPizza = product.isPizzaCustomizer;
@@ -20,6 +22,10 @@ export function ProductCard({
 
   const handleAction = (e) => {
     e.stopPropagation();
+    if (!isStoreOpen && !isCustomizable) {
+      if (onBlockedByClosed) onBlockedByClosed(product);
+      return;
+    }
     if (isBox) {
       onOpenBoxBuilder(product);
     } else if (isPizza) {
@@ -35,6 +41,10 @@ export function ProductCard({
 
   const handleIncrement = (e) => {
     e.stopPropagation();
+    if (!isStoreOpen) {
+      if (onBlockedByClosed) onBlockedByClosed(product);
+      return;
+    }
     if (onUpdateQuantity && cartItem) {
       onUpdateQuantity(cartItem.id, 1);
     } else {
@@ -61,6 +71,11 @@ export function ProductCard({
         <div>
           {/* Top Badges */}
           <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
+            {!isStoreOpen && (
+              <span className="px-2 py-0.5 text-[9px] font-bold rounded-md bg-red-500/20 text-red-300 border border-red-500/30">
+                🔴 Fechado
+              </span>
+            )}
             {product.badge ? (
               <span className="px-2 py-0.5 text-[10px] font-black rounded-md bg-dark-950/90 text-brand-gold border border-brand-gold/30 flex items-center gap-1">
                 <Sparkles className="w-2.5 h-2.5" />
@@ -215,10 +230,14 @@ export function ProductCard({
             <button
               type="button"
               onClick={handleAction}
-              className="px-3 py-1.5 rounded-xl bg-dark-800 hover:bg-brand-gold text-slate-200 hover:text-dark-950 border border-white/10 hover:border-brand-gold font-bold text-xs flex items-center gap-1 transition-all active:scale-95 cursor-pointer"
+              className={`px-3 py-1.5 rounded-xl border font-bold text-xs flex items-center gap-1 transition-all active:scale-95 cursor-pointer ${
+                !isStoreOpen 
+                  ? 'bg-red-950/40 text-red-300 border-red-500/30 hover:bg-red-900/50' 
+                  : 'bg-dark-800 hover:bg-brand-gold text-slate-200 hover:text-dark-950 border-white/10 hover:border-brand-gold'
+              }`}
             >
               <Plus className="w-3 h-3 stroke-[3]" />
-              <span>Adicionar</span>
+              <span>{!isStoreOpen ? 'Fechado' : 'Adicionar'}</span>
             </button>
           )}
         </div>
