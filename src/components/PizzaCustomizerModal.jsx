@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { X, Pizza, Check, Sparkles, AlertCircle, Info, Search, Flame, ArrowUpRight } from 'lucide-react';
-import { getStoredPizzaFlavors, calculatePizzaPrice, INITIAL_PIZZA_FLAVORS } from '../data/menuData';
+import { getStoredPizzaFlavors, calculatePizzaPrice, getPizzaFlavorPrice, getPizzaSizeKey, INITIAL_PIZZA_FLAVORS } from '../data/menuData';
 
 export function PizzaCustomizerModal({ isOpen, onClose, pizzaProduct, onAddPizzaToCart, flavors, isStoreOpen = true }) {
   const [flavorsList, setFlavorsList] = useState(() => {
@@ -24,6 +24,10 @@ export function PizzaCustomizerModal({ isOpen, onClose, pizzaProduct, onAddPizza
   }, [pizzaProduct]);
 
   const basePrice = Number(pizzaProduct?.price) || 0;
+
+  const sizeKey = useMemo(() => {
+    return getPizzaSizeKey(pizzaProduct, basePrice);
+  }, [pizzaProduct, basePrice]);
 
   // Atualiza lista quando eventos de sincronização acontecerem
   useEffect(() => {
@@ -92,21 +96,20 @@ export function PizzaCustomizerModal({ isOpen, onClose, pizzaProduct, onAddPizza
     });
   }, [availableFlavors, categoryFilter, flavorSearch]);
 
-  // Cálculo de Preço - Regra: sempre puxa para o maior valor
+  // Cálculo de Preço - Regra: sempre puxa para o maior valor do tamanho
   const calculatedPrice = useMemo(() => {
-    return calculatePizzaPrice(basePrice, selectedFlavors);
-  }, [basePrice, selectedFlavors]);
+    return calculatePizzaPrice(basePrice, selectedFlavors, sizeKey);
+  }, [basePrice, selectedFlavors, sizeKey]);
 
   // Identifica o sabor de maior valor selecionado que causa acréscimo
   const highestPricedFlavor = useMemo(() => {
     if (!selectedFlavors || selectedFlavors.length === 0) return null;
     return selectedFlavors.reduce((max, f) => {
-      const isStandard = Number(f.price) <= 40 && f.category !== 'especiais';
-      const effPrice = isStandard ? basePrice : (Number(f.price) || 0);
-      const maxEffPrice = max ? ((Number(max.price) <= 40 && max.category !== 'especiais') ? basePrice : (Number(max.price) || 0)) : 0;
+      const effPrice = getPizzaFlavorPrice(f, sizeKey, basePrice);
+      const maxEffPrice = max ? getPizzaFlavorPrice(max, sizeKey, basePrice) : 0;
       return effPrice > maxEffPrice ? f : max;
     }, null);
-  }, [selectedFlavors, basePrice]);
+  }, [selectedFlavors, basePrice, sizeKey]);
 
   // Verifica se o preço final subiu acima da base da pizza
   const isPriceUpgraded = Boolean(
@@ -266,9 +269,9 @@ export function PizzaCustomizerModal({ isOpen, onClose, pizzaProduct, onAddPizza
             filteredFlavors.map((flavor) => {
               const isSelected = selectedFlavors.some(f => f.id === flavor.id || f.name === flavor.name);
               const isDisabled = !isSelected && selectedFlavors.length >= maxFlavors;
-              const rawFlavorPrice = Number(flavor.price) || 0;
-              const isStandard = rawFlavorPrice <= 40 && flavor.category !== 'especiais';
-              const effectivePrice = isStandard ? basePrice : rawFlavorPrice;
+              const flavorPriceForSize = getPizzaFlavorPrice(flavor, sizeKey, basePrice);
+              const isStandard = flavorPriceForSize <= basePrice && flavor.category !== 'especiais';
+              const effectivePrice = isStandard ? basePrice : flavorPriceForSize;
               const isFlavorMoreExpensive = effectivePrice > basePrice;
 
               const imageSrc = flavor.image || '';
@@ -337,12 +340,12 @@ export function PizzaCustomizerModal({ isOpen, onClose, pizzaProduct, onAddPizza
                       ) : (
                         <>
                           <span className="text-xs font-black text-brand-gold">
-                            R$ {rawFlavorPrice.toFixed(2).replace('.', ',')}
+                            R$ {flavorPriceForSize.toFixed(2).replace('.', ',')}
                           </span>
                           {isFlavorMoreExpensive ? (
                             <span className="inline-flex items-center gap-0.5 text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold">
                               <ArrowUpRight className="w-3 h-3 text-amber-400" />
-                              <span>Puxa p/ R$ {rawFlavorPrice.toFixed(2).replace('.', ',')}</span>
+                              <span>Puxa p/ R$ {flavorPriceForSize.toFixed(2).replace('.', ',')}</span>
                             </span>
                           ) : (
                             <span className="text-[10px] text-emerald-400 font-semibold">

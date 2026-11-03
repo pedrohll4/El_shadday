@@ -263,7 +263,7 @@ export function ComboCustomizerModal({
     pizzasConfig.forEach(p => {
       const flavors = pizzaSelections[p.id] || [];
       const base = Number(p.basePrice) || (p.size === 'gigante' ? 50.00 : 40.00);
-      map[p.id] = calculatePizzaSurcharge(base, flavors);
+      map[p.id] = calculatePizzaSurcharge(base, flavors, p.size);
     });
     return map;
   }, [pizzasConfig, pizzaSelections]);
@@ -664,7 +664,7 @@ export function ComboCustomizerModal({
                   const flavorName = flavor.name;
                   const isSelected = currentFlavors.includes(flavorName);
                   const isDisabled = !isSelected && currentFlavors.length >= currentPizza.maxFlavors;
-                  const extraPrice = getFlavorSurchargeForPizza(currentPizzaBase, flavor);
+                  const extraPrice = getFlavorSurchargeForPizza(currentPizzaBase, flavor, currentPizza?.size);
                   const imageSrc = flavor.image || '';
 
                   return (

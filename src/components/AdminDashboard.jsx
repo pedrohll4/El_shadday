@@ -40,7 +40,11 @@ import {
   normalizePizzaFlavors,
   getStoredCategories,
   saveStoredCategories,
-  normalizeCategoriesList
+  normalizeCategoriesList,
+  PIZZA_SIZES,
+  DEFAULT_PIZZA_BASE_PRICES,
+  getPizzaSizeKey,
+  getPizzaFlavorPrice
 } from '../data/menuData';
 import { PizzaCustomizerModal } from './PizzaCustomizerModal';
 import { BoxBuilderModal } from './BoxBuilderModal';
@@ -699,6 +703,12 @@ export function AdminDashboard({
   const [editingFlavor, setEditingFlavor] = useState(null);
   const [flavorFormName, setFlavorFormName] = useState('');
   const [flavorFormPrice, setFlavorFormPrice] = useState('40.00');
+  const [flavorFormPrices, setFlavorFormPrices] = useState({
+    p: '20.00',
+    m: '30.00',
+    familia: '40.00',
+    gigante: '50.00'
+  });
   const [flavorFormCategory, setFlavorFormCategory] = useState('salgadas');
   const [flavorFormDescription, setFlavorFormDescription] = useState('');
   const [flavorFormImage, setFlavorFormImage] = useState('');
@@ -1418,6 +1428,12 @@ export function AdminDashboard({
     setEditingFlavor(null);
     setFlavorFormName('');
     setFlavorFormPrice('40.00');
+    setFlavorFormPrices({
+      p: '20.00',
+      m: '30.00',
+      familia: '40.00',
+      gigante: '50.00'
+    });
     setFlavorFormCategory('salgadas');
     setFlavorFormDescription('');
     setFlavorFormImage('');
@@ -1429,6 +1445,19 @@ export function AdminDashboard({
     setEditingFlavor(flavor);
     setFlavorFormName(flavor.name || '');
     setFlavorFormPrice(flavor.price !== undefined ? flavor.price.toString() : '40.00');
+    
+    const pVal = flavor.prices?.p ?? getPizzaFlavorPrice(flavor, 'p');
+    const mVal = flavor.prices?.m ?? getPizzaFlavorPrice(flavor, 'm');
+    const famVal = flavor.prices?.familia ?? (flavor.price || 40.00);
+    const gigVal = flavor.prices?.gigante ?? getPizzaFlavorPrice(flavor, 'gigante');
+
+    setFlavorFormPrices({
+      p: Number(pVal).toFixed(2),
+      m: Number(mVal).toFixed(2),
+      familia: Number(famVal).toFixed(2),
+      gigante: Number(gigVal).toFixed(2)
+    });
+
     setFlavorFormCategory(flavor.category || 'salgadas');
     setFlavorFormDescription(flavor.description || '');
     setFlavorFormImage(flavor.image || '');
@@ -1446,16 +1475,27 @@ export function AdminDashboard({
       alert('Informe o nome do sabor.');
       return;
     }
-    const priceNum = parseFloat(flavorFormPrice.toString().replace(',', '.'));
-    if (isNaN(priceNum) || priceNum <= 0) {
-      alert('Informe um preço válido para o sabor (ex: 40.00 ou 120.00).');
+    
+    const pNum = parseFloat(String(flavorFormPrices.p).replace(',', '.')) || 20.00;
+    const mNum = parseFloat(String(flavorFormPrices.m).replace(',', '.')) || 30.00;
+    const famNum = parseFloat(String(flavorFormPrices.familia).replace(',', '.')) || 40.00;
+    const gigNum = parseFloat(String(flavorFormPrices.gigante).replace(',', '.')) || 50.00;
+
+    if (pNum <= 0 || mNum <= 0 || famNum <= 0 || gigNum <= 0) {
+      alert('Informe valores válidos maiores que zero para todos os tamanhos de pizza.');
       return;
     }
 
     const savedFlavor = {
       id: editingFlavor ? editingFlavor.id : `flavor_${Date.now()}`,
       name: flavorFormName.trim(),
-      price: priceNum,
+      price: famNum,
+      prices: {
+        p: pNum,
+        m: mNum,
+        familia: famNum,
+        gigante: gigNum
+      },
       category: flavorFormCategory,
       description: flavorFormDescription.trim(),
       image: flavorFormImage.trim(),
@@ -6428,13 +6468,13 @@ export function AdminDashboard({
                       </div>
                       <div>
                         <h3 className="font-display font-extrabold text-sm sm:text-base text-white flex items-center gap-2">
-                          <span>Regra do Maior Valor Ativa</span>
+                          <span>Valores por Tamanho & Regra do Maior Valor</span>
                           <span className="text-[10px] px-2 py-0.5 rounded-full bg-brand-gold/20 text-brand-gold font-bold border border-brand-gold/30">
-                            Automático
+                            P • M • Família • Gigante
                           </span>
                         </h3>
                         <p className="text-xs text-slate-300 mt-1 leading-relaxed">
-                          Ao montar uma pizza (ex: Família ou Gigante), o sistema puxa automaticamente para o <strong>MAIOR valor</strong> entre os sabores selecionados. Sabores com valor igual ou inferior ao preço base da pizza não geram acréscimo. Se o cliente escolher um sabor mais caro (ex: R$ 45, R$ 55, R$ 120), a pizza será cobrada por esse maior valor!
+                          Agora você pode definir o valor de cada sabor individualmente para cada tamanho (Pequena, Média, Família e Gigante). Ao montar uma pizza, o sistema puxa automaticamente para o <strong>MAIOR valor</strong> entre os sabores selecionados naquele tamanho. Sabores no valor base ou inferior não geram nenhum acréscimo!
                         </p>
                       </div>
                     </div>
@@ -6524,6 +6564,10 @@ export function AdminDashboard({
                     {filteredAdminFlavors.map(flavor => {
                       const isAvailable = flavor.isAvailable !== false;
                       const priceNum = Number(flavor.price) || 0;
+                      const pPrice = getPizzaFlavorPrice(flavor, 'p');
+                      const mPrice = getPizzaFlavorPrice(flavor, 'm');
+                      const famPrice = getPizzaFlavorPrice(flavor, 'familia');
+                      const gigPrice = getPizzaFlavorPrice(flavor, 'gigante');
 
                       return (
                         <div
@@ -6569,12 +6613,38 @@ export function AdminDashboard({
                               </span>
                             </div>
 
-                            {/* Preço do Sabor */}
-                            <div className="flex items-baseline gap-1.5 my-1.5">
-                              <span className="text-xs font-bold text-slate-400">Preço do Sabor:</span>
-                              <span className="text-lg font-black text-brand-gold">
-                                R$ {priceNum.toFixed(2).replace('.', ',')}
-                              </span>
+                            {/* Valores por Tamanho do Sabor */}
+                            <div className="my-2 p-2 rounded-xl bg-dark-900/90 border border-dark-750">
+                              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                                <span>Valores por Tamanho:</span>
+                                {flavor.category === 'especiais' && <span className="text-amber-400 font-bold">Gourmet ⭐</span>}
+                              </div>
+                              <div className="grid grid-cols-4 gap-1.5 text-center font-mono">
+                                <div className="p-1 rounded-lg bg-dark-950 border border-dark-800">
+                                  <div className="text-[9px] text-slate-400 font-sans font-semibold">P (4f)</div>
+                                  <div className={`text-xs font-black ${pPrice > 20 ? 'text-amber-300' : 'text-slate-200'}`}>
+                                    R$ {pPrice.toFixed(0)}
+                                  </div>
+                                </div>
+                                <div className="p-1 rounded-lg bg-dark-950 border border-dark-800">
+                                  <div className="text-[9px] text-slate-400 font-sans font-semibold">M (6f)</div>
+                                  <div className={`text-xs font-black ${mPrice > 30 ? 'text-amber-300' : 'text-slate-200'}`}>
+                                    R$ {mPrice.toFixed(0)}
+                                  </div>
+                                </div>
+                                <div className="p-1 rounded-lg bg-dark-950 border border-dark-800">
+                                  <div className="text-[9px] text-slate-400 font-sans font-semibold">FM (8f)</div>
+                                  <div className={`text-xs font-black ${famPrice > 40 ? 'text-amber-300' : 'text-slate-200'}`}>
+                                    R$ {famPrice.toFixed(0)}
+                                  </div>
+                                </div>
+                                <div className="p-1 rounded-lg bg-dark-950 border border-dark-800">
+                                  <div className="text-[9px] text-slate-400 font-sans font-semibold">GG (12f)</div>
+                                  <div className={`text-xs font-black ${gigPrice > 50 ? 'text-amber-300' : 'text-slate-200'}`}>
+                                    R$ {gigPrice.toFixed(0)}
+                                  </div>
+                                </div>
+                              </div>
                             </div>
 
                             {flavor.description && (
@@ -10184,24 +10254,158 @@ export function AdminDashboard({
                 />
               </div>
 
-              {/* Preço do Sabor */}
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-bold text-slate-200">
-                    Preço deste Sabor (R$) *
-                  </label>
-                  <span className="text-[10px] text-brand-gold font-medium">Puxa o valor da pizza se for o maior</span>
+              {/* Preços por Tamanho de Pizza */}
+              <div className="p-3.5 sm:p-4 rounded-2xl bg-dark-850 border border-brand-gold/30 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <label className="block text-xs font-bold text-white flex items-center gap-1.5">
+                      <span>Preços por Tamanho de Pizza (R$) *</span>
+                      <span className="text-[10px] text-brand-gold font-normal">(Personalize o valor de cada tamanho)</span>
+                    </label>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      Sabores tradicionais ficam no valor base. Sabores especiais podem ter acréscimo proporcional por tamanho.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => setFlavorFormPrices({ p: '20.00', m: '30.00', familia: '40.00', gigante: '50.00' })}
+                      className="px-2.5 py-1 rounded-lg bg-dark-800 hover:bg-dark-750 text-[10px] text-emerald-400 hover:text-emerald-300 font-bold border border-emerald-500/30 cursor-pointer"
+                      title="Preencher com valores base padrão (sem acréscimo)"
+                    >
+                      Tradicional (20/30/40/50)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFlavorFormPrices({ p: '25.00', m: '38.00', familia: '50.00', gigante: '65.00' })}
+                      className="px-2.5 py-1 rounded-lg bg-dark-800 hover:bg-dark-750 text-[10px] text-amber-300 hover:text-amber-200 font-bold border border-amber-500/30 cursor-pointer"
+                      title="Sugerir valores para sabor Especial (+5 P, +8 M, +10 FM, +15 GG)"
+                    >
+                      Sugerir Especial ⭐
+                    </button>
+                  </div>
                 </div>
-                <input
-                  type="text"
-                  required
-                  value={flavorFormPrice}
-                  onChange={(e) => setFlavorFormPrice(e.target.value)}
-                  placeholder="Ex: 40,00 ou 55,00 ou 120,00"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-dark-800 border border-dark-700 text-xs text-white font-mono font-bold focus:outline-none focus:border-brand-gold"
-                />
-                <p className="text-[11px] text-slate-400 mt-1">
-                  💡 <strong>Regra:</strong> Se o cliente montar uma pizza com este sabor e ele for o mais caro entre os escolhidos, a pizza inteira será cobrada por este valor.
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  {/* Pequena (P) */}
+                  <div className="p-2.5 rounded-xl bg-dark-900 border border-dark-750 focus-within:border-brand-gold">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-bold text-white">Pequena (P)</span>
+                      <span className="text-[9px] text-slate-400">4 fatias</span>
+                    </div>
+                    <div className="text-[9px] text-slate-500 mb-1">Base: R$ 20,00</div>
+                    <div className="relative">
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">R$</span>
+                      <input
+                        type="text"
+                        required
+                        value={flavorFormPrices.p}
+                        onChange={(e) => setFlavorFormPrices(prev => ({ ...prev, p: e.target.value }))}
+                        className="w-full pl-8 pr-2 py-1.5 rounded-lg bg-dark-950 border border-dark-700 text-xs text-white font-mono font-bold focus:outline-none focus:border-brand-gold"
+                        placeholder="20.00"
+                      />
+                    </div>
+                    <div className="text-[9px] mt-1">
+                      {parseFloat(String(flavorFormPrices.p).replace(',', '.')) > 20 ? (
+                        <span className="text-amber-400 font-bold">
+                          + R$ {(parseFloat(String(flavorFormPrices.p).replace(',', '.')) - 20).toFixed(2).replace('.', ',')}
+                        </span>
+                      ) : (
+                        <span className="text-emerald-400">Sem acréscimo</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Média (M) */}
+                  <div className="p-2.5 rounded-xl bg-dark-900 border border-dark-750 focus-within:border-brand-gold">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-bold text-white">Média (M)</span>
+                      <span className="text-[9px] text-slate-400">6 fatias</span>
+                    </div>
+                    <div className="text-[9px] text-slate-500 mb-1">Base: R$ 30,00</div>
+                    <div className="relative">
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">R$</span>
+                      <input
+                        type="text"
+                        required
+                        value={flavorFormPrices.m}
+                        onChange={(e) => setFlavorFormPrices(prev => ({ ...prev, m: e.target.value }))}
+                        className="w-full pl-8 pr-2 py-1.5 rounded-lg bg-dark-950 border border-dark-700 text-xs text-white font-mono font-bold focus:outline-none focus:border-brand-gold"
+                        placeholder="30.00"
+                      />
+                    </div>
+                    <div className="text-[9px] mt-1">
+                      {parseFloat(String(flavorFormPrices.m).replace(',', '.')) > 30 ? (
+                        <span className="text-amber-400 font-bold">
+                          + R$ {(parseFloat(String(flavorFormPrices.m).replace(',', '.')) - 30).toFixed(2).replace('.', ',')}
+                        </span>
+                      ) : (
+                        <span className="text-emerald-400">Sem acréscimo</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Família (FM) */}
+                  <div className="p-2.5 rounded-xl bg-dark-900 border border-dark-750 focus-within:border-brand-gold">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-bold text-white">Família (FM)</span>
+                      <span className="text-[9px] text-slate-400">8 fatias</span>
+                    </div>
+                    <div className="text-[9px] text-slate-500 mb-1">Base: R$ 40,00</div>
+                    <div className="relative">
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">R$</span>
+                      <input
+                        type="text"
+                        required
+                        value={flavorFormPrices.familia}
+                        onChange={(e) => setFlavorFormPrices(prev => ({ ...prev, familia: e.target.value }))}
+                        className="w-full pl-8 pr-2 py-1.5 rounded-lg bg-dark-950 border border-dark-700 text-xs text-white font-mono font-bold focus:outline-none focus:border-brand-gold"
+                        placeholder="40.00"
+                      />
+                    </div>
+                    <div className="text-[9px] mt-1">
+                      {parseFloat(String(flavorFormPrices.familia).replace(',', '.')) > 40 ? (
+                        <span className="text-amber-400 font-bold">
+                          + R$ {(parseFloat(String(flavorFormPrices.familia).replace(',', '.')) - 40).toFixed(2).replace('.', ',')}
+                        </span>
+                      ) : (
+                        <span className="text-emerald-400">Sem acréscimo</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Gigante (GG) */}
+                  <div className="p-2.5 rounded-xl bg-dark-900 border border-dark-750 focus-within:border-brand-gold">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-bold text-white">Gigante (GG)</span>
+                      <span className="text-[9px] text-slate-400">12 fatias</span>
+                    </div>
+                    <div className="text-[9px] text-slate-500 mb-1">Base: R$ 50,00</div>
+                    <div className="relative">
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">R$</span>
+                      <input
+                        type="text"
+                        required
+                        value={flavorFormPrices.gigante}
+                        onChange={(e) => setFlavorFormPrices(prev => ({ ...prev, gigante: e.target.value }))}
+                        className="w-full pl-8 pr-2 py-1.5 rounded-lg bg-dark-950 border border-dark-700 text-xs text-white font-mono font-bold focus:outline-none focus:border-brand-gold"
+                        placeholder="50.00"
+                      />
+                    </div>
+                    <div className="text-[9px] mt-1">
+                      {parseFloat(String(flavorFormPrices.gigante).replace(',', '.')) > 50 ? (
+                        <span className="text-amber-400 font-bold">
+                          + R$ {(parseFloat(String(flavorFormPrices.gigante).replace(',', '.')) - 50).toFixed(2).replace('.', ',')}
+                        </span>
+                      ) : (
+                        <span className="text-emerald-400">Sem acréscimo</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                  💡 <strong>Regra:</strong> Ao montar a pizza, o sistema cobrará o <strong>maior valor</strong> entre os sabores escolhidos para aquele tamanho.
                 </p>
               </div>
 

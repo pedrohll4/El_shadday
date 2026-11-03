@@ -761,11 +761,28 @@ export const PRODUCTS = [
   }
 ];
 
+export const PIZZA_SIZES = [
+  { key: 'p', label: 'Pequena (P)', shortLabel: 'P (4 fatias)', fatias: '4 fatias', defaultBase: 20.00 },
+  { key: 'm', label: 'Média (M)', shortLabel: 'M (6 fatias)', fatias: '6 fatias', defaultBase: 30.00 },
+  { key: 'familia', label: 'Família (FM)', shortLabel: 'FM (8 fatias)', fatias: '8 fatias', defaultBase: 40.00 },
+  { key: 'gigante', label: 'Gigante (GG)', shortLabel: 'GG (12 fatias)', fatias: '12 fatias', defaultBase: 50.00 }
+];
+
+export const DEFAULT_PIZZA_BASE_PRICES = {
+  p: 20.00,
+  m: 30.00,
+  familia: 40.00,
+  gigante: 50.00
+};
+
+const STD_PIZZA_PRICES = { ...DEFAULT_PIZZA_BASE_PRICES };
+
 export const INITIAL_PIZZA_FLAVORS = [
   {
     id: "calabresa",
     name: "Calabresa Especial com Cebola",
     price: 40.00,
+    prices: { ...STD_PIZZA_PRICES },
     category: "salgadas",
     description: "Molho artesanal, queijo muçarela derretido, calabresa fatiada crocante, cebola e orégano.",
     image: "/flavors/calabresa.png",
@@ -775,6 +792,7 @@ export const INITIAL_PIZZA_FLAVORS = [
     id: "mucarela",
     name: "Muçarela Tradicional",
     price: 40.00,
+    prices: { ...STD_PIZZA_PRICES },
     category: "salgadas",
     description: "Muçarela de primeira qualidade, molho artesanal e orégano perfumado.",
     image: "/flavors/mucarela.png",
@@ -784,6 +802,7 @@ export const INITIAL_PIZZA_FLAVORS = [
     id: "dois-queijos",
     name: "Dois Queijos Cremoso",
     price: 40.00,
+    prices: { ...STD_PIZZA_PRICES },
     category: "salgadas",
     description: "Combinação saborosa de muçarela especial e queijo cremoso com orégano.",
     image: "/flavors/dois-queijos.png",
@@ -793,6 +812,7 @@ export const INITIAL_PIZZA_FLAVORS = [
     id: "frango-catupiry",
     name: "Frango com Catupiry",
     price: 40.00,
+    prices: { ...STD_PIZZA_PRICES },
     category: "salgadas",
     description: "Peito de frango desfiado temperado, muçarela, legítimo Catupiry cremoso e orégano.",
     image: "/flavors/frango-catupiry.png",
@@ -802,6 +822,7 @@ export const INITIAL_PIZZA_FLAVORS = [
     id: "frango-cheddar",
     name: "Frango com Cheddar",
     price: 40.00,
+    prices: { ...STD_PIZZA_PRICES },
     category: "salgadas",
     description: "Frango desfiado suculento, muçarela e delicioso queijo cheddar derretido.",
     image: "/flavors/frango-cheddar.png",
@@ -811,6 +832,7 @@ export const INITIAL_PIZZA_FLAVORS = [
     id: "vegetariana",
     name: "Vegetariana da Casa",
     price: 40.00,
+    prices: { ...STD_PIZZA_PRICES },
     category: "salgadas",
     description: "Milho verde, ervilha fresca, azeitona, muçarela, cebola crocante e orégano.",
     image: "/flavors/vegetariana.png",
@@ -820,6 +842,7 @@ export const INITIAL_PIZZA_FLAVORS = [
     id: "calabresa-picadinha",
     name: "Calabresa Picadinha com Ervilha",
     price: 40.00,
+    prices: { ...STD_PIZZA_PRICES },
     category: "salgadas",
     description: "Calabresa picadinha especial, ervilhas frescas, queijo muçarela e orégano.",
     image: "/flavors/calabresa-picadinha.png",
@@ -829,6 +852,7 @@ export const INITIAL_PIZZA_FLAVORS = [
     id: "bacon-crocante",
     name: "Bacon Crocante",
     price: 40.00,
+    prices: { ...STD_PIZZA_PRICES },
     category: "salgadas",
     description: "Cubos de bacon dourados e crocantes, queijo muçarela derretido e orégano.",
     image: "/flavors/bacon-crocante.png",
@@ -838,6 +862,7 @@ export const INITIAL_PIZZA_FLAVORS = [
     id: "romanesca",
     name: "Romanesca",
     price: 40.00,
+    prices: { ...STD_PIZZA_PRICES },
     category: "salgadas",
     description: "Receita especial com muçarela, presunto, champignon e orégano.",
     image: "/flavors/romanesca.png",
@@ -847,6 +872,7 @@ export const INITIAL_PIZZA_FLAVORS = [
     id: "hot-dog",
     name: "Hot-Dog Especial",
     price: 40.00,
+    prices: { ...STD_PIZZA_PRICES },
     category: "salgadas",
     description: "Molho artesanal, muçarela, salsicha fatiada selecionada, milho e batata palha.",
     image: "/flavors/hot-dog.png",
@@ -856,6 +882,7 @@ export const INITIAL_PIZZA_FLAVORS = [
     id: "baiana-apimentada",
     name: "Baiana Apimentada",
     price: 40.00,
+    prices: { ...STD_PIZZA_PRICES },
     category: "salgadas",
     description: "Calabresa moída, pimenta calabresa selecionada, cebola, ovos e muçarela.",
     image: "/flavors/baiana-apimentada.png",
@@ -865,6 +892,7 @@ export const INITIAL_PIZZA_FLAVORS = [
     id: "frango-milho",
     name: "Frango com Milho",
     price: 40.00,
+    prices: { ...STD_PIZZA_PRICES },
     category: "salgadas",
     description: "Frango desfiado suculento, milho verde selecionado e queijo muçarela.",
     image: "/flavors/frango-milho.png",
@@ -874,6 +902,7 @@ export const INITIAL_PIZZA_FLAVORS = [
     id: "milho",
     name: "Milho Verde com Queijo",
     price: 40.00,
+    prices: { ...STD_PIZZA_PRICES },
     category: "salgadas",
     description: "Milho verde doce e suculento, muçarela derretida e orégano.",
     image: "/flavors/milho.png",
@@ -883,6 +912,7 @@ export const INITIAL_PIZZA_FLAVORS = [
     id: "calabresa-catupiry",
     name: "Calabresa com Catupiry (Gourmet)",
     price: 50.00,
+    prices: { p: 25.00, m: 38.00, familia: 50.00, gigante: 62.00 },
     category: "especiais",
     description: "Fatias de calabresa artesanal combinadas com o legítimo Catupiry cremoso e muçarela.",
     image: "/flavors/calabresa-catupiry.png",
@@ -892,6 +922,7 @@ export const INITIAL_PIZZA_FLAVORS = [
     id: "carne-seca",
     name: "Carne Seca com Catupiry (Gourmet)",
     price: 65.00,
+    prices: { p: 35.00, m: 48.00, familia: 65.00, gigante: 78.00 },
     category: "especiais",
     description: "Carne seca desfiada de primeiríssima qualidade com generoso Catupiry cremoso.",
     image: "/flavors/carne-seca.png",
@@ -901,6 +932,7 @@ export const INITIAL_PIZZA_FLAVORS = [
     id: "strogonoff-frango",
     name: "Strogonoff de Frango (Especial)",
     price: 55.00,
+    prices: { p: 28.00, m: 42.00, familia: 55.00, gigante: 68.00 },
     category: "especiais",
     description: "Strogonoff de frango cremoso feito na hora, muçarela e batata palha crocante.",
     image: "/flavors/strogonoff-frango.png",
@@ -910,6 +942,7 @@ export const INITIAL_PIZZA_FLAVORS = [
     id: "lombo-abacaxi",
     name: "Lombo com Abacaxi (Especial)",
     price: 65.00,
+    prices: { p: 35.00, m: 48.00, familia: 65.00, gigante: 78.00 },
     category: "especiais",
     description: "Lombo canadense fatiado, pedaços doces de abacaxi e queijo muçarela derretido.",
     image: "/flavors/lombo-abacaxi.png",
@@ -919,6 +952,7 @@ export const INITIAL_PIZZA_FLAVORS = [
     id: "lombo-portuguesa",
     name: "Lombo à Portuguesa (Especial)",
     price: 65.00,
+    prices: { p: 35.00, m: 48.00, familia: 65.00, gigante: 78.00 },
     category: "especiais",
     description: "Lombo especial com cebola, ovos, azeitonas selecionadas e muçarela.",
     image: "/flavors/lombo-portuguesa.png",
@@ -928,6 +962,7 @@ export const INITIAL_PIZZA_FLAVORS = [
     id: "brigadeiro-gourmet",
     name: "Brigadeiro com Granulado Nobre",
     price: 40.00,
+    prices: { ...STD_PIZZA_PRICES },
     category: "doces",
     description: "Chocolate ao leite cremoso nobre, granulado de puro cacau e leve toque suave de queijo.",
     image: "/flavors/brigadeiro-gourmet.png",
@@ -937,6 +972,7 @@ export const INITIAL_PIZZA_FLAVORS = [
     id: "banana-canela",
     name: "Banana com Canela e Leite Condensado",
     price: 40.00,
+    prices: { ...STD_PIZZA_PRICES },
     category: "doces",
     description: "Fatias de banana fresca, leite condensado cremoso artesanal, muçarela derretida e canela em pó perfumada.",
     image: "/flavors/banana-canela.png",
@@ -946,6 +982,7 @@ export const INITIAL_PIZZA_FLAVORS = [
     id: "romeu-julieta",
     name: "Romeu e Julieta Nobre",
     price: 40.00,
+    prices: { ...STD_PIZZA_PRICES },
     category: "doces",
     description: "Goiabada cascão cremosa derretida harmonizada com bastante queijo muçarela especial.",
     image: "/flavors/romeu-julieta.png",
@@ -955,6 +992,7 @@ export const INITIAL_PIZZA_FLAVORS = [
     id: "prestigio-gourmet",
     name: "Prestígio com Coco Ralado",
     price: 40.00,
+    prices: { ...STD_PIZZA_PRICES },
     category: "doces",
     description: "Chocolate ao leite nobre cremoso com flocos úmidos de coco ralado selecionado e queijo muçarela.",
     image: "/flavors/prestigio-gourmet.png",
@@ -964,6 +1002,7 @@ export const INITIAL_PIZZA_FLAVORS = [
     id: "chocolate-morango",
     name: "Sensação (Chocolate com Morango)",
     price: 40.00,
+    prices: { ...STD_PIZZA_PRICES },
     category: "doces",
     description: "Generoso chocolate nobre ao leite com pedaços frescos e suculentos de morango.",
     image: "/flavors/chocolate-morango.png",
@@ -973,6 +1012,7 @@ export const INITIAL_PIZZA_FLAVORS = [
     id: "chocolate-branco",
     name: "Chocolate Branco Cremoso",
     price: 40.00,
+    prices: { ...STD_PIZZA_PRICES },
     category: "doces",
     description: "Puro chocolate branco nobre derretido, amanteigado, aveludado e irresistível.",
     image: "/flavors/chocolate-branco.png",
@@ -982,6 +1022,7 @@ export const INITIAL_PIZZA_FLAVORS = [
     id: "banana-nevada",
     name: "Banana Nevada com Chocolate Branco",
     price: 40.00,
+    prices: { ...STD_PIZZA_PRICES },
     category: "doces",
     description: "Fatias de banana fresca, chocolate branco nobre derretido, queijo e canela suave.",
     image: "/flavors/banana-nevada.png",
@@ -991,6 +1032,7 @@ export const INITIAL_PIZZA_FLAVORS = [
     id: "confete-mm",
     name: "Confete M&M Colorido",
     price: 40.00,
+    prices: { ...STD_PIZZA_PRICES },
     category: "doces",
     description: "Chocolate ao leite nobre cremoso com confeitos crocantes e coloridos de chocolate.",
     image: "/flavors/confete-mm.png",
@@ -1000,6 +1042,7 @@ export const INITIAL_PIZZA_FLAVORS = [
     id: "doce-leite-pacoca",
     name: "Doce de Leite com Paçoca",
     price: 40.00,
+    prices: { ...STD_PIZZA_PRICES },
     category: "doces",
     description: "Doce de leite artesanal aveludado e farofa generosa de paçoca de amendoim torrado.",
     image: "/flavors/doce-leite-pacoca.png",
@@ -1045,6 +1088,7 @@ export function normalizePizzaFlavors(flavors) {
         id: found?.id || generatedId,
         name: item,
         price: found ? found.price : 40.00,
+        prices: found?.prices ? { ...found.prices } : { ...DEFAULT_PIZZA_BASE_PRICES },
         category: found ? found.category : 'salgadas',
         description: found ? found.description : '',
         image: found?.image || '',
@@ -1066,10 +1110,33 @@ export function normalizePizzaFlavors(flavors) {
       itemImage = found.image;
     }
 
+    // Normalização dos preços por tamanho
+    let itemPrices = null;
+    if (item.prices && typeof item.prices === 'object') {
+      itemPrices = {
+        p: typeof item.prices.p === 'number' ? item.prices.p : (parseFloat(String(item.prices.p).replace(',', '.')) || (found?.prices?.p || DEFAULT_PIZZA_BASE_PRICES.p)),
+        m: typeof item.prices.m === 'number' ? item.prices.m : (parseFloat(String(item.prices.m).replace(',', '.')) || (found?.prices?.m || DEFAULT_PIZZA_BASE_PRICES.m)),
+        familia: typeof item.prices.familia === 'number' ? item.prices.familia : (parseFloat(String(item.prices.familia).replace(',', '.')) || (found?.prices?.familia || DEFAULT_PIZZA_BASE_PRICES.familia)),
+        gigante: typeof item.prices.gigante === 'number' ? item.prices.gigante : (parseFloat(String(item.prices.gigante).replace(',', '.')) || (found?.prices?.gigante || DEFAULT_PIZZA_BASE_PRICES.gigante))
+      };
+    } else if (found?.prices) {
+      itemPrices = { ...found.prices };
+    } else {
+      const legacyPrice = typeof item.price === 'number' ? item.price : (parseFloat(item.price) || (found ? found.price : 40.00));
+      const diff = Math.max(0, legacyPrice - 40.00);
+      itemPrices = {
+        p: DEFAULT_PIZZA_BASE_PRICES.p + diff,
+        m: DEFAULT_PIZZA_BASE_PRICES.m + diff,
+        familia: DEFAULT_PIZZA_BASE_PRICES.familia + diff,
+        gigante: DEFAULT_PIZZA_BASE_PRICES.gigante + diff
+      };
+    }
+
     return {
       id: found?.id || id,
       name: itemName || found?.name || 'Sabor Especial',
-      price: typeof item.price === 'number' ? item.price : (parseFloat(item.price) || (found ? found.price : 40.00)),
+      price: typeof item.price === 'number' ? item.price : (itemPrices.familia || 40.00),
+      prices: itemPrices,
       category: item.category || found?.category || 'salgadas',
       description: item.description || found?.description || '',
       image: itemImage,
@@ -1359,62 +1426,123 @@ export function saveStoredDistricts(districts) {
 }
 
 /**
- * Regra de cálculo de Pizza por Sabor (Regra do Estabelecimento):
- * - Sabores tradicionais (salgadas ou doces padrão até R$ 40) são inclusos no valor base do tamanho escolhido (P, M, Família ou Gigante).
- * - Se algum sabor escolhido for especial/gourmet ou tiver valor superior ao preço base da pizza, puxa para o MAIOR valor entre os sabores escolhidos.
+ * Retorna a chave do tamanho da pizza ('p' | 'm' | 'familia' | 'gigante')
  */
-export function calculatePizzaPrice(basePrice, selectedFlavors) {
+export function getPizzaSizeKey(sizeOrProduct, basePrice = null) {
+  if (typeof sizeOrProduct === 'string') {
+    const s = sizeOrProduct.toLowerCase().trim();
+    if (s === 'p' || s === 'pequena' || s.includes('pequena') || s.includes('4 fatia')) return 'p';
+    if (s === 'm' || s === 'media' || s === 'média' || s.includes('média') || s.includes('media') || s.includes('6 fatia')) return 'm';
+    if (s === 'familia' || s === 'família' || s.includes('família') || s.includes('familia') || s.includes('8 fatia')) return 'familia';
+    if (s === 'gigante' || s === 'gg' || s.includes('gigante') || s.includes('12 fatia')) return 'gigante';
+  } else if (sizeOrProduct && typeof sizeOrProduct === 'object') {
+    const id = (sizeOrProduct.id || '').toLowerCase();
+    const name = (sizeOrProduct.name || '').toLowerCase();
+    const tamanho = (sizeOrProduct.tamanho || '').toLowerCase();
+    const size = (sizeOrProduct.size || '').toLowerCase();
+    
+    if (size) return getPizzaSizeKey(size, basePrice);
+    if (id === 'pizza-p' || name.includes('pequena') || name.includes(' p (') || tamanho.includes('pequena')) return 'p';
+    if (id === 'pizza-m' || name.includes('média') || name.includes('media') || name.includes(' m (') || tamanho.includes('média') || tamanho.includes('media')) return 'm';
+    if (id === 'pizza-familia-salgada' || name.includes('família') || name.includes('familia') || tamanho.includes('família') || tamanho.includes('familia')) return 'familia';
+    if (id === 'pizza-gigante-salgada' || name.includes('gigante') || tamanho.includes('gigante')) return 'gigante';
+  }
+
+  // Fallback pelo preço base
+  const base = Number(basePrice) || 0;
+  if (base > 0 && base <= 25) return 'p';
+  if (base > 25 && base <= 35) return 'm';
+  if (base > 35 && base <= 45) return 'familia';
+  if (base > 45) return 'gigante';
+
+  return 'familia';
+}
+
+/**
+ * Retorna o preço configurado de um sabor para um determinado tamanho de pizza
+ */
+export function getPizzaFlavorPrice(flavorObj, sizeKeyOrProduct = 'familia', basePrice = null) {
+  if (!flavorObj) return 0;
+  const sizeKey = getPizzaSizeKey(sizeKeyOrProduct, basePrice);
+  const defaultBase = DEFAULT_PIZZA_BASE_PRICES[sizeKey] || (Number(basePrice) || 40.00);
+
+  // 1. Se tem preço específico definido no mapa prices para esse tamanho
+  if (flavorObj.prices && typeof flavorObj.prices === 'object') {
+    const rawVal = flavorObj.prices[sizeKey];
+    if (rawVal !== undefined && rawVal !== null && rawVal !== '') {
+      const parsed = typeof rawVal === 'number' ? rawVal : parseFloat(String(rawVal).replace(',', '.'));
+      if (!isNaN(parsed) && parsed > 0) {
+        return parsed;
+      }
+    }
+  }
+
+  // 2. Se for sabor tradicional/doce padrão com preço <= 40
+  const legacyPrice = Number(flavorObj.price) || 0;
+  if (legacyPrice <= 40 && flavorObj.category !== 'especiais') {
+    if (basePrice !== null && Number(basePrice) > 0) return Number(basePrice);
+    return defaultBase;
+  }
+
+  // 3. Se for especial legado (diferença proporcional em relação aos 40 da Família)
+  const diff = Math.max(0, legacyPrice - 40.00);
+  return defaultBase + diff;
+}
+
+/**
+ * Regra de cálculo de Pizza por Sabor (Regra do Estabelecimento):
+ * - Sabores tradicionais são inclusos no valor base do tamanho escolhido (P, M, Família ou Gigante).
+ * - Se algum sabor escolhido for especial/gourmet ou tiver valor superior ao preço base da pizza para aquele tamanho,
+ *   a pizza inteira puxa para o MAIOR valor entre os sabores escolhidos!
+ */
+export function calculatePizzaPrice(basePrice, selectedFlavors, sizeKeyOrProduct = null) {
   const base = Number(basePrice) || 0;
   if (!selectedFlavors || !Array.isArray(selectedFlavors) || selectedFlavors.length === 0) {
     return base;
   }
   
+  const sizeKey = getPizzaSizeKey(sizeKeyOrProduct, base);
   const allFlavors = getStoredPizzaFlavors();
   const flavorPrices = selectedFlavors.map(f => {
-    if (!f) return 0;
+    if (!f) return base;
     const flavorObj = typeof f === 'object' 
       ? f 
       : allFlavors.find(s => s && s.name === f) || INITIAL_PIZZA_FLAVORS.find(s => s && s.name === f);
-    if (!flavorObj) return 0;
+    if (!flavorObj) return base;
     
-    const price = Number(flavorObj.price) || 0;
-    // Sabores tradicionais (salgados e doces padrão com valor base) são inclusos no valor base de qualquer tamanho
-    if (price <= 40 && flavorObj.category !== 'especiais') {
+    const priceForSize = getPizzaFlavorPrice(flavorObj, sizeKey, base);
+    // Sabores tradicionais com valor igual ou inferior ao base não geram acréscimo
+    if (priceForSize <= base && flavorObj.category !== 'especiais') {
       return base;
     }
-    return price;
+    return priceForSize;
   });
 
-  const maxFlavorPrice = Math.max(0, ...flavorPrices);
+  const maxFlavorPrice = Math.max(base, ...flavorPrices);
   return Math.max(base, maxFlavorPrice);
 }
 
 /**
- * Retorna o acréscimo de uma pizza com base nos sabores selecionados
- * @param {number} pizzaBasePrice 
- * @param {Array<string|object>} selectedFlavors 
- * @returns {number}
+ * Retorna o acréscimo de uma pizza com base nos sabores selecionados e no tamanho
  */
-export function calculatePizzaSurcharge(pizzaBasePrice, selectedFlavors) {
+export function calculatePizzaSurcharge(pizzaBasePrice, selectedFlavors, sizeKeyOrProduct = null) {
   const base = Number(pizzaBasePrice) || 0;
-  const calculated = calculatePizzaPrice(base, selectedFlavors);
+  const calculated = calculatePizzaPrice(base, selectedFlavors, sizeKeyOrProduct);
   return Math.max(0, calculated - base);
 }
 
 /**
- * Retorna o acréscimo individual que um sabor traria para uma pizza
- * @param {number} pizzaBasePrice 
- * @param {object} flavorObj 
- * @returns {number}
+ * Retorna o acréscimo individual que um sabor traria para uma pizza de determinado tamanho
  */
-export function getFlavorSurchargeForPizza(pizzaBasePrice, flavorObj) {
+export function getFlavorSurchargeForPizza(pizzaBasePrice, flavorObj, sizeKeyOrProduct = null) {
   if (!flavorObj) return 0;
   const base = Number(pizzaBasePrice) || 0;
-  const rawPrice = Number(flavorObj.price) || 0;
-  if (rawPrice <= 40 && flavorObj.category !== 'especiais') {
+  const sizeKey = getPizzaSizeKey(sizeKeyOrProduct, base);
+  const priceForSize = getPizzaFlavorPrice(flavorObj, sizeKey, base);
+  if (priceForSize <= base && flavorObj.category !== 'especiais') {
     return 0;
   }
-  return Math.max(0, rawPrice - base);
+  return Math.max(0, priceForSize - base);
 }
 
 /**
