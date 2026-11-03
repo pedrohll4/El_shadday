@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   X, Flame, Check, Sparkles, AlertCircle, Copy, 
-  ChevronRight, ArrowRight, Pizza as PizzaIcon, CheckCircle2, 
+  ChevronRight, ArrowRight, Pizza, Pizza as PizzaIcon, CheckCircle2, 
   Package, IceCream, ArrowLeft, Search, ArrowUpRight, Info 
 } from 'lucide-react';
 import { 
