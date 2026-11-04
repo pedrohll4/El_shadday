@@ -1098,7 +1098,13 @@ export function AdminDashboard({
     }
     const origPriceNum = prodFormOriginalPrice ? parseFloat(prodFormOriginalPrice.toString().replace(',', '.')) : null;
 
+    const isBoxProductCategory = prodFormCategory === 'caixas' || (prodFormName.toLowerCase().includes('caixa') && prodFormName.toLowerCase().includes('esfirr'));
+    const inferredCount = parseInt(editingProduct?.totalCount || prodFormName.match(/\d+/)?.[0] || '20', 10);
+    const inferredSalgadas = editingProduct?.salgadasCount || (inferredCount === 50 ? 40 : (inferredCount === 40 ? 33 : (inferredCount === 30 ? 22 : 15)));
+    const inferredDoces = editingProduct?.docesCount || Math.max(0, inferredCount - inferredSalgadas);
+
     const savedProd = {
+      ...(editingProduct || {}),
       id: editingProduct ? editingProduct.id : `prod_${Date.now()}`,
       name: prodFormName.trim(),
       categoryId: prodFormCategory,
@@ -1112,7 +1118,11 @@ export function AdminDashboard({
       isPromo: prodFormIsPromo,
       isHighlight: !!prodFormIsHighlight,
       bordaGratis: prodFormBordaGratis,
-      isBox: editingProduct ? editingProduct.isBox : (prodFormCategory === 'caixas'),
+      isBox: editingProduct ? (editingProduct.isBox ?? isBoxProductCategory) : isBoxProductCategory,
+      totalCount: isBoxProductCategory ? inferredCount : editingProduct?.totalCount,
+      salgadasCount: isBoxProductCategory ? inferredSalgadas : editingProduct?.salgadasCount,
+      docesCount: isBoxProductCategory ? inferredDoces : editingProduct?.docesCount,
+      creditPrice: editingProduct?.creditPrice || (isBoxProductCategory ? (inferredCount === 50 ? 75 : (inferredCount === 40 ? 60 : (inferredCount === 30 ? 50 : 40))) : undefined),
       isPizzaCustomizer: editingProduct ? (editingProduct.isPizzaCustomizer ?? (prodFormCategory === 'pizzas')) : (prodFormCategory === 'pizzas'),
       maxSabores: prodFormCategory === 'pizzas' ? (parseInt(prodFormMaxSabores) || 2) : editingProduct?.maxSabores,
       tamanho: prodFormCategory === 'pizzas' ? (prodFormTamanho.trim() || 'Família (8 fatias)') : editingProduct?.tamanho,

@@ -155,7 +155,7 @@ export const PRODUCTS = [
     id: "combo-20esf-dydyo",
     categoryId: "combos",
     name: "Caixa com 20 Esfirras + Dydyo 2L",
-    description: "Caixa de 20 unidades de esfirras (15 salgadas + 5 doces todas sortidas quentinhas) + 1 Refrigerante Dydyo 2L geladíssimo.",
+    description: "Caixa com 20 esfirras sortidas quentinhas (com doces: 15 salgadas + 5 doces | sem doces: 20 salgadas) + 1 Refrigerante Dydyo 2L geladíssimo à sua escolha.",
     price: 44.99,
     originalPrice: 44.99,
     badge: "Combo Sucesso 🔥",
@@ -170,7 +170,7 @@ export const PRODUCTS = [
     id: "combo-30esf-dydyo",
     categoryId: "combos",
     name: "Caixa com 30 Esfirras + Dydyo 2L",
-    description: "Caixa com 30 esfirras (25 salgadas + 5 doces sabores sortidos) + 1 Refrigerante Dydyo 2L geladíssimo.",
+    description: "Caixa com 30 esfirras sortidas quentinhas (com doces: 25 salgadas + 5 doces | sem doces: 30 salgadas) + 1 Refrigerante Dydyo 2L geladíssimo à sua escolha.",
     price: 55.00,
     originalPrice: 55.00,
     badge: "Mais Pedido 👥",
@@ -261,7 +261,7 @@ export const PRODUCTS = [
     id: "caixa-20-esfirras",
     categoryId: "caixas",
     name: "Caixa com 20 Esfirras Sortidas",
-    description: "A clássica da El Shadday: 20 esfirras sortidas quentinhas. Escolha entre: com ou sem doces, e com ou sem carne suína. *No crédito: R$ 40,00.",
+    description: "A clássica da El Shadday: 20 esfirras sortidas quentinhas (com doces: 15 salgadas + 5 doces | sem doces: 20 salgadas). Opção sem carne suína disponível. *No crédito: R$ 40,00.",
     price: 35.00,
     creditPrice: 40.00,
     badge: "Pioneira em Ariquemes 🥇",
@@ -269,13 +269,14 @@ export const PRODUCTS = [
     totalCount: 20,
     salgadasCount: 15,
     docesCount: 5,
+    details: "20 esfirras (15 salgadas + 5 doces ou 20 salgadas)",
     image: "https://assets.olaclick.app/companies/products/images/800/4cfa4549-ad5f-4b4e-b539-468584a0eeba.png"
   },
   {
     id: "caixa-30-esfirras",
     categoryId: "caixas",
     name: "Caixa com 30 Esfirras Sortidas",
-    description: "Conjunto perfeito para compartilhar: 30 esfirras sortidas quentinhas. Escolha entre: com ou sem doces, e com ou sem carne suína. *No crédito: R$ 50,00.",
+    description: "Conjunto perfeito para compartilhar: 30 esfirras sortidas quentinhas (com doces: 22 salgadas + 8 doces | sem doces: 30 salgadas). Opção sem carne suína disponível. *No crédito: R$ 50,00.",
     price: 45.00,
     creditPrice: 50.00,
     badge: "Para Compartilhar 👥",
@@ -283,13 +284,14 @@ export const PRODUCTS = [
     totalCount: 30,
     salgadasCount: 22,
     docesCount: 8,
+    details: "30 esfirras (22 salgadas + 8 doces ou 30 salgadas)",
     image: "https://assets.olaclick.app/companies/products/images/800/d22ae090-8054-428b-8ba3-6f147ad985c8.png"
   },
   {
     id: "caixa-40-esfirras",
     categoryId: "caixas",
     name: "Caixa com 40 Esfirras Sortidas",
-    description: "Conjunto com 40 esfirras sortidas quentinhas. Escolha entre: com ou sem doces, e com ou sem carne suína. *No crédito: R$ 60,00.",
+    description: "Conjunto com 40 esfirras sortidas quentinhas (com doces: 33 salgadas + 7 doces | sem doces: 40 salgadas). Opção sem carne suína disponível. *No crédito: R$ 60,00.",
     price: 55.00,
     creditPrice: 60.00,
     badge: "Melhor Custo x Benefício 💰",
@@ -297,13 +299,14 @@ export const PRODUCTS = [
     totalCount: 40,
     salgadasCount: 33,
     docesCount: 7,
+    details: "40 esfirras (33 salgadas + 7 doces ou 40 salgadas)",
     image: "https://assets.olaclick.app/companies/products/images/800/365a2072-4954-4c6a-a734-69a6cef0130a.png"
   },
   {
     id: "caixa-50-esfirras",
     categoryId: "caixas",
     name: "Caixa com 50 Esfirras Sortidas",
-    description: "A super caixa da El Shadday: 50 esfirras sortidas quentinhas. Escolha entre: com ou sem doces, e com ou sem carne suína. *No crédito: R$ 75,00.",
+    description: "A super caixa da El Shadday: 50 esfirras sortidas quentinhas (com doces: 40 salgadas + 10 doces | sem doces: 50 salgadas). Opção sem carne suína disponível. *No crédito: R$ 75,00.",
     price: 70.00,
     creditPrice: 75.00,
     badge: "Mega Caixa 📦",
@@ -311,6 +314,7 @@ export const PRODUCTS = [
     totalCount: 50,
     salgadasCount: 40,
     docesCount: 10,
+    details: "50 esfirras (40 salgadas + 10 doces ou 50 salgadas)",
     image: "https://assets.olaclick.app/companies/products/images/800/ad6d93be-acae-46e7-b062-9e796f376b8f.png"
   },
 
@@ -1064,15 +1068,125 @@ export const DEFAULT_PROMO_SETTINGS = {
 
 export function normalizeProductsList(prods) {
   if (!Array.isArray(prods) || prods.length === 0) return PRODUCTS;
-  // Se contiver os itens legados de pizzas doces separadas ou faltar pizza-p, migra a fatia de pizzas
-  const hasLegacyDoces = prods.some(p => p.id === 'pizza-doce-1sabor' || p.id === 'pizza-doce-2-3-sabores');
-  const lacksPizzaP = !prods.some(p => p.id === 'pizza-p');
+
+  // 1. Migração de Pizzas legadas se necessário
+  let list = prods;
+  const hasLegacyDoces = list.some(p => p.id === 'pizza-doce-1sabor' || p.id === 'pizza-doce-2-3-sabores');
+  const lacksPizzaP = !list.some(p => p.id === 'pizza-p');
   if (hasLegacyDoces || lacksPizzaP) {
-    const nonPizza = prods.filter(p => p.categoryId !== 'pizzas' && p.id !== 'pizza-doce-1sabor' && p.id !== 'pizza-doce-2-3-sabores' && p.id !== 'pizza-familia-salgada' && p.id !== 'pizza-gigante-salgada');
+    const nonPizza = list.filter(p => p.categoryId !== 'pizzas' && p.id !== 'pizza-doce-1sabor' && p.id !== 'pizza-doce-2-3-sabores' && p.id !== 'pizza-familia-salgada' && p.id !== 'pizza-gigante-salgada');
     const defaultPizzas = PRODUCTS.filter(p => p.categoryId === 'pizzas');
-    return [...nonPizza, ...defaultPizzas];
+    list = [...nonPizza, ...defaultPizzas];
   }
-  return prods;
+
+  // 2. Normalização e garantia de integridade de Caixas de Esfirras e Combos de Esfirras
+  const BOX_DEFAULTS = {
+    'caixa-20-esfirras': {
+      name: "Caixa com 20 Esfirras Sortidas",
+      totalCount: 20,
+      salgadasCount: 15,
+      docesCount: 5,
+      isBox: true,
+      price: 35.00,
+      creditPrice: 40.00,
+      badge: "Pioneira em Ariquemes 🥇",
+      details: "20 esfirras (15 salgadas + 5 doces ou 20 salgadas)",
+      description: "A clássica da El Shadday: 20 esfirras sortidas quentinhas (com doces: 15 salgadas + 5 doces | sem doces: 20 salgadas). Opção sem carne suína disponível. *No crédito: R$ 40,00."
+    },
+    'caixa-30-esfirras': {
+      name: "Caixa com 30 Esfirras Sortidas",
+      totalCount: 30,
+      salgadasCount: 22,
+      docesCount: 8,
+      isBox: true,
+      price: 45.00,
+      creditPrice: 50.00,
+      badge: "Para Compartilhar 👥",
+      details: "30 esfirras (22 salgadas + 8 doces ou 30 salgadas)",
+      description: "Conjunto perfeito para compartilhar: 30 esfirras sortidas quentinhas (com doces: 22 salgadas + 8 doces | sem doces: 30 salgadas). Opção sem carne suína disponível. *No crédito: R$ 50,00."
+    },
+    'caixa-40-esfirras': {
+      name: "Caixa com 40 Esfirras Sortidas",
+      totalCount: 40,
+      salgadasCount: 33,
+      docesCount: 7,
+      isBox: true,
+      price: 55.00,
+      creditPrice: 60.00,
+      badge: "Melhor Custo x Benefício 💰",
+      details: "40 esfirras (33 salgadas + 7 doces ou 40 salgadas)",
+      description: "Conjunto com 40 esfirras sortidas quentinhas (com doces: 33 salgadas + 7 doces | sem doces: 40 salgadas). Opção sem carne suína disponível. *No crédito: R$ 60,00."
+    },
+    'caixa-50-esfirras': {
+      name: "Caixa com 50 Esfirras Sortidas",
+      totalCount: 50,
+      salgadasCount: 40,
+      docesCount: 10,
+      isBox: true,
+      price: 70.00,
+      creditPrice: 75.00,
+      badge: "Mega Caixa 📦",
+      details: "50 esfirras (40 salgadas + 10 doces ou 50 salgadas)",
+      description: "A super caixa da El Shadday: 50 esfirras sortidas quentinhas (com doces: 40 salgadas + 10 doces | sem doces: 50 salgadas). Opção sem carne suína disponível. *No crédito: R$ 75,00."
+    },
+    'combo-20esf-dydyo': {
+      name: "Caixa com 20 Esfirras + Dydyo 2L",
+      totalCount: 20,
+      salgadasCount: 15,
+      docesCount: 5,
+      isBox: true,
+      price: 44.99,
+      badge: "Combo Sucesso 🔥",
+      details: "20 esfirras sortidas + Dydyo 2L.",
+      description: "Caixa com 20 esfirras sortidas quentinhas (com doces: 15 salgadas + 5 doces | sem doces: 20 salgadas) + 1 Refrigerante Dydyo 2L geladíssimo à sua escolha."
+    },
+    'combo-30esf-dydyo': {
+      name: "Caixa com 30 Esfirras + Dydyo 2L",
+      totalCount: 30,
+      salgadasCount: 25,
+      docesCount: 5,
+      isBox: true,
+      price: 55.00,
+      badge: "Mais Pedido 👥",
+      details: "30 esfirras sortidas + Dydyo 2L.",
+      description: "Caixa com 30 esfirras sortidas quentinhas (com doces: 25 salgadas + 5 doces | sem doces: 30 salgadas) + 1 Refrigerante Dydyo 2L geladíssimo à sua escolha."
+    }
+  };
+
+  return list.map(item => {
+    if (!item) return item;
+    const def = BOX_DEFAULTS[item.id];
+    if (def) {
+      const needsDescFix = !item.description || item.description.includes('Máx.') || item.description.includes('max.') || !item.description.includes('sortidas') || item.description.includes('3 por salgada');
+      return {
+        ...item,
+        isBox: true,
+        totalCount: def.totalCount,
+        salgadasCount: def.salgadasCount,
+        docesCount: def.docesCount,
+        creditPrice: item.creditPrice || def.creditPrice,
+        price: item.price || def.price,
+        details: item.details || def.details,
+        description: needsDescFix ? def.description : item.description
+      };
+    }
+
+    const isGenericBox = item.isBox || item.categoryId === 'caixas' || (item.name && item.name.toLowerCase().includes('caixa') && item.name.toLowerCase().includes('esfirr'));
+    if (isGenericBox) {
+      const inferredCount = parseInt(item.totalCount || item.name?.match(/\d+/)?.[0] || item.id?.match(/\d+/)?.[0] || '20', 10);
+      const salgadas = item.salgadasCount || (inferredCount === 50 ? 40 : (inferredCount === 40 ? 33 : (inferredCount === 30 ? 22 : 15)));
+      const doces = item.docesCount || Math.max(0, inferredCount - salgadas);
+      return {
+        ...item,
+        isBox: true,
+        totalCount: inferredCount,
+        salgadasCount: salgadas,
+        docesCount: doces
+      };
+    }
+
+    return item;
+  });
 }
 
 export function normalizePizzaFlavors(flavors) {

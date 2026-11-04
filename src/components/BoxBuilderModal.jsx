@@ -161,24 +161,77 @@ export function BoxBuilderModal({ isOpen, onClose, onAddBoxToCart, initialBox = 
 
   if (!isOpen) return null;
 
-  // O produto é rigorosamente o item clicado pelo cliente no cardápio!
-  const currentBox = initialBox || BOX_CONFIGS[0];
-  const totalCount = Number(currentBox.totalCount || currentBox.total || 20);
-  const salgadasCount = Number(currentBox.salgadasCount || currentBox.salgadas || (totalCount > 5 ? totalCount - 5 : totalCount));
-  const docesCount = Number(currentBox.docesCount || currentBox.doces || (totalCount - salgadasCount));
-  const price = Number(currentBox.price) || 0;
-  const creditPrice = currentBox.creditPrice ? Number(currentBox.creditPrice) : null;
-  const name = currentBox.name || `Caixa com ${totalCount} Esfirras`;
-  const isDydyoCombo = (name.toLowerCase().includes('dydyo') || (currentBox.id || '').toLowerCase().includes('dydyo'));
+  // Procura configuração pré-definida por id ou por correspondência de nome
+  const knownConfig = BOX_CONFIGS.find(b => b.id === initialBox?.id) || null;
+
+  // Extrai quantidade do nome ou id (ex: 'Caixa com 40 Esfirras' -> 40, 'caixa-40-esfirras' -> 40)
+  const countFromName = (() => {
+    const text = `${initialBox?.id || ''} ${initialBox?.name || ''}`;
+    const m = text.match(/(?:caixa|combo).*?(\d+)/i) || text.match(/(\d+)\s*(?:esfirras?|unidades?|un)/i) || text.match(/-(\d+)-/);
+    return m ? parseInt(m[1], 10) : null;
+  })();
+
+  const totalCount = Number(
+    initialBox?.totalCount || 
+    initialBox?.total || 
+    knownConfig?.totalCount || 
+    knownConfig?.total || 
+    countFromName || 
+    20
+  );
+
+  const defaultSalgadas = totalCount === 50 ? 40 : (totalCount === 40 ? 33 : (totalCount === 30 ? (initialBox?.id?.includes('dydyo') ? 25 : 22) : (totalCount === 20 ? 15 : Math.max(1, totalCount - 5))));
+  const salgadasCount = Number(
+    initialBox?.salgadasCount || 
+    initialBox?.salgadas || 
+    knownConfig?.salgadasCount || 
+    knownConfig?.salgadas || 
+    defaultSalgadas
+  );
+
+  const defaultDoces = Math.max(0, totalCount - salgadasCount);
+  const docesCount = Number(
+    initialBox?.docesCount || 
+    initialBox?.doces || 
+    knownConfig?.docesCount || 
+    knownConfig?.doces || 
+    defaultDoces
+  );
+
+  const defaultPrice = totalCount === 50 ? 70 : (totalCount === 40 ? 55 : (totalCount === 30 ? (initialBox?.id?.includes('dydyo') ? 55 : 45) : (totalCount === 20 ? (initialBox?.id?.includes('dydyo') ? 44.99 : 35) : 35)));
+  const price = Number(initialBox?.price ?? knownConfig?.price ?? defaultPrice);
+
+  const defaultCreditPrice = totalCount === 50 ? 75 : (totalCount === 40 ? 60 : (totalCount === 30 ? (initialBox?.id?.includes('dydyo') ? 55 : 50) : (totalCount === 20 ? (initialBox?.id?.includes('dydyo') ? 44.99 : 40) : 40)));
+  const creditPrice = initialBox?.creditPrice ? Number(initialBox.creditPrice) : (knownConfig?.creditPrice ? Number(knownConfig.creditPrice) : defaultCreditPrice);
+
+  const name = initialBox?.name || knownConfig?.name || `Caixa com ${totalCount} Esfirras`;
+  const isDydyoCombo = (name.toLowerCase().includes('dydyo') || (initialBox?.id || '').toLowerCase().includes('dydyo'));
+  const boxImage = initialBox?.image || knownConfig?.image || "https://assets.olaclick.app/companies/products/images/800/4cfa4549-ad5f-4b4e-b539-468584a0eeba.png";
 
   const currentOption = BOX_SORTIDO_OPTIONS.find(o => o.id === selectedOptionId) || BOX_SORTIDO_OPTIONS[0];
+
+  const getOptionDescription = (opt) => {
+    if (opt.id === 'esfirras-sortidas-sem-doce') {
+      return `Caixa com todas as ${totalCount} esfirras salgadas sortidas tradicionais da casa (carne moída temperada, frango, queijo, calabresa, etc.). 100% salgadas, sem doces.`;
+    }
+    if (opt.id === 'esfirras-sortidas-com-doce') {
+      return `A clássica mistura da El Shadday: ${salgadasCount} esfirras salgadas sortidas tradicionais + ${docesCount} esfirras doces sortidas da casa.`;
+    }
+    if (opt.id === 'esfirras-sortidas-sem-suinos-sem-doce') {
+      return `Todas as ${totalCount} esfirras salgadas sortidas SEM carne suína (sem calabresa e sem bacon; preparadas com frango, carne bovina e queijos). 100% salgadas, sem doces.`;
+    }
+    if (opt.id === 'esfirras-sortidas-sem-suinos-com-doce') {
+      return `${salgadasCount} esfirras salgadas sortidas SEM carne suína (sem calabresa e sem bacon) + ${docesCount} esfirras doces sortidas da casa.`;
+    }
+    return opt.description;
+  };
 
   const handleConfirm = () => {
     const isDoces = currentOption.hasDoces;
     const isSemSuinos = currentOption.semSuinos;
 
     const customItem = {
-      id: `custom-box-${currentBox.id}-${Date.now()}`,
+      id: `custom-box-${initialBox?.id || 'box'}-${Date.now()}`,
       name: name,
       price: price,
       creditPrice: creditPrice,
@@ -194,7 +247,7 @@ export function BoxBuilderModal({ isOpen, onClose, onAddBoxToCart, initialBox = 
       docesCount: isDoces ? docesCount : 0,
       dydyoFlavor: isDydyoCombo ? selectedDydyo : null,
       notes: notes.trim(),
-      image: currentBox.image || "https://assets.olaclick.app/companies/products/images/800/4cfa4549-ad5f-4b4e-b539-468584a0eeba.png",
+      image: boxImage,
       description: `${currentOption.displayTitle} (${isDoces ? `${salgadasCount} Salgadas + ${docesCount} Doces` : `${totalCount} Salgadas`})${isSemSuinos ? ' • 🚫 Sem carne suína' : ''}${isDydyoCombo ? ` • 🥤 + ${selectedDydyo}` : ''}${notes.trim() ? ` • Obs: ${notes.trim()}` : ''}`
     };
 
@@ -247,7 +300,7 @@ export function BoxBuilderModal({ isOpen, onClose, onAddBoxToCart, initialBox = 
             <div className="flex items-center gap-3 min-w-0">
               <div className="w-12 h-12 rounded-xl overflow-hidden bg-dark-900 border border-dark-750 flex-shrink-0">
                 <img
-                  src={currentBox.image || "https://assets.olaclick.app/companies/products/images/800/4cfa4549-ad5f-4b4e-b539-468584a0eeba.png"}
+                  src={boxImage}
                   alt={name}
                   className="w-full h-full object-cover"
                 />
@@ -343,7 +396,7 @@ export function BoxBuilderModal({ isOpen, onClose, onAddBoxToCart, initialBox = 
 
                         {/* Description */}
                         <p className="mt-1 text-xs text-slate-400 leading-relaxed">
-                          {opt.description}
+                          {getOptionDescription(opt)}
                         </p>
                       </div>
                     </div>

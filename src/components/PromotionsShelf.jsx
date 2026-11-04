@@ -24,12 +24,17 @@ export function PromotionsShelf({
   }
 
   const handleAction = (product) => {
-    const isCustomizable = product.isBox || product.isPizzaCustomizer || product.categoryId === 'combos';
+    const isBox = Boolean(
+      product.isBox || 
+      product.categoryId === 'caixas' || 
+      (product.name && product.name.toLowerCase().includes('caixa') && product.name.toLowerCase().includes('esfirr'))
+    );
+    const isCustomizable = isBox || product.isPizzaCustomizer || product.categoryId === 'combos';
     if (!isStoreOpen && !isCustomizable) {
       if (onBlockedByClosed) onBlockedByClosed(product);
       return;
     }
-    if (product.isBox) {
+    if (isBox) {
       onOpenBoxBuilder(product);
     } else if (product.isPizzaCustomizer) {
       onOpenPizzaCustomizer(product);

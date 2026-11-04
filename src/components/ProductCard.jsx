@@ -14,9 +14,13 @@ export function ProductCard({
   isStoreOpen = true,
   onBlockedByClosed
 }) {
-  const isBox = product.isBox;
+  const isBox = Boolean(
+    product.isBox || 
+    product.categoryId === 'caixas' || 
+    (product.name && product.name.toLowerCase().includes('caixa') && product.name.toLowerCase().includes('esfirr'))
+  );
   const isPizza = product.isPizzaCustomizer;
-  const isCombo = product.categoryId === 'combos';
+  const isCombo = product.categoryId === 'combos' && !isBox;
   const isAcai = product.categoryId === 'acai' || (product.id && product.id.includes('acai')) || (product.name && product.name.toLowerCase().includes('açaí'));
   const isCustomizable = isBox || isPizza || isCombo || isAcai;
 
@@ -96,7 +100,7 @@ export function ProductCard({
             
             {isBox && (
               <span className="px-2 py-0.5 text-[9px] font-bold rounded-md bg-brand-gold/15 text-brand-goldLight border border-brand-gold/30">
-                {product.totalCount} unidades
+                {product.totalCount || product.name?.match(/\d+/)?.[0] || '20'} unidades
               </span>
             )}
           </div>
