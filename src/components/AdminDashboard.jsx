@@ -710,6 +710,7 @@ export function AdminDashboard({
   const [flavorFormName, setFlavorFormName] = useState('');
   const [flavorFormPrice, setFlavorFormPrice] = useState('40.00');
   const [flavorFormPrices, setFlavorFormPrices] = useState({
+    brotinho: '15.00',
     p: '20.00',
     m: '30.00',
     familia: '40.00',
@@ -1445,6 +1446,7 @@ export function AdminDashboard({
     setFlavorFormName('');
     setFlavorFormPrice('40.00');
     setFlavorFormPrices({
+      brotinho: '15.00',
       p: '20.00',
       m: '30.00',
       familia: '40.00',
@@ -1462,12 +1464,14 @@ export function AdminDashboard({
     setFlavorFormName(flavor.name || '');
     setFlavorFormPrice(flavor.price !== undefined ? flavor.price.toString() : '40.00');
     
+    const brotinhoVal = flavor.prices?.brotinho ?? getPizzaFlavorPrice(flavor, 'brotinho');
     const pVal = flavor.prices?.p ?? getPizzaFlavorPrice(flavor, 'p');
     const mVal = flavor.prices?.m ?? getPizzaFlavorPrice(flavor, 'm');
     const famVal = flavor.prices?.familia ?? (flavor.price || 40.00);
     const gigVal = flavor.prices?.gigante ?? getPizzaFlavorPrice(flavor, 'gigante');
 
     setFlavorFormPrices({
+      brotinho: Number(brotinhoVal).toFixed(2),
       p: Number(pVal).toFixed(2),
       m: Number(mVal).toFixed(2),
       familia: Number(famVal).toFixed(2),
@@ -1492,12 +1496,13 @@ export function AdminDashboard({
       return;
     }
     
+    const brotinhoNum = parseFloat(String(flavorFormPrices.brotinho).replace(',', '.')) || 15.00;
     const pNum = parseFloat(String(flavorFormPrices.p).replace(',', '.')) || 20.00;
     const mNum = parseFloat(String(flavorFormPrices.m).replace(',', '.')) || 30.00;
     const famNum = parseFloat(String(flavorFormPrices.familia).replace(',', '.')) || 40.00;
     const gigNum = parseFloat(String(flavorFormPrices.gigante).replace(',', '.')) || 50.00;
 
-    if (pNum <= 0 || mNum <= 0 || famNum <= 0 || gigNum <= 0) {
+    if (brotinhoNum <= 0 || pNum <= 0 || mNum <= 0 || famNum <= 0 || gigNum <= 0) {
       alert('Informe valores válidos maiores que zero para todos os tamanhos de pizza.');
       return;
     }
@@ -1507,6 +1512,7 @@ export function AdminDashboard({
       name: flavorFormName.trim(),
       price: famNum,
       prices: {
+        brotinho: brotinhoNum,
         p: pNum,
         m: mNum,
         familia: famNum,
@@ -2527,20 +2533,26 @@ export function AdminDashboard({
     return () => clearInterval(interval);
   }, [orders, currentBranch]);
 
-  // Metrics calculations (Excluding cancelled orders and closed shifts!)
+  // Metrics calculations (Excluding cancelled orders, completed orders, and closed shifts!)
   const activeOrdersList = useMemo(() => {
     return scopedOrders.filter(o => {
-      if (!o || normalizeOrderStatus(o) === 'CANCELADO') return false;
+      if (!o) return false;
+      const st = normalizeOrderStatus(o);
+      if (st === 'CANCELADO' || st === 'CONCLUIDO') return false;
       if (!showArchivedKdsOrders && (o.shiftClosedAt || o.isArchived)) return false;
       return true;
     });
   }, [scopedOrders, showArchivedKdsOrders]);
 
   const totalRevenue = useMemo(() => {
-    return activeOrdersList
-      .filter(o => o && (o.paymentStatus === 'PAGO_APROVADO' || normalizeOrderStatus(o) === 'CONCLUIDO'))
+    return scopedOrders
+      .filter(o => {
+        if (!o || normalizeOrderStatus(o) === 'CANCELADO') return false;
+        if (!showArchivedKdsOrders && (o.shiftClosedAt || o.isArchived)) return false;
+        return o.paymentStatus === 'PAGO_APROVADO' || normalizeOrderStatus(o) === 'CONCLUIDO';
+      })
       .reduce((acc, o) => acc + (Number(o.total) || 0), 0);
-  }, [activeOrdersList]);
+  }, [scopedOrders, showArchivedKdsOrders]);
 
   const pendingCount = useMemo(() => {
     return activeOrdersList.filter(o => normalizeOrderStatus(o) === 'RECEBIDO_COZINHA').length;
@@ -2554,16 +2566,26 @@ export function AdminDashboard({
     return activeOrdersList.filter(o => normalizeOrderStatus(o) === 'SAIU_ENTREGA').length;
   }, [activeOrdersList]);
 
+  const readyBalcaoCount = useMemo(() => {
+    return activeOrdersList.filter(o => normalizeOrderStatus(o) === 'PRONTO_BALCAO').length;
+  }, [activeOrdersList]);
+
   const delayedCount = useMemo(() => {
     return activeOrdersList.filter(o => isOrderDelayed(o)).length;
   }, [activeOrdersList, now]);
 
   const completedCount = useMemo(() => {
-    return activeOrdersList.filter(o => normalizeOrderStatus(o) === 'CONCLUIDO').length;
-  }, [activeOrdersList]);
+    return scopedOrders.filter(o => {
+      if (!o) return false;
+      if (normalizeOrderStatus(o) !== 'CONCLUIDO') return false;
+      if (!showArchivedKdsOrders && (o.shiftClosedAt || o.isArchived)) return false;
+      return true;
+    }).length;
+  }, [scopedOrders, showArchivedKdsOrders]);
 
   const cancelledCount = useMemo(() => {
     return scopedOrders.filter(o => {
+      if (!o) return false;
       if (normalizeOrderStatus(o) !== 'CANCELADO') return false;
       if (!showArchivedKdsOrders && (o.shiftClosedAt || o.isArchived)) return false;
       return true;
@@ -2580,21 +2602,29 @@ export function AdminDashboard({
 
       const orderSt = normalizeOrderStatus(order);
       const isCancelled = orderSt === 'CANCELADO';
+      const isConcluded = orderSt === 'CONCLUIDO';
 
       // Specific filter tabs
       if (selectedFilter === 'cancelados') {
         if (!isCancelled) return false;
+      } else if (selectedFilter === 'concluidos') {
+        if (!isConcluded) return false;
       } else {
-        // All other tabs hide cancelled orders unless specifically looking at cancelados
-        if (isCancelled && selectedFilter !== 'todos') return false;
+        // All other tabs hide cancelled orders
+        if (isCancelled) return false;
       }
 
-      if (selectedFilter === 'atrasados' && !isOrderDelayed(order)) return false;
+      // 'todos' tab represents 'Ativos' in KDS: hide concluded orders!
+      if (selectedFilter === 'todos') {
+        if (isConcluded || isCancelled) return false;
+      }
+
+      if (selectedFilter === 'atrasados' && (!isOrderDelayed(order) || isConcluded)) return false;
       if (selectedFilter === 'pendentes' && orderSt !== 'RECEBIDO_COZINHA') return false;
       if (selectedFilter === 'preparo' && orderSt !== 'EM_PREPARO') return false;
+      if (selectedFilter === 'pronto_balcao' && orderSt !== 'PRONTO_BALCAO') return false;
       if (selectedFilter === 'entrega' && orderSt !== 'SAIU_ENTREGA') return false;
-      if (selectedFilter === 'concluidos' && orderSt !== 'CONCLUIDO') return false;
-      if (selectedFilter === 'nao_pagos' && (order.paymentStatus === 'PAGO_APROVADO' || isCancelled)) return false;
+      if (selectedFilter === 'nao_pagos' && (order.paymentStatus === 'PAGO_APROVADO' || isCancelled || isConcluded)) return false;
 
       // Search query
       if (searchQuery.trim()) {
@@ -2609,7 +2639,7 @@ export function AdminDashboard({
 
       return true;
     });
-  }, [scopedOrders, selectedFilter, searchQuery, now]);
+  }, [scopedOrders, selectedFilter, searchQuery, now, showArchivedKdsOrders]);
 
   // Print ticket helper (imprime comanda térmica compacta sem abrir nova guia no navegador)
   const handlePrintOrder = (order) => {
@@ -2902,10 +2932,8 @@ export function AdminDashboard({
   const handleUpdateStatusAndTab = (order, newStatus, customReason = '') => {
     if (!order || !newStatus) return;
 
-    let notifyType = newStatus;
-    if (newStatus === 'CONCLUIDO' && order.deliveryType === 'balcao') {
-      notifyType = 'PRONTO_BALCAO';
-    }
+    const normNewStatus = normalizeOrderStatus(newStatus);
+    const notifyType = normNewStatus;
 
     // REGRA DE OURO: Se o motor Baileys na nuvem estiver ATIVADO/CONECTADO:
     // O sistema de abrir mensagem em nova guia NÃO É USADO! O envio é 100% invisível em segundo plano!
@@ -2923,7 +2951,7 @@ export function AdminDashboard({
     }
 
     // 1. Update order status in app state / DB
-    onUpdateOrderStatus(order.orderId, newStatus);
+    onUpdateOrderStatus(order.orderId, normNewStatus);
 
     // 2. Dispatch background WhatsApp notification (Baileys Cloud)
     handleTriggerCustomerWhatsApp(order, notifyType, customReason);
@@ -2939,17 +2967,18 @@ export function AdminDashboard({
     const STATUS_MAP = {
       RECEBIDO_COZINHA: { tab: 'pendentes', label: 'Pendentes' },
       EM_PREPARO: { tab: 'preparo', label: 'No Forno' },
+      PRONTO_BALCAO: { tab: 'todos', label: 'Pronto Balcão' },
       SAIU_ENTREGA: { tab: 'entrega', label: 'Saiu p/ Entrega' },
       CONCLUIDO: { tab: 'concluidos', label: 'Prontos / Entregues' },
       CANCELADO: { tab: 'cancelados', label: 'Cancelados' }
     };
 
-    const targetInfo = STATUS_MAP[newStatus];
+    const targetInfo = STATUS_MAP[normNewStatus];
     if (autoFollowTab && targetInfo) {
       setSelectedFilter(targetInfo.tab);
       setStatusChangeToast({
         orderId: formatOrderNumber(order),
-        newStatus,
+        newStatus: normNewStatus,
         tabLabel: targetInfo.label
       });
       if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
@@ -3430,7 +3459,7 @@ export function AdminDashboard({
     }
 
     if (newOrder.customerPhone) {
-      handleTriggerCustomerWhatsApp(newOrder, isConcludedDirect ? (newOrder.deliveryType === 'balcao' ? 'PRONTO_BALCAO' : 'CONCLUIDO') : 'RECEBIDO_COZINHA');
+      handleTriggerCustomerWhatsApp(newOrder, isConcludedDirect ? 'CONCLUIDO' : 'RECEBIDO_COZINHA');
     }
 
     playChime(isConcludedDirect);
@@ -4210,6 +4239,20 @@ export function AdminDashboard({
                     No Forno ({inPrepCount})
                   </button>
 
+                  {readyBalcaoCount > 0 && (
+                    <button
+                      onClick={() => setSelectedFilter('pronto_balcao')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1 ${
+                        selectedFilter === 'pronto_balcao' 
+                          ? 'bg-purple-500 text-white font-black' 
+                          : 'bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 border border-purple-500/30'
+                      }`}
+                    >
+                      <Store className="w-3.5 h-3.5" />
+                      <span>Pronto Balcão ({readyBalcaoCount})</span>
+                    </button>
+                  )}
+
                   <button
                     onClick={() => setSelectedFilter('entrega')}
                     className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
@@ -4497,7 +4540,7 @@ export function AdminDashboard({
                                           ? 'bg-amber-500/20 border-amber-500/40 text-amber-300 hover:bg-amber-500/30'
                                           : currentStatus === 'EM_PREPARO'
                                           ? 'bg-brand-gold/25 border-brand-gold/50 text-brand-gold hover:bg-brand-gold/35'
-                                          : currentStatus === 'SAIU_ENTREGA'
+                                          : (currentStatus === 'SAIU_ENTREGA' || currentStatus === 'PRONTO_BALCAO')
                                           ? 'bg-blue-500/20 border-blue-500/40 text-blue-300 hover:bg-blue-500/30'
                                           : 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/30'
                                       }`}
@@ -4505,8 +4548,11 @@ export function AdminDashboard({
                                     >
                                       <option value="RECEBIDO_COZINHA" className="bg-dark-950 text-amber-300">🟡 Na Fila (Pendente)</option>
                                       <option value="EM_PREPARO" className="bg-dark-950 text-brand-gold">🔥 No Forno (Preparo)</option>
-                                      {order.deliveryType === 'balcao' ? (
-                                        <option value="CONCLUIDO" className="bg-dark-950 text-emerald-300">📦 Pronto no Balcão</option>
+                                      {(order.deliveryType === 'balcao' || order.deliveryType === 'retirada' || order.district === 'Balcão') ? (
+                                        <>
+                                          <option value="PRONTO_BALCAO" className="bg-dark-950 text-blue-300">📦 Pronto no Balcão</option>
+                                          <option value="CONCLUIDO" className="bg-dark-950 text-emerald-300">✅ Concluído (Entregue)</option>
+                                        </>
                                       ) : (
                                         <>
                                           <option value="SAIU_ENTREGA" className="bg-dark-950 text-blue-300">🛵 Saiu p/ Entrega</option>
@@ -4644,8 +4690,9 @@ export function AdminDashboard({
                                 <span className="text-[10px] text-brand-goldLight font-bold">
                                   {currentStatus === 'RECEBIDO_COZINHA' && '🟡 1. Na Fila'}
                                   {currentStatus === 'EM_PREPARO' && '🔥 2. No Forno'}
+                                  {currentStatus === 'PRONTO_BALCAO' && '📦 3. Pronto no Balcão'}
                                   {currentStatus === 'SAIU_ENTREGA' && '🛵 3. Em Rota'}
-                                  {currentStatus === 'CONCLUIDO' && (order.deliveryType === 'balcao' ? '📦 3. No Balcão' : '✅ 4. Concluído')}
+                                  {currentStatus === 'CONCLUIDO' && '✅ 4. Concluído'}
                                 </span>
                               </div>
 
@@ -4684,25 +4731,26 @@ export function AdminDashboard({
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    if (order.deliveryType === 'balcao') {
-                                      handleUpdateStatusAndTab(order, 'CONCLUIDO');
+                                    const isBalcao = order.deliveryType === 'balcao' || order.deliveryType === 'retirada' || order.district === 'Balcão';
+                                    if (isBalcao) {
+                                      handleUpdateStatusAndTab(order, 'PRONTO_BALCAO');
                                     } else {
                                       handleUpdateStatusAndTab(order, 'SAIU_ENTREGA');
                                     }
                                   }}
                                   className={`py-1.5 px-1 rounded-lg text-[11px] font-bold flex flex-col sm:flex-row items-center justify-center gap-1 transition-all cursor-pointer ${
-                                    currentStatus === 'SAIU_ENTREGA' || (order.deliveryType === 'balcao' && currentStatus === 'CONCLUIDO')
+                                    currentStatus === 'SAIU_ENTREGA' || currentStatus === 'PRONTO_BALCAO'
                                       ? 'bg-blue-500 text-white font-black shadow-sm ring-1 ring-blue-400 scale-[1.02]'
                                       : 'bg-dark-900 hover:bg-dark-850 text-slate-400 hover:text-blue-300 border border-dark-800'
                                   }`}
-                                  title={order.deliveryType === 'balcao' ? 'Marcar Pronto no Balcão' : 'Mover para Saiu para Entrega'}
+                                  title={(order.deliveryType === 'balcao' || order.deliveryType === 'retirada' || order.district === 'Balcão') ? 'Marcar Pronto no Balcão' : 'Mover para Saiu para Entrega'}
                                 >
-                                  {order.deliveryType === 'balcao' ? (
+                                  {(order.deliveryType === 'balcao' || order.deliveryType === 'retirada' || order.district === 'Balcão') ? (
                                     <Store className="w-3 h-3 flex-shrink-0" />
                                   ) : (
                                     <Bike className="w-3 h-3 flex-shrink-0" />
                                   )}
-                                  <span className="truncate">{order.deliveryType === 'balcao' ? '3. Balcão' : '3. Entrega'}</span>
+                                  <span className="truncate">{(order.deliveryType === 'balcao' || order.deliveryType === 'retirada' || order.district === 'Balcão') ? '3. Balcão' : '3. Entrega'}</span>
                                 </button>
 
                                 {/* 4. Concluído */}
@@ -4852,7 +4900,19 @@ export function AdminDashboard({
 
                             {/* WhatsApp Button */}
                             <button
-                              onClick={() => handleOpenWhatsAppModal(order, order.deliveryType === 'balcao' ? 'pronto' : 'entrega')}
+                              onClick={() => {
+                                const isBalcao = order.deliveryType === 'balcao' || order.deliveryType === 'retirada' || order.district === 'Balcão';
+                                const defType = currentStatus === 'CONCLUIDO' 
+                                  ? 'concluido' 
+                                  : currentStatus === 'EM_PREPARO' 
+                                  ? (isBalcao ? 'pronto' : 'entrega')
+                                  : currentStatus === 'PRONTO_BALCAO'
+                                  ? 'pronto'
+                                  : currentStatus === 'SAIU_ENTREGA'
+                                  ? 'entrega'
+                                  : 'recebido';
+                                handleOpenWhatsAppModal(order, defType);
+                              }}
                               className="px-2.5 py-1.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/40 text-xs font-bold flex items-center gap-1 transition-all cursor-pointer active:scale-95"
                               title="Enviar mensagem no WhatsApp do cliente"
                             >
@@ -4883,8 +4943,11 @@ export function AdminDashboard({
                                 >
                                   <option value="RECEBIDO_COZINHA">🟡 1. Mover p/ Pendente</option>
                                   <option value="EM_PREPARO">🔥 2. Mover p/ No Forno</option>
-                                  {order.deliveryType === 'balcao' ? (
-                                    <option value="CONCLUIDO">📦 3. Mover p/ Pronto Balcão</option>
+                                  {(order.deliveryType === 'balcao' || order.deliveryType === 'retirada' || order.district === 'Balcão') ? (
+                                    <>
+                                      <option value="PRONTO_BALCAO">📦 3. Mover p/ Pronto Balcão</option>
+                                      <option value="CONCLUIDO">✅ 4. Mover p/ Concluído</option>
+                                    </>
                                   ) : (
                                     <>
                                       <option value="SAIU_ENTREGA">🛵 3. Mover p/ Saiu Entrega</option>
@@ -4909,17 +4972,18 @@ export function AdminDashboard({
                             {!isCancelled && currentStatus === 'EM_PREPARO' && (
                               <button
                                 onClick={() => {
-                                  if (order.deliveryType === 'balcao') {
-                                    handleUpdateStatusAndTab(order, 'CONCLUIDO');
+                                  const isBalcao = order.deliveryType === 'balcao' || order.deliveryType === 'retirada' || order.district === 'Balcão';
+                                  if (isBalcao) {
+                                    handleUpdateStatusAndTab(order, 'PRONTO_BALCAO');
                                   } else {
                                     handleUpdateStatusAndTab(order, 'SAIU_ENTREGA');
                                   }
                                 }}
                                 className="px-3 py-1.5 rounded-xl bg-blue-500 hover:bg-blue-400 text-white font-bold text-xs flex items-center gap-1 shadow-md transition-all cursor-pointer"
                               >
-                                {order.deliveryType === 'balcao' ? (
+                                {(order.deliveryType === 'balcao' || order.deliveryType === 'retirada' || order.district === 'Balcão') ? (
                                   <>
-                                    <Check className="w-3.5 h-3.5 stroke-[3]" />
+                                    <Store className="w-3.5 h-3.5 stroke-[2.5]" />
                                     <span>Pronto p/ Retirada</span>
                                   </>
                                 ) : (
@@ -4928,6 +4992,17 @@ export function AdminDashboard({
                                     <span>Despachar Entrega</span>
                                   </>
                                 )}
+                              </button>
+                            )}
+
+                            {!isCancelled && currentStatus === 'PRONTO_BALCAO' && (
+                              <button
+                                onClick={() => handleUpdateStatusAndTab(order, 'CONCLUIDO')}
+                                className="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-dark-950 font-bold text-xs flex items-center gap-1 shadow-md transition-all cursor-pointer"
+                                title="Cliente retirou o pedido: completar pedido e dar baixa"
+                              >
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                <span>Completar Pedido</span>
                               </button>
                             )}
 
@@ -6020,12 +6095,15 @@ export function AdminDashboard({
                                       ? 'bg-amber-500/15 border-amber-500/40 text-amber-300'
                                       : currentStatus === 'EM_PREPARO'
                                       ? 'bg-brand-gold/15 border-brand-gold/40 text-brand-gold'
-                                      : 'bg-blue-500/15 border-blue-500/40 text-blue-300'
+                                      : (currentStatus === 'SAIU_ENTREGA' || currentStatus === 'PRONTO_BALCAO')
+                                      ? 'bg-blue-500/15 border-blue-500/40 text-blue-300'
+                                      : 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
                                   }`}>
                                     <Clock className="w-3 h-3" />
                                     <span>
                                       {currentStatus === 'RECEBIDO_COZINHA' && 'Na Fila'}
                                       {currentStatus === 'EM_PREPARO' && 'No Forno'}
+                                      {currentStatus === 'PRONTO_BALCAO' && 'Pronto Balcão'}
                                       {currentStatus === 'SAIU_ENTREGA' && 'Em Rota'}
                                     </span>
                                   </span>
@@ -7077,11 +7155,11 @@ export function AdminDashboard({
                         <h3 className="font-display font-extrabold text-sm sm:text-base text-white flex items-center gap-2">
                           <span>Valores por Tamanho & Regra do Maior Valor</span>
                           <span className="text-[10px] px-2 py-0.5 rounded-full bg-brand-gold/20 text-brand-gold font-bold border border-brand-gold/30">
-                            P • M • Família • Gigante
+                            Broto • P • M • Família • Gigante
                           </span>
                         </h3>
                         <p className="text-xs text-slate-300 mt-1 leading-relaxed">
-                          Agora você pode definir o valor de cada sabor individualmente para cada tamanho (Pequena, Média, Família e Gigante). Ao montar uma pizza, o sistema puxa automaticamente para o <strong>MAIOR valor</strong> entre os sabores selecionados naquele tamanho. Sabores no valor base ou inferior não geram nenhum acréscimo!
+                          Agora você pode definir o valor de cada sabor individualmente para cada tamanho (Brotinho, Pequena, Média, Família e Gigante). Ao montar uma pizza, o sistema puxa automaticamente para o <strong>MAIOR valor</strong> entre os sabores selecionados naquele tamanho. Sabores no valor base ou inferior não geram nenhum acréscimo!
                         </p>
                       </div>
                     </div>
@@ -7171,6 +7249,7 @@ export function AdminDashboard({
                     {filteredAdminFlavors.map(flavor => {
                       const isAvailable = flavor.isAvailable !== false;
                       const priceNum = Number(flavor.price) || 0;
+                      const brotinhoPrice = getPizzaFlavorPrice(flavor, 'brotinho');
                       const pPrice = getPizzaFlavorPrice(flavor, 'p');
                       const mPrice = getPizzaFlavorPrice(flavor, 'm');
                       const famPrice = getPizzaFlavorPrice(flavor, 'familia');
@@ -7226,7 +7305,13 @@ export function AdminDashboard({
                                 <span>Valores por Tamanho:</span>
                                 {flavor.category === 'especiais' && <span className="text-amber-400 font-bold">Gourmet ⭐</span>}
                               </div>
-                              <div className="grid grid-cols-4 gap-1.5 text-center font-mono">
+                              <div className="grid grid-cols-5 gap-1 text-center font-mono">
+                                <div className="p-1 rounded-lg bg-dark-950 border border-dark-800">
+                                  <div className="text-[9px] text-slate-400 font-sans font-semibold">Broto (4f)</div>
+                                  <div className={`text-xs font-black ${brotinhoPrice > 15 ? 'text-amber-300' : 'text-slate-200'}`}>
+                                    R$ {brotinhoPrice.toFixed(0)}
+                                  </div>
+                                </div>
                                 <div className="p-1 rounded-lg bg-dark-950 border border-dark-800">
                                   <div className="text-[9px] text-slate-400 font-sans font-semibold">P (4f)</div>
                                   <div className={`text-xs font-black ${pPrice > 20 ? 'text-amber-300' : 'text-slate-200'}`}>
@@ -10680,7 +10765,7 @@ export function AdminDashboard({
                         type="text"
                         value={prodFormTamanho}
                         onChange={(e) => setProdFormTamanho(e.target.value)}
-                        placeholder="Ex: Família (8 fatias), Gigante (12 fatias), Pequena (4 fatias)..."
+                        placeholder="Ex: Brotinho (4 fatias), Pequena (4 fatias), Família (8 fatias)..."
                         className="w-full px-3 py-2 rounded-xl bg-dark-800 border border-dark-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand-gold"
                       />
                     </div>
@@ -10896,24 +10981,53 @@ export function AdminDashboard({
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <button
                       type="button"
-                      onClick={() => setFlavorFormPrices({ p: '20.00', m: '30.00', familia: '40.00', gigante: '50.00' })}
+                      onClick={() => setFlavorFormPrices({ brotinho: '15.00', p: '20.00', m: '30.00', familia: '40.00', gigante: '50.00' })}
                       className="px-2.5 py-1 rounded-lg bg-dark-800 hover:bg-dark-750 text-[10px] text-emerald-400 hover:text-emerald-300 font-bold border border-emerald-500/30 cursor-pointer"
                       title="Preencher com valores base padrão (sem acréscimo)"
                     >
-                      Tradicional (20/30/40/50)
+                      Tradicional (15/20/30/40/50)
                     </button>
                     <button
                       type="button"
-                      onClick={() => setFlavorFormPrices({ p: '25.00', m: '38.00', familia: '50.00', gigante: '65.00' })}
+                      onClick={() => setFlavorFormPrices({ brotinho: '18.00', p: '25.00', m: '38.00', familia: '50.00', gigante: '65.00' })}
                       className="px-2.5 py-1 rounded-lg bg-dark-800 hover:bg-dark-750 text-[10px] text-amber-300 hover:text-amber-200 font-bold border border-amber-500/30 cursor-pointer"
-                      title="Sugerir valores para sabor Especial (+5 P, +8 M, +10 FM, +15 GG)"
+                      title="Sugerir valores para sabor Especial (+3 Broto, +5 P, +8 M, +10 FM, +15 GG)"
                     >
                       Sugerir Especial ⭐
                     </button>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                  {/* Brotinho (BROTO) */}
+                  <div className="p-2.5 rounded-xl bg-dark-900 border border-dark-750 focus-within:border-brand-gold">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-bold text-white">Brotinho</span>
+                      <span className="text-[9px] text-slate-400">4 fatias</span>
+                    </div>
+                    <div className="text-[9px] text-slate-500 mb-1">Base: R$ 15,00</div>
+                    <div className="relative">
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">R$</span>
+                      <input
+                        type="text"
+                        required
+                        value={flavorFormPrices.brotinho}
+                        onChange={(e) => setFlavorFormPrices(prev => ({ ...prev, brotinho: e.target.value }))}
+                        className="w-full pl-8 pr-2 py-1.5 rounded-lg bg-dark-950 border border-dark-700 text-xs text-white font-mono font-bold focus:outline-none focus:border-brand-gold"
+                        placeholder="15.00"
+                      />
+                    </div>
+                    <div className="text-[9px] mt-1">
+                      {parseFloat(String(flavorFormPrices.brotinho).replace(',', '.')) > 15 ? (
+                        <span className="text-amber-400 font-bold">
+                          + R$ {(parseFloat(String(flavorFormPrices.brotinho).replace(',', '.')) - 15).toFixed(2).replace('.', ',')}
+                        </span>
+                      ) : (
+                        <span className="text-emerald-400">Sem acréscimo</span>
+                      )}
+                    </div>
+                  </div>
+
                   {/* Pequena (P) */}
                   <div className="p-2.5 rounded-xl bg-dark-900 border border-dark-750 focus-within:border-brand-gold">
                     <div className="flex items-center justify-between mb-1">

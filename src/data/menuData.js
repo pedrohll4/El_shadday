@@ -541,8 +541,21 @@ export const PRODUCTS = [
   },
 
   // ==========================================
-  // PIZZAS ESPECIAIS (POR TAMANHO: P, M, FAMÍLIA, GIGANTE)
+  // PIZZAS ESPECIAIS (POR TAMANHO: BROTINHO, P, M, FAMÍLIA, GIGANTE)
   // ==========================================
+  {
+    id: "pizza-brotinho",
+    categoryId: "pizzas",
+    name: "Pizza Brotinho (4 Fatias - até 2 Sabores)",
+    description: "Pizza individual brotinho com 4 fatias. Escolha até 2 sabores à sua escolha (salgados, especiais ou doces). Acompanha BORDA DE CATUPIRY GRÁTIS!",
+    price: 15.00,
+    badge: "Borda Grátis 🧀",
+    bordaGratis: true,
+    isPizzaCustomizer: true,
+    tamanho: "Brotinho (4 fatias)",
+    maxSabores: 2,
+    image: "https://assets.olaclick.app/companies/products/images/800/c89d7ac9-5a31-4384-8b87-9a08d78edf71.png"
+  },
   {
     id: "pizza-p",
     categoryId: "pizzas",
@@ -766,6 +779,7 @@ export const PRODUCTS = [
 ];
 
 export const PIZZA_SIZES = [
+  { key: 'brotinho', label: 'Brotinho (BROTO)', shortLabel: 'Broto (4 fatias)', fatias: '4 fatias', defaultBase: 15.00 },
   { key: 'p', label: 'Pequena (P)', shortLabel: 'P (4 fatias)', fatias: '4 fatias', defaultBase: 20.00 },
   { key: 'm', label: 'Média (M)', shortLabel: 'M (6 fatias)', fatias: '6 fatias', defaultBase: 30.00 },
   { key: 'familia', label: 'Família (FM)', shortLabel: 'FM (8 fatias)', fatias: '8 fatias', defaultBase: 40.00 },
@@ -773,6 +787,7 @@ export const PIZZA_SIZES = [
 ];
 
 export const DEFAULT_PIZZA_BASE_PRICES = {
+  brotinho: 15.00,
   p: 20.00,
   m: 30.00,
   familia: 40.00,
@@ -916,7 +931,7 @@ export const INITIAL_PIZZA_FLAVORS = [
     id: "calabresa-catupiry",
     name: "Calabresa com Catupiry (Gourmet)",
     price: 50.00,
-    prices: { p: 25.00, m: 38.00, familia: 50.00, gigante: 62.00 },
+    prices: { brotinho: 18.00, p: 25.00, m: 38.00, familia: 50.00, gigante: 62.00 },
     category: "especiais",
     description: "Fatias de calabresa artesanal combinadas com o legítimo Catupiry cremoso e muçarela.",
     image: "/flavors/calabresa-catupiry.png",
@@ -926,7 +941,7 @@ export const INITIAL_PIZZA_FLAVORS = [
     id: "carne-seca",
     name: "Carne Seca com Catupiry (Gourmet)",
     price: 65.00,
-    prices: { p: 35.00, m: 48.00, familia: 65.00, gigante: 78.00 },
+    prices: { brotinho: 25.00, p: 35.00, m: 48.00, familia: 65.00, gigante: 78.00 },
     category: "especiais",
     description: "Carne seca desfiada de primeiríssima qualidade com generoso Catupiry cremoso.",
     image: "/flavors/carne-seca.png",
@@ -936,7 +951,7 @@ export const INITIAL_PIZZA_FLAVORS = [
     id: "strogonoff-frango",
     name: "Strogonoff de Frango (Especial)",
     price: 55.00,
-    prices: { p: 28.00, m: 42.00, familia: 55.00, gigante: 68.00 },
+    prices: { brotinho: 20.00, p: 28.00, m: 42.00, familia: 55.00, gigante: 68.00 },
     category: "especiais",
     description: "Strogonoff de frango cremoso feito na hora, muçarela e batata palha crocante.",
     image: "/flavors/strogonoff-frango.png",
@@ -946,7 +961,7 @@ export const INITIAL_PIZZA_FLAVORS = [
     id: "lombo-abacaxi",
     name: "Lombo com Abacaxi (Especial)",
     price: 65.00,
-    prices: { p: 35.00, m: 48.00, familia: 65.00, gigante: 78.00 },
+    prices: { brotinho: 25.00, p: 35.00, m: 48.00, familia: 65.00, gigante: 78.00 },
     category: "especiais",
     description: "Lombo canadense fatiado, pedaços doces de abacaxi e queijo muçarela derretido.",
     image: "/flavors/lombo-abacaxi.png",
@@ -956,7 +971,7 @@ export const INITIAL_PIZZA_FLAVORS = [
     id: "lombo-portuguesa",
     name: "Lombo à Portuguesa (Especial)",
     price: 65.00,
-    prices: { p: 35.00, m: 48.00, familia: 65.00, gigante: 78.00 },
+    prices: { brotinho: 25.00, p: 35.00, m: 48.00, familia: 65.00, gigante: 78.00 },
     category: "especiais",
     description: "Lombo especial com cebola, ovos, azeitonas selecionadas e muçarela.",
     image: "/flavors/lombo-portuguesa.png",
@@ -1073,10 +1088,21 @@ export function normalizeProductsList(prods) {
   let list = prods;
   const hasLegacyDoces = list.some(p => p.id === 'pizza-doce-1sabor' || p.id === 'pizza-doce-2-3-sabores');
   const lacksPizzaP = !list.some(p => p.id === 'pizza-p');
+  const lacksPizzaBrotinho = !list.some(p => p.id === 'pizza-brotinho');
   if (hasLegacyDoces || lacksPizzaP) {
     const nonPizza = list.filter(p => p.categoryId !== 'pizzas' && p.id !== 'pizza-doce-1sabor' && p.id !== 'pizza-doce-2-3-sabores' && p.id !== 'pizza-familia-salgada' && p.id !== 'pizza-gigante-salgada');
     const defaultPizzas = PRODUCTS.filter(p => p.categoryId === 'pizzas');
     list = [...nonPizza, ...defaultPizzas];
+  } else if (lacksPizzaBrotinho) {
+    const brotinhoProd = PRODUCTS.find(p => p.id === 'pizza-brotinho');
+    if (brotinhoProd) {
+      const pIndex = list.findIndex(p => p.id === 'pizza-p');
+      if (pIndex !== -1) {
+        list = [...list.slice(0, pIndex), brotinhoProd, ...list.slice(pIndex)];
+      } else {
+        list = [brotinhoProd, ...list];
+      }
+    }
   }
 
   // 2. Normalização e garantia de integridade de Caixas de Esfirras e Combos de Esfirras
@@ -1227,7 +1253,15 @@ export function normalizePizzaFlavors(flavors) {
     // Normalização dos preços por tamanho
     let itemPrices = null;
     if (item.prices && typeof item.prices === 'object') {
+      const famRef = typeof item.prices.familia === 'number' ? item.prices.familia : (parseFloat(String(item.prices.familia).replace(',', '.')) || (found?.prices?.familia || 40.00));
+      const isEspecial = (item.category === 'especiais' || found?.category === 'especiais' || famRef > 40.00);
+      const diffEspecial = Math.max(0, famRef - 40.00);
+      const defaultBrotinho = isEspecial
+        ? (DEFAULT_PIZZA_BASE_PRICES.brotinho + diffEspecial)
+        : DEFAULT_PIZZA_BASE_PRICES.brotinho;
+
       itemPrices = {
+        brotinho: typeof item.prices.brotinho === 'number' ? item.prices.brotinho : (parseFloat(String(item.prices.brotinho).replace(',', '.')) || (found?.prices?.brotinho || defaultBrotinho)),
         p: typeof item.prices.p === 'number' ? item.prices.p : (parseFloat(String(item.prices.p).replace(',', '.')) || (found?.prices?.p || DEFAULT_PIZZA_BASE_PRICES.p)),
         m: typeof item.prices.m === 'number' ? item.prices.m : (parseFloat(String(item.prices.m).replace(',', '.')) || (found?.prices?.m || DEFAULT_PIZZA_BASE_PRICES.m)),
         familia: typeof item.prices.familia === 'number' ? item.prices.familia : (parseFloat(String(item.prices.familia).replace(',', '.')) || (found?.prices?.familia || DEFAULT_PIZZA_BASE_PRICES.familia)),
@@ -1239,6 +1273,7 @@ export function normalizePizzaFlavors(flavors) {
       const legacyPrice = typeof item.price === 'number' ? item.price : (parseFloat(item.price) || (found ? found.price : 40.00));
       const diff = Math.max(0, legacyPrice - 40.00);
       itemPrices = {
+        brotinho: DEFAULT_PIZZA_BASE_PRICES.brotinho + diff,
         p: DEFAULT_PIZZA_BASE_PRICES.p + diff,
         m: DEFAULT_PIZZA_BASE_PRICES.m + diff,
         familia: DEFAULT_PIZZA_BASE_PRICES.familia + diff,
@@ -1540,11 +1575,12 @@ export function saveStoredDistricts(districts) {
 }
 
 /**
- * Retorna a chave do tamanho da pizza ('p' | 'm' | 'familia' | 'gigante')
+ * Retorna a chave do tamanho da pizza ('brotinho' | 'p' | 'm' | 'familia' | 'gigante')
  */
 export function getPizzaSizeKey(sizeOrProduct, basePrice = null) {
   if (typeof sizeOrProduct === 'string') {
     const s = sizeOrProduct.toLowerCase().trim();
+    if (s === 'brotinho' || s === 'broto' || s.includes('brotinho') || s.includes('broto')) return 'brotinho';
     if (s === 'p' || s === 'pequena' || s.includes('pequena') || s.includes('4 fatia')) return 'p';
     if (s === 'm' || s === 'media' || s === 'média' || s.includes('média') || s.includes('media') || s.includes('6 fatia')) return 'm';
     if (s === 'familia' || s === 'família' || s.includes('família') || s.includes('familia') || s.includes('8 fatia')) return 'familia';
@@ -1556,6 +1592,7 @@ export function getPizzaSizeKey(sizeOrProduct, basePrice = null) {
     const size = (sizeOrProduct.size || '').toLowerCase();
     
     if (size) return getPizzaSizeKey(size, basePrice);
+    if (id === 'pizza-brotinho' || name.includes('brotinho') || name.includes('broto') || tamanho.includes('brotinho') || tamanho.includes('broto')) return 'brotinho';
     if (id === 'pizza-p' || name.includes('pequena') || name.includes(' p (') || tamanho.includes('pequena')) return 'p';
     if (id === 'pizza-m' || name.includes('média') || name.includes('media') || name.includes(' m (') || tamanho.includes('média') || tamanho.includes('media')) return 'm';
     if (id === 'pizza-familia-salgada' || name.includes('família') || name.includes('familia') || tamanho.includes('família') || tamanho.includes('familia')) return 'familia';
@@ -1564,7 +1601,8 @@ export function getPizzaSizeKey(sizeOrProduct, basePrice = null) {
 
   // Fallback pelo preço base
   const base = Number(basePrice) || 0;
-  if (base > 0 && base <= 25) return 'p';
+  if (base > 0 && base <= 17) return 'brotinho';
+  if (base > 17 && base <= 25) return 'p';
   if (base > 25 && base <= 35) return 'm';
   if (base > 35 && base <= 45) return 'familia';
   if (base > 45) return 'gigante';
@@ -1592,7 +1630,7 @@ export function getPizzaFlavorPrice(flavorObj, sizeKeyOrProduct = 'familia', bas
   }
 
   // 2. Se for sabor tradicional/doce padrão com preço <= 40
-  const legacyPrice = Number(flavorObj.price) || 0;
+  const legacyPrice = Number(flavorObj.price) || Number(flavorObj.prices?.familia) || 0;
   if (legacyPrice <= 40 && flavorObj.category !== 'especiais') {
     if (basePrice !== null && Number(basePrice) > 0) return Number(basePrice);
     return defaultBase;

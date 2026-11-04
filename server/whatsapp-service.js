@@ -591,10 +591,7 @@ function initSupabaseOrderWatcher() {
             const oldStatus = String(payload.old?.status || '').toUpperCase().trim();
             if (oldStatus && status === oldStatus) return;
 
-            let notifyType = status;
-            if (status === 'CONCLUIDO' && (row.delivery_type === 'balcao' || row.district === 'Balcão')) {
-              notifyType = 'PRONTO_BALCAO';
-            }
+            let notifyType = normalizeStatusKey(status);
 
             if (!tryAcquireSendLock(orderId, notifyType)) {
               console.log(`[Supabase Realtime] ⚠️ Ignorando UPDATE duplicado para #${orderId} (${notifyType})`);

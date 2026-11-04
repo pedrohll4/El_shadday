@@ -204,7 +204,7 @@ Estamos te esperando! 💛`
 
     case 'CONCLUIDO':
       return (
-`🎉🍕 *PEDIDO ENTREGUE COM SUCESSO!*
+`🎉🍕 *PEDIDO ${isBalcao ? 'FINALIZADO' : 'ENTREGUE'} COM SUCESSO!*
 📍 *${branchName}*
 ----------------------------------------
 Olá, *${customerName}*! Seu pedido *#${orderId}* foi finalizado! ✅
@@ -251,6 +251,15 @@ export function openWhatsAppInstantLink({ order, statusType, branch, reason = ''
   const rawPhone = order.customerPhone;
   const cleanPhone = cleanPhoneNumber(rawPhone);
   if (!cleanPhone) return null;
+
+  const settings = getWhatsAppSettings();
+  if (!settings.autoNotify) return { success: false, reason: 'auto_notify_disabled' };
+  if ((statusType === 'RECEBIDO' || statusType === 'RECEBIDO_COZINHA') && settings.notifyOnReceive === false) return { success: false };
+  if (statusType === 'EM_PREPARO' && settings.notifyOnPrep === false) return { success: false };
+  if (statusType === 'SAIU_ENTREGA' && settings.notifyOnDelivery === false) return { success: false };
+  if (statusType === 'PRONTO_BALCAO' && settings.notifyOnReadyCounter === false) return { success: false };
+  if (statusType === 'CONCLUIDO' && settings.notifyOnComplete === false) return { success: false };
+  if (statusType === 'CANCELADO' && settings.notifyOnCancel === false) return { success: false };
 
   if (shouldBlockDuplicateDispatch(order.orderId, statusType)) {
     console.log('[WhatsApp] Abertura instantânea evitada por duplicata recente:', order.orderId, statusType);
@@ -300,9 +309,29 @@ export async function sendCustomerWhatsAppNotification({
   const settings = getWhatsAppSettings();
 
   // Verifica se o disparo automático está ativo para este status
-  if (!forceOpen && !settings.autoNotify) {
-    console.log('[WhatsApp] Auto-envio desativado nas preferências');
-    return { success: false, reason: 'auto_notify_disabled' };
+  if (!forceOpen) {
+    if (!settings.autoNotify) {
+      console.log('[WhatsApp] Auto-envio desativado nas preferências');
+      return { success: false, reason: 'auto_notify_disabled' };
+    }
+    if ((statusType === 'RECEBIDO' || statusType === 'RECEBIDO_COZINHA') && settings.notifyOnReceive === false) {
+      return { success: false, reason: 'notify_on_receive_disabled' };
+    }
+    if (statusType === 'EM_PREPARO' && settings.notifyOnPrep === false) {
+      return { success: false, reason: 'notify_on_prep_disabled' };
+    }
+    if (statusType === 'SAIU_ENTREGA' && settings.notifyOnDelivery === false) {
+      return { success: false, reason: 'notify_on_delivery_disabled' };
+    }
+    if (statusType === 'PRONTO_BALCAO' && settings.notifyOnReadyCounter === false) {
+      return { success: false, reason: 'notify_on_ready_counter_disabled' };
+    }
+    if (statusType === 'CONCLUIDO' && settings.notifyOnComplete === false) {
+      return { success: false, reason: 'notify_on_complete_disabled' };
+    }
+    if (statusType === 'CANCELADO' && settings.notifyOnCancel === false) {
+      return { success: false, reason: 'notify_on_cancel_disabled' };
+    }
   }
 
   const message = buildStatusMessage({ order, statusType, branch, reason });

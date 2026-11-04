@@ -26,7 +26,8 @@ export function normalizeOrderStatus(orderOrStatus) {
   const s = String(raw).toUpperCase().trim();
 
   if (s === 'CANCELADO' || s === 'CANCELED' || s === 'CANCELLED') return 'CANCELADO';
-  if (s === 'CONCLUIDO' || s === 'CONCLUÍDO' || s === 'FINALIZADO' || s === 'ENTREGUE' || s === 'PRONTO' || s === 'DONE' || s === 'COMPLETED') return 'CONCLUIDO';
+  if (s === 'CONCLUIDO' || s === 'CONCLUÍDO' || s === 'FINALIZADO' || s === 'ENTREGUE' || s === 'DONE' || s === 'COMPLETED') return 'CONCLUIDO';
+  if (s === 'PRONTO' || s === 'PRONTO_BALCAO' || s === 'BALCAO' || s === 'RETIRADA' || s === 'READY') return 'PRONTO_BALCAO';
   if (s === 'SAIU_ENTREGA' || s === 'ENTREGA' || s === 'EM_ENTREGA' || s === 'DESPACHADO' || s === 'DELIVERY' || s === 'ROTA') return 'SAIU_ENTREGA';
   if (s === 'EM_PREPARO' || s === 'PREPARO' || s === 'NO_FORNO' || s === 'FORNO' || s === 'PREPARING') return 'EM_PREPARO';
   return 'RECEBIDO_COZINHA';

@@ -19,7 +19,7 @@ export function PizzaCustomizerModal({ isOpen, onClose, pizzaProduct, onAddPizza
     if (name.includes('gigante') || name.includes('12 fatia') || name.includes('3 sabor')) return 3;
     if (name.includes('família') || name.includes('familia') || name.includes('8 fatia')) return 2;
     if (name.includes('média') || name.includes('media') || name.includes('6 fatia')) return 2;
-    if (name.includes('pequena') || name.includes('4 fatia')) return 2;
+    if (name.includes('brotinho') || name.includes('broto') || name.includes('pequena') || name.includes('4 fatia')) return 2;
     return 2;
   }, [pizzaProduct]);
 
