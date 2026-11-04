@@ -11,7 +11,8 @@ import {
   Pizza, ArrowUpRight, Info, CreditCard, Play, Film,
   Building2, Users, Crown, Sliders, BarChart3, Star, QrCode,
   Settings2, Smartphone, Banknote, Shuffle, Lock, ImageOff,
-  GripVertical, ArrowUp, ArrowDown, ChevronsUp, HeartHandshake, IceCream, Soup, Wine
+  GripVertical, ArrowUp, ArrowDown, ChevronsUp, HeartHandshake, IceCream, Soup, Wine,
+  ClipboardList
 } from 'lucide-react';
 import { 
   RESTAURANT_INFO, 
@@ -362,6 +363,11 @@ export function AdminDashboard({
   const [pdvOrderNotes, setPdvOrderNotes] = useState('');
   const [pdvSuccessOrder, setPdvSuccessOrder] = useState(null);
   const [pdvValidationError, setPdvValidationError] = useState('');
+  const [pdvSubTab, setPdvSubTab] = useState('novo'); // 'novo' | 'baixa'
+  const [pdvBaixaSearch, setPdvBaixaSearch] = useState('');
+  const [pdvBaixaFilter, setPdvBaixaFilter] = useState('abertos'); // 'abertos' | 'balcao' | 'delivery' | 'concluidos'
+  const [pdvBaixaToast, setPdvBaixaToast] = useState(null);
+  const pdvBaixaToastTimeoutRef = useRef(null);
 
   // Customer Profile Autocomplete State (PDV)
   const [customerSuggestions, setCustomerSuggestions] = useState([]);
@@ -3348,7 +3354,7 @@ export function AdminDashboard({
     setPdvCart(prev => prev.filter(i => i.id !== id));
   };
 
-  const handleLaunchPDVOrder = () => {
+  const handleLaunchPDVOrder = (directBaixa = false) => {
     setPdvValidationError('');
 
     if (pdvCart.length === 0) {
@@ -3378,6 +3384,8 @@ export function AdminDashboard({
       paymentMethodText = 'Cartão de Crédito (Balcão / Maquininha)';
     }
 
+    const isConcludedDirect = Boolean(directBaixa);
+
     const newOrder = {
       orderId,
       orderNumber,
@@ -3405,10 +3413,12 @@ export function AdminDashboard({
       deliveryFee: pdvDeliveryFee,
       total: pdvCartTotal,
       paymentMethod: paymentMethodText,
-      paymentStatus: pdvIsPaid ? 'PAGO_APROVADO' : 'PENDENTE',
-      orderStatus: 'RECEBIDO_COZINHA',
+      paymentStatus: (isConcludedDirect || pdvIsPaid) ? 'PAGO_APROVADO' : 'PENDENTE',
+      orderStatus: isConcludedDirect ? 'CONCLUIDO' : 'RECEBIDO_COZINHA',
       source: 'PDV_BALCAO',
-      orderNotes: pdvOrderNotes.trim()
+      orderNotes: pdvOrderNotes.trim(),
+      baixaDadaEm: isConcludedDirect ? new Date().toISOString() : null,
+      baixaDadaPor: isConcludedDirect ? (currentUser?.name || 'Balcão / PDV') : null
     };
 
     try {
@@ -3420,10 +3430,10 @@ export function AdminDashboard({
     }
 
     if (newOrder.customerPhone) {
-      handleTriggerCustomerWhatsApp(newOrder, 'RECEBIDO_COZINHA');
+      handleTriggerCustomerWhatsApp(newOrder, isConcludedDirect ? (newOrder.deliveryType === 'balcao' ? 'PRONTO_BALCAO' : 'CONCLUIDO') : 'RECEBIDO_COZINHA');
     }
 
-    playChime(false);
+    playChime(isConcludedDirect);
     setPdvSuccessOrder(newOrder);
 
     // Reset PDV form
@@ -3437,6 +3447,106 @@ export function AdminDashboard({
     setPdvOrderNotes('');
     setActiveAutoCompletedCustomer(null);
     setIsCustomerSuggestionsOpen(false);
+  };
+
+  // PDV Controle / Dar Baixa Helpers
+  const pdvOrdersList = useMemo(() => {
+    return (scopedOrders || []).filter(o => {
+      if (!o || normalizeOrderStatus(o) === 'CANCELADO') return false;
+      if (!showArchivedKdsOrders && (o.shiftClosedAt || o.isArchived)) return false;
+      return true;
+    });
+  }, [scopedOrders, showArchivedKdsOrders]);
+
+  const openPdvOrders = useMemo(() => {
+    return pdvOrdersList.filter(o => normalizeOrderStatus(o) !== 'CONCLUIDO');
+  }, [pdvOrdersList]);
+
+  const openPdvOrdersCount = openPdvOrders.length;
+
+  const balcaoOpenCount = useMemo(() => {
+    return openPdvOrders.filter(o => o.deliveryType === 'balcao').length;
+  }, [openPdvOrders]);
+
+  const deliveryOpenCount = useMemo(() => {
+    return openPdvOrders.filter(o => o.deliveryType === 'delivery').length;
+  }, [openPdvOrders]);
+
+  const concluidosCount = useMemo(() => {
+    return pdvOrdersList.filter(o => normalizeOrderStatus(o) === 'CONCLUIDO').length;
+  }, [pdvOrdersList]);
+
+  const filteredPdvBaixaOrders = useMemo(() => {
+    let list = pdvOrdersList;
+
+    if (pdvBaixaFilter === 'abertos') {
+      list = list.filter(o => normalizeOrderStatus(o) !== 'CONCLUIDO');
+    } else if (pdvBaixaFilter === 'balcao') {
+      list = list.filter(o => normalizeOrderStatus(o) !== 'CONCLUIDO' && o.deliveryType === 'balcao');
+    } else if (pdvBaixaFilter === 'delivery') {
+      list = list.filter(o => normalizeOrderStatus(o) !== 'CONCLUIDO' && o.deliveryType === 'delivery');
+    } else if (pdvBaixaFilter === 'concluidos') {
+      list = list.filter(o => normalizeOrderStatus(o) === 'CONCLUIDO');
+    }
+
+    if (pdvBaixaSearch.trim()) {
+      const q = pdvBaixaSearch.toLowerCase().trim();
+      list = list.filter(o => {
+        const orderNum = String(o.orderNumber || o.orderId || '').toLowerCase();
+        const displayNum = formatOrderNumber(o).toLowerCase();
+        const custName = (o.customerName || '').toLowerCase();
+        const custPhone = (o.customerPhone || '').toLowerCase();
+        return orderNum.includes(q) || displayNum.includes(q) || custName.includes(q) || custPhone.includes(q);
+      });
+    }
+
+    return list.slice().sort((a, b) => {
+      const dateA = new Date(a.createdAt || 0).getTime();
+      const dateB = new Date(b.createdAt || 0).getTime();
+      return dateB - dateA;
+    });
+  }, [pdvOrdersList, pdvBaixaFilter, pdvBaixaSearch]);
+
+  const handleDarBaixa = (order) => {
+    if (!order) return;
+    handleUpdateStatusAndTab(order, 'CONCLUIDO');
+    if (order.paymentStatus !== 'PAGO_APROVADO' && onUpdatePaymentStatus) {
+      onUpdatePaymentStatus(order.orderId, 'PAGO_APROVADO');
+    }
+    playChime(true);
+    setPdvBaixaToast({
+      orderId: formatOrderNumber(order),
+      customerName: order.customerName,
+      type: 'success',
+      text: `Baixa realizada com sucesso no Pedido #${formatOrderNumber(order)}!`
+    });
+    if (pdvBaixaToastTimeoutRef.current) clearTimeout(pdvBaixaToastTimeoutRef.current);
+    pdvBaixaToastTimeoutRef.current = setTimeout(() => {
+      setPdvBaixaToast(null);
+    }, 4000);
+  };
+
+  const handleReabrirPedido = (order) => {
+    if (!order) return;
+    handleUpdateStatusAndTab(order, 'EM_PREPARO');
+    playChime(false);
+    setPdvBaixaToast({
+      orderId: formatOrderNumber(order),
+      customerName: order.customerName,
+      type: 'info',
+      text: `Pedido #${formatOrderNumber(order)} reaberto e retornado para Em Preparo.`
+    });
+    if (pdvBaixaToastTimeoutRef.current) clearTimeout(pdvBaixaToastTimeoutRef.current);
+    pdvBaixaToastTimeoutRef.current = setTimeout(() => {
+      setPdvBaixaToast(null);
+    }, 4000);
+  };
+
+  const handleTogglePaymentStatus = (order) => {
+    if (!order || !onUpdatePaymentStatus) return;
+    const newPayStatus = order.paymentStatus === 'PAGO_APROVADO' ? 'PENDENTE' : 'PAGO_APROVADO';
+    onUpdatePaymentStatus(order.orderId, newPayStatus);
+    playChime(newPayStatus === 'PAGO_APROVADO');
   };
 
   return (
@@ -4882,8 +4992,8 @@ export function AdminDashboard({
         {activeAdminTab === 'pdv' && currentUser?.role !== ROLES.KITCHEN && (
           <div className="space-y-6 animate-fade-in">
             
-            {/* PDV Header Banner */}
-            <div className="p-4 rounded-3xl bg-gradient-to-r from-dark-900 via-dark-850 to-dark-900 border border-brand-gold/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xl">
+            {/* PDV Header Banner & Sub-Tabs */}
+            <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-dark-900 via-dark-850 to-dark-900 border border-brand-gold/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xl">
               <div>
                 <div className="flex items-center gap-2">
                   <Store className="w-5 h-5 text-brand-gold" />
@@ -4892,25 +5002,63 @@ export function AdminDashboard({
                   </h2>
                 </div>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Lance pedidos do balcão ou telefone diretamente na fila de produção da cozinha.
+                  Lance pedidos do balcão ou dê baixa imediata para controle de atendimento da loja.
                 </p>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2 self-end sm:self-auto">
+              {/* Sub-Tabs Switcher */}
+              <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                <div className="flex items-center bg-dark-950 p-1 rounded-2xl border border-dark-800 shadow-inner">
+                  <button
+                    type="button"
+                    onClick={() => setPdvSubTab('novo')}
+                    className={`px-3 sm:px-3.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer ${
+                      pdvSubTab === 'novo'
+                        ? 'bg-gradient-to-r from-brand-gold to-amber-400 text-dark-950 shadow-glow-gold'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <ShoppingBag className="w-3.5 h-3.5" />
+                    <span>Novo Lançamento</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setPdvSubTab('baixa')}
+                    className={`px-3 sm:px-3.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer relative ${
+                      pdvSubTab === 'baixa'
+                        ? 'bg-gradient-to-r from-brand-gold to-amber-400 text-dark-950 shadow-glow-gold'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <ClipboardList className="w-3.5 h-3.5" />
+                    <span>Controle / Dar Baixa</span>
+                    {openPdvOrdersCount > 0 && (
+                      <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                        pdvSubTab === 'baixa'
+                          ? 'bg-dark-950 text-brand-gold'
+                          : 'bg-brand-gold text-dark-950 animate-pulse'
+                      }`}>
+                        {openPdvOrdersCount}
+                      </span>
+                    )}
+                  </button>
+                </div>
+
                 <button
                   type="button"
                   onClick={() => {
                     setIsCustomerDirectoryOpen(true);
                     setCustomerDirectorySearch('');
                   }}
-                  className="px-3 py-1.5 rounded-xl bg-dark-950 hover:bg-dark-800 text-brand-gold border border-brand-gold/30 text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
+                  className="px-3 py-1.5 rounded-xl bg-dark-950 hover:bg-dark-800 text-brand-gold border border-brand-gold/30 text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm cursor-pointer ml-auto sm:ml-0"
                   title="Ver clientes cadastrados a partir dos pedidos"
                 >
                   <Users className="w-3.5 h-3.5" />
                   <span>Cadastros ({getAllCustomers().length})</span>
                 </button>
 
-                {pdvCart.length > 0 && (
+                {pdvSubTab === 'novo' && pdvCart.length > 0 && (
                   <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-dark-950 border border-dark-800">
                     <span className="text-xs text-slate-400">Total:</span>
                     <span className="text-sm font-black text-brand-gold">
@@ -4937,8 +5085,9 @@ export function AdminDashboard({
               </div>
             )}
 
-            {/* PDV Main Layout Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            {/* PDV Main Layout Grid (Sub-Tab: Novo Lançamento) */}
+            {pdvSubTab === 'novo' && (
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
               
               {/* LEFT: PRODUCTS CATALOG (7 cols) */}
               <div className="lg:col-span-7 space-y-4">
@@ -5559,19 +5708,37 @@ export function AdminDashboard({
                       </span>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={handleLaunchPDVOrder}
-                      disabled={pdvCart.length === 0}
-                      className={`w-full py-3 rounded-2xl font-black text-sm flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg mt-2 ${
-                        pdvCart.length > 0
-                          ? 'bg-gradient-to-r from-brand-gold via-amber-400 to-brand-gold hover:scale-102 text-dark-950 shadow-glow-gold active:scale-98'
-                          : 'bg-dark-800 text-slate-500 cursor-not-allowed'
-                      }`}
-                    >
-                      <Flame className="w-5 h-5" />
-                      <span>Lançar Pedido na Cozinha (PDV)</span>
-                    </button>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+                      <button
+                        type="button"
+                        onClick={() => handleLaunchPDVOrder(false)}
+                        disabled={pdvCart.length === 0}
+                        className={`w-full py-3 rounded-2xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md ${
+                          pdvCart.length > 0
+                            ? 'bg-dark-800 hover:bg-dark-750 text-white border border-dark-700 hover:border-brand-gold/40 active:scale-98'
+                            : 'bg-dark-800 text-slate-500 cursor-not-allowed'
+                        }`}
+                        title="Envia o pedido para a fila de produção da cozinha (KDS)"
+                      >
+                        <Flame className="w-4 h-4 text-brand-gold" />
+                        <span>Fila Cozinha</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleLaunchPDVOrder(true)}
+                        disabled={pdvCart.length === 0}
+                        className={`w-full py-3 rounded-2xl font-black text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg ${
+                          pdvCart.length > 0
+                            ? 'bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-500 hover:scale-[1.02] text-dark-950 shadow-glow-emerald active:scale-98'
+                            : 'bg-dark-800 text-slate-500 cursor-not-allowed'
+                        }`}
+                        title="Registra a venda e dá baixa imediata como concluído e pago no balcão"
+                      >
+                        <CheckCircle2 className="w-4 h-4" />
+                        <span>Lançar & Baixa Imediata</span>
+                      </button>
+                    </div>
                   </div>
 
                 </div>
@@ -5579,6 +5746,436 @@ export function AdminDashboard({
               </div>
 
             </div>
+            )}
+
+            {/* SUB-VIEW 2: CONTROLE / DAR BAIXA NOS PEDIDOS */}
+            {pdvSubTab === 'baixa' && (
+              <div className="space-y-4 animate-fade-in">
+                {/* Active Toast Notification Banner */}
+                {pdvBaixaToast && (
+                  <div className={`p-4 rounded-2xl border flex items-center justify-between gap-3 shadow-lg animate-fade-in ${
+                    pdvBaixaToast.type === 'success' 
+                      ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-200' 
+                      : 'bg-blue-950/80 border-blue-500/50 text-blue-200'
+                  }`}>
+                    <div className="flex items-center gap-3">
+                      <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-black ${
+                        pdvBaixaToast.type === 'success' ? 'bg-emerald-500 text-dark-950' : 'bg-blue-500 text-white'
+                      }`}>
+                        <CheckCircle2 className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="font-bold text-sm text-white">{pdvBaixaToast.text}</div>
+                        <div className="text-xs text-slate-300">Cliente: {pdvBaixaToast.customerName || 'Balcão'}</div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setPdvBaixaToast(null)}
+                      className="text-slate-400 hover:text-white text-xs px-2 py-1 rounded-lg cursor-pointer"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
+
+                {/* Quick Stat Cards */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {/* 1. Em Aberto */}
+                  <div 
+                    onClick={() => setPdvBaixaFilter('abertos')}
+                    className={`p-3.5 rounded-2xl border transition-all cursor-pointer ${
+                      pdvBaixaFilter === 'abertos' 
+                        ? 'bg-amber-500/15 border-amber-500/60 ring-2 ring-amber-500/30' 
+                        : 'bg-dark-900 border-dark-800 hover:border-dark-700'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-400">Total em Aberto</span>
+                      <Clock className="w-4 h-4 text-amber-400" />
+                    </div>
+                    <div className="mt-1 flex items-baseline gap-2">
+                      <span className="text-2xl font-black text-amber-400">{openPdvOrdersCount}</span>
+                      <span className="text-[11px] text-slate-400">pedidos</span>
+                    </div>
+                  </div>
+
+                  {/* 2. Balcão / Retirada */}
+                  <div 
+                    onClick={() => setPdvBaixaFilter('balcao')}
+                    className={`p-3.5 rounded-2xl border transition-all cursor-pointer ${
+                      pdvBaixaFilter === 'balcao' 
+                        ? 'bg-brand-gold/15 border-brand-gold/60 ring-2 ring-brand-gold/30' 
+                        : 'bg-dark-900 border-dark-800 hover:border-dark-700'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-400">Balcão (Retirada)</span>
+                      <Store className="w-4 h-4 text-brand-gold" />
+                    </div>
+                    <div className="mt-1 flex items-baseline gap-2">
+                      <span className="text-2xl font-black text-brand-gold">{balcaoOpenCount}</span>
+                      <span className="text-[11px] text-slate-400">a entregar</span>
+                    </div>
+                  </div>
+
+                  {/* 3. Delivery */}
+                  <div 
+                    onClick={() => setPdvBaixaFilter('delivery')}
+                    className={`p-3.5 rounded-2xl border transition-all cursor-pointer ${
+                      pdvBaixaFilter === 'delivery' 
+                        ? 'bg-blue-500/15 border-blue-500/60 ring-2 ring-blue-500/30' 
+                        : 'bg-dark-900 border-dark-800 hover:border-dark-700'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-400">Delivery</span>
+                      <Bike className="w-4 h-4 text-blue-400" />
+                    </div>
+                    <div className="mt-1 flex items-baseline gap-2">
+                      <span className="text-2xl font-black text-blue-400">{deliveryOpenCount}</span>
+                      <span className="text-[11px] text-slate-400">em rota/fila</span>
+                    </div>
+                  </div>
+
+                  {/* 4. Concluídos / Baixas Dadas */}
+                  <div 
+                    onClick={() => setPdvBaixaFilter('concluidos')}
+                    className={`p-3.5 rounded-2xl border transition-all cursor-pointer ${
+                      pdvBaixaFilter === 'concluidos' 
+                        ? 'bg-emerald-500/15 border-emerald-500/60 ring-2 ring-emerald-500/30' 
+                        : 'bg-dark-900 border-dark-800 hover:border-dark-700'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-400">Baixas Hoje</span>
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    </div>
+                    <div className="mt-1 flex items-baseline gap-2">
+                      <span className="text-2xl font-black text-emerald-400">{concluidosCount}</span>
+                      <span className="text-[11px] text-slate-400">finalizados</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Filter pills & search bar */}
+                <div className="p-3.5 rounded-2xl bg-dark-900 border border-dark-800 flex flex-col sm:flex-row items-center justify-between gap-3">
+                  <div className="flex items-center gap-1.5 flex-wrap w-full sm:w-auto">
+                    <button
+                      type="button"
+                      onClick={() => setPdvBaixaFilter('abertos')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        pdvBaixaFilter === 'abertos'
+                          ? 'bg-amber-500 text-dark-950 font-black shadow-sm'
+                          : 'bg-dark-950 hover:bg-dark-800 text-slate-300 border border-dark-800'
+                      }`}
+                    >
+                      Abertos ({openPdvOrdersCount})
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setPdvBaixaFilter('balcao')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        pdvBaixaFilter === 'balcao'
+                          ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
+                          : 'bg-dark-950 hover:bg-dark-800 text-slate-300 border border-dark-800'
+                      }`}
+                    >
+                      Balcão ({balcaoOpenCount})
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setPdvBaixaFilter('delivery')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        pdvBaixaFilter === 'delivery'
+                          ? 'bg-blue-500 text-white font-black shadow-sm'
+                          : 'bg-dark-950 hover:bg-dark-800 text-slate-300 border border-dark-800'
+                      }`}
+                    >
+                      Delivery ({deliveryOpenCount})
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setPdvBaixaFilter('concluidos')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        pdvBaixaFilter === 'concluidos'
+                          ? 'bg-emerald-500 text-dark-950 font-black shadow-sm'
+                          : 'bg-dark-950 hover:bg-dark-800 text-slate-300 border border-dark-800'
+                      }`}
+                    >
+                      Concluídos ({concluidosCount})
+                    </button>
+                  </div>
+
+                  <div className="relative w-full sm:w-72">
+                    <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={pdvBaixaSearch}
+                      onChange={(e) => setPdvBaixaSearch(e.target.value)}
+                      placeholder="Buscar nº pedido, cliente, fone..."
+                      className="w-full bg-dark-950 border border-dark-800 rounded-xl pl-9 pr-8 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand-gold"
+                    />
+                    {pdvBaixaSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setPdvBaixaSearch('')}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white text-xs cursor-pointer"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Orders Grid / List */}
+                {filteredPdvBaixaOrders.length === 0 ? (
+                  <div className="p-12 rounded-3xl bg-dark-900 border border-dark-800 text-center space-y-4">
+                    <div className="w-16 h-16 rounded-3xl bg-dark-950 border border-dark-800 text-brand-gold flex items-center justify-center mx-auto shadow-inner">
+                      <CheckCircle2 className="w-8 h-8 text-emerald-400" />
+                    </div>
+                    <div className="max-w-md mx-auto">
+                      <h3 className="text-base font-black text-white">
+                        {pdvBaixaFilter === 'abertos' 
+                          ? 'Nenhum pedido em aberto aguardando baixa!' 
+                          : pdvBaixaSearch 
+                          ? 'Nenhum pedido encontrado com este termo.' 
+                          : 'Nenhum pedido registrado nesta categoria.'}
+                      </h3>
+                      <p className="text-xs text-slate-400 mt-1">
+                        {pdvBaixaFilter === 'abertos'
+                          ? 'Todos os pedidos foram atendidos e tiveram a baixa dada no sistema.'
+                          : 'Você pode pesquisar por outro nome ou criar um novo lançamento.'}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setPdvSubTab('novo')}
+                      className="px-4 py-2 rounded-xl bg-gradient-to-r from-brand-gold to-amber-400 text-dark-950 font-black text-xs inline-flex items-center gap-1.5 shadow-glow-gold cursor-pointer"
+                    >
+                      <ShoppingBag className="w-3.5 h-3.5" />
+                      <span>+ Fazer Novo Lançamento</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                    {filteredPdvBaixaOrders.map((order) => {
+                      const orderDisplayNumber = formatOrderNumber(order);
+                      const currentStatus = normalizeOrderStatus(order);
+                      const isConcluded = currentStatus === 'CONCLUIDO';
+                      const isPaid = order.paymentStatus === 'PAGO_APROVADO';
+                      const elapsedMin = getElapsedMinutes(order.createdAt);
+                      const isDelayed = isOrderDelayed(order);
+
+                      return (
+                        <div
+                          key={order.orderId}
+                          className={`rounded-3xl border flex flex-col justify-between transition-all duration-300 shadow-lg ${
+                            isConcluded
+                              ? 'bg-dark-900/60 border-dark-800/80 opacity-80 hover:opacity-100'
+                              : isDelayed
+                              ? 'bg-red-950/20 border-red-500/50 ring-1 ring-red-500/30'
+                              : 'bg-dark-900 border-dark-800 hover:border-brand-gold/40'
+                          }`}
+                        >
+                          {/* Card Header */}
+                          <div className="p-4 sm:p-5 border-b border-dark-800/80 space-y-2.5">
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-2">
+                                <span className="font-display font-black text-xl text-brand-gold tracking-tight bg-dark-950 px-2.5 py-0.5 rounded-xl border border-brand-gold/40 shadow-sm">
+                                  #{orderDisplayNumber}
+                                </span>
+                                <span className={`px-2 py-0.5 rounded-lg text-[10px] font-black uppercase flex items-center gap-1 ${
+                                  order.deliveryType === 'balcao'
+                                    ? 'bg-amber-500/15 border border-amber-500/40 text-amber-300'
+                                    : 'bg-blue-500/15 border border-blue-500/40 text-blue-300'
+                                }`}>
+                                  {order.deliveryType === 'balcao' ? (
+                                    <>
+                                      <Store className="w-3 h-3" />
+                                      <span>Balcão</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Bike className="w-3 h-3" />
+                                      <span>Delivery</span>
+                                    </>
+                                  )}
+                                </span>
+                              </div>
+
+                              {/* Status Indicator */}
+                              <div>
+                                {isConcluded ? (
+                                  <span className="px-2.5 py-1 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-black flex items-center gap-1">
+                                    <CheckCircle2 className="w-3.5 h-3.5" />
+                                    <span>Baixa Concluída</span>
+                                  </span>
+                                ) : (
+                                  <span className={`px-2.5 py-1 rounded-xl text-xs font-bold flex items-center gap-1 border ${
+                                    currentStatus === 'RECEBIDO_COZINHA'
+                                      ? 'bg-amber-500/15 border-amber-500/40 text-amber-300'
+                                      : currentStatus === 'EM_PREPARO'
+                                      ? 'bg-brand-gold/15 border-brand-gold/40 text-brand-gold'
+                                      : 'bg-blue-500/15 border-blue-500/40 text-blue-300'
+                                  }`}>
+                                    <Clock className="w-3 h-3" />
+                                    <span>
+                                      {currentStatus === 'RECEBIDO_COZINHA' && 'Na Fila'}
+                                      {currentStatus === 'EM_PREPARO' && 'No Forno'}
+                                      {currentStatus === 'SAIU_ENTREGA' && 'Em Rota'}
+                                    </span>
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Customer Info */}
+                            <div className="space-y-1">
+                              <div className="text-sm font-bold text-white flex items-center gap-1.5">
+                                <User className="w-3.5 h-3.5 text-brand-gold flex-shrink-0" />
+                                <span className="truncate">{order.customerName || 'Cliente Balcão'}</span>
+                              </div>
+
+                              <div className="flex items-center gap-3 text-xs text-slate-400 flex-wrap">
+                                {order.customerPhone && (
+                                  <span className="text-[11px] text-emerald-400 font-mono flex items-center gap-1">
+                                    <Phone className="w-3 h-3" />
+                                    <span>{order.customerPhone}</span>
+                                  </span>
+                                )}
+                                <span className="text-[11px] text-slate-400 flex items-center gap-1 font-mono">
+                                  <Clock className="w-3 h-3 text-slate-500" />
+                                  <span>{elapsedMin === 0 ? 'Agora mesmo' : `há ${elapsedMin} min`}</span>
+                                </span>
+                              </div>
+
+                              {order.deliveryType === 'delivery' && (
+                                <div className="text-[11px] text-slate-300 flex items-center gap-1 pt-0.5">
+                                  <MapPin className="w-3 h-3 text-brand-gold flex-shrink-0" />
+                                  <span className="truncate">
+                                    {order.district} • {order.address}{order.number ? `, Nº ${order.number}` : ''}
+                                  </span>
+                                </div>
+                              )}
+
+                              {order.orderNotes && (
+                                <div className="text-[11px] text-amber-300/90 italic bg-dark-950/80 p-1.5 rounded-lg border border-dark-850 mt-1">
+                                  Obs: {order.orderNotes}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Card Body: Items List */}
+                          <div className="p-4 sm:p-5 flex-1 space-y-2">
+                            <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+                              <span>Itens do Pedido ({order.items?.length || 0})</span>
+                              <span className="text-brand-gold font-mono font-black text-xs">
+                                R$ {(Number(order.total) || 0).toFixed(2).replace('.', ',')}
+                              </span>
+                            </div>
+
+                            <div className="bg-dark-950 p-2.5 rounded-2xl border border-dark-850 space-y-1.5 max-h-44 overflow-y-auto">
+                              {(order.items || []).map((it, idx) => (
+                                <div key={idx} className="border-b border-dark-900 pb-1.5 last:border-0 last:pb-0 text-xs">
+                                  <div className="font-bold text-white flex items-center justify-between">
+                                    <span>{it.quantity}x {it.name}</span>
+                                    <span className="text-slate-400 text-[11px]">
+                                      R$ {((it.price || 0) * (it.quantity || 1)).toFixed(2).replace('.', ',')}
+                                    </span>
+                                  </div>
+                                  {it.customizerDetails && (
+                                    <div className="text-[11px] text-brand-goldLight pl-2 mt-0.5">
+                                      {it.customizerDetails}
+                                    </div>
+                                  )}
+                                  {it.boxSelections && it.boxSelections.length > 0 && (
+                                    <div className="text-[11px] text-amber-300/80 pl-2 mt-0.5">
+                                      {it.boxSelections.map(f => `${f.quantity}x ${f.name}`).join(' • ')}
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+
+                            {/* Payment Info */}
+                            <div className="p-2.5 rounded-2xl bg-dark-950/60 border border-dark-850 flex items-center justify-between gap-2">
+                              <div className="text-xs truncate">
+                                <span className="text-slate-400">Pagamento: </span>
+                                <span className="font-bold text-slate-200">{order.paymentMethod || 'A Definir'}</span>
+                              </div>
+
+                              <div>
+                                {isPaid ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleTogglePaymentStatus(order)}
+                                    className="px-2 py-0.5 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 text-[11px] font-bold inline-flex items-center gap-1 cursor-pointer hover:bg-emerald-500/30 transition-all"
+                                    title="Clique para alternar status do pagamento"
+                                  >
+                                    <CheckCircle2 className="w-3 h-3" />
+                                    <span>Pago</span>
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleTogglePaymentStatus(order)}
+                                    className="px-2 py-0.5 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[11px] font-bold inline-flex items-center gap-1 cursor-pointer hover:bg-amber-500/30 transition-all animate-pulse"
+                                    title="Clique para marcar como Pago"
+                                  >
+                                    <AlertTriangle className="w-3 h-3" />
+                                    <span>Receber (Pendente)</span>
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Card Footer: Action Buttons */}
+                          <div className="p-3 sm:p-4 border-t border-dark-800/80 bg-dark-950/40 rounded-b-3xl flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handlePrintOrder(order)}
+                              className="py-2.5 px-3 rounded-2xl bg-dark-800 hover:bg-dark-750 text-slate-300 text-xs font-semibold flex items-center justify-center gap-1.5 border border-dark-700 transition-colors cursor-pointer"
+                              title="Imprimir comanda térmica"
+                            >
+                              <Printer className="w-3.5 h-3.5" />
+                              <span className="hidden sm:inline">Comanda</span>
+                            </button>
+
+                            {!isConcluded ? (
+                              <button
+                                type="button"
+                                onClick={() => handleDarBaixa(order)}
+                                className="flex-1 py-2.5 px-4 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-500 hover:scale-[1.02] active:scale-98 text-dark-950 font-black text-xs sm:text-sm flex items-center justify-center gap-1.5 cursor-pointer shadow-glow-emerald transition-all"
+                                title="Dar baixa imediata: conclui o pedido e aprova o pagamento"
+                              >
+                                <CheckCircle2 className="w-4 h-4 stroke-[2.5]" />
+                                <span>Dar Baixa (Concluir)</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleReabrirPedido(order)}
+                                className="flex-1 py-2.5 px-3 rounded-2xl bg-dark-800 hover:bg-dark-750 text-slate-300 hover:text-white font-bold text-xs flex items-center justify-center gap-1.5 border border-dark-700 cursor-pointer transition-colors"
+                                title="Reabrir pedido se foi concluído por engano"
+                              >
+                                <RotateCcw className="w-3.5 h-3.5 text-brand-gold" />
+                                <span>Reabrir Pedido</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
           </div>
         )}
@@ -9886,10 +10483,14 @@ export function AdminDashboard({
 
             <div>
               <h3 className="text-lg font-black text-white">
-                Pedido #{formatOrderNumber(pdvSuccessOrder)} Lançado!
+                {pdvSuccessOrder.orderStatus === 'CONCLUIDO'
+                  ? `Pedido #${formatOrderNumber(pdvSuccessOrder)} Baixa Concluída!`
+                  : `Pedido #${formatOrderNumber(pdvSuccessOrder)} Lançado!`}
               </h3>
               <p className="text-xs text-brand-gold font-medium mt-1">
-                O pedido já está visível em tempo real na fila da cozinha.
+                {pdvSuccessOrder.orderStatus === 'CONCLUIDO'
+                  ? 'Venda registrada e baixa imediata realizada com sucesso.'
+                  : 'O pedido já está visível em tempo real na fila da cozinha.'}
               </p>
               <div className="text-sm font-bold text-slate-300 mt-2">
                 Cliente: {pdvSuccessOrder.customerName} • R$ {(pdvSuccessOrder.total || 0).toFixed(2).replace('.', ',')}
@@ -9922,21 +10523,37 @@ export function AdminDashboard({
             <div className="pt-2 border-t border-dark-800 flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => setPdvSuccessOrder(null)}
+                onClick={() => {
+                  setPdvSuccessOrder(null);
+                  setPdvSubTab('novo');
+                }}
                 className="flex-1 py-2.5 rounded-xl bg-brand-gold hover:bg-amber-400 text-dark-950 font-black text-xs cursor-pointer shadow-glow-gold"
               >
                 + Criar Outro Pedido
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setPdvSuccessOrder(null);
-                  setActiveAdminTab('kds');
-                }}
-                className="flex-1 py-2.5 rounded-xl bg-dark-800 hover:bg-dark-750 text-slate-300 font-semibold text-xs cursor-pointer"
-              >
-                Ver na Cozinha (KDS)
-              </button>
+              {pdvSuccessOrder.orderStatus === 'CONCLUIDO' ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPdvSuccessOrder(null);
+                    setPdvSubTab('baixa');
+                  }}
+                  className="flex-1 py-2.5 rounded-xl bg-dark-800 hover:bg-dark-750 text-slate-300 font-semibold text-xs cursor-pointer"
+                >
+                  Ver Controle / Baixas
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPdvSuccessOrder(null);
+                    setActiveAdminTab('kds');
+                  }}
+                  className="flex-1 py-2.5 rounded-xl bg-dark-800 hover:bg-dark-750 text-slate-300 font-semibold text-xs cursor-pointer"
+                >
+                  Ver na Cozinha (KDS)
+                </button>
+              )}
             </div>
 
           </div>
