@@ -361,6 +361,7 @@ export function AdminDashboard({
   const [pdvIsPaid, setPdvIsPaid] = useState(true);
   const [pdvCashChange, setPdvCashChange] = useState('');
   const [pdvOrderNotes, setPdvOrderNotes] = useState('');
+  const [pdvDiscount, setPdvDiscount] = useState('');
   const [pdvSuccessOrder, setPdvSuccessOrder] = useState(null);
   const [pdvValidationError, setPdvValidationError] = useState('');
   const [pdvSubTab, setPdvSubTab] = useState('novo'); // 'novo' | 'baixa'
@@ -368,6 +369,7 @@ export function AdminDashboard({
   const [pdvBaixaFilter, setPdvBaixaFilter] = useState('abertos'); // 'abertos' | 'balcao' | 'delivery' | 'concluidos'
   const [pdvBaixaToast, setPdvBaixaToast] = useState(null);
   const pdvBaixaToastTimeoutRef = useRef(null);
+  const pdvCategoryScrollRef = useRef(null);
 
   // Customer Profile Autocomplete State (PDV)
   const [customerSuggestions, setCustomerSuggestions] = useState([]);
@@ -2672,7 +2674,8 @@ export function AdminDashboard({
     const complement = order.deliveryAddress?.complement || order.complement || '';
     const reference = order.deliveryAddress?.reference || order.reference || '';
     const changeFor = order.changeFor || order.cashChange || null;
-    const orderNotes = order.notes || '';
+    const orderNotes = order.notes || order.orderNotes || '';
+    const discountAmount = Number(order.discountAmount || order.discount || 0);
     const formattedDate = order.createdAt ? new Date(order.createdAt).toLocaleString('pt-BR') : new Date().toLocaleString('pt-BR');
     const paymentMethod = order.paymentMethod || 'A Definir';
     const isPaid = order.paymentStatus === 'PAGO_APROVADO';
@@ -2806,6 +2809,12 @@ export function AdminDashboard({
             <div style="display:flex; justify-content:space-between; margin:1px 0; font-size:11px;">
               <span>Taxa Entrega:</span>
               <span>R$ ${Number(order.deliveryFee || 0).toFixed(2)}</span>
+            </div>
+          ` : ''}
+          ${discountAmount > 0 ? `
+            <div style="display:flex; justify-content:space-between; margin:1px 0; font-size:11px; font-weight:bold;">
+              <span>Desconto Balcão:</span>
+              <span>- R$ ${discountAmount.toFixed(2)}</span>
             </div>
           ` : ''}
           <div class="total-row">
@@ -3153,7 +3162,37 @@ export function AdminDashboard({
   }, [pdvCart]);
 
   const pdvDeliveryFee = pdvDeliveryType === 'delivery' ? (pdvDistrict?.price || 8) : 0;
-  const pdvCartTotal = pdvCartSubtotal + pdvDeliveryFee;
+
+  // Desconto em Reais no Balcão (PDV)
+  const pdvDiscountAmount = useMemo(() => {
+    if (!pdvDiscount) return 0;
+    let s = String(pdvDiscount).trim().replace(/\s+/g, '');
+    if (!s) return 0;
+    if (s.includes(',') && s.includes('.')) {
+      s = s.replace(/\./g, '').replace(',', '.');
+    } else if (s.includes(',')) {
+      s = s.replace(',', '.');
+    }
+    const val = parseFloat(s);
+    if (isNaN(val) || val <= 0) return 0;
+    return Math.min(val, pdvCartSubtotal + pdvDeliveryFee);
+  }, [pdvDiscount, pdvCartSubtotal, pdvDeliveryFee]);
+
+  const pdvCartTotal = Math.max(0, (pdvCartSubtotal + pdvDeliveryFee) - pdvDiscountAmount);
+
+  const scrollPdvCategories = (direction) => {
+    if (pdvCategoryScrollRef.current) {
+      const scrollAmount = direction === 'left' ? -220 : 220;
+      pdvCategoryScrollRef.current.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+    }
+  };
+
+  const handlePdvCategoryWheel = (e) => {
+    if (e.deltaY !== 0 && pdvCategoryScrollRef.current) {
+      e.preventDefault();
+      pdvCategoryScrollRef.current.scrollLeft += (e.deltaY > 0 ? 120 : -120);
+    }
+  };
 
   // PDV Customization Product Detectors
   const isPizzaProduct = (prod) => {
@@ -3440,11 +3479,14 @@ export function AdminDashboard({
       items: pdvCart,
       subtotal: pdvCartSubtotal,
       deliveryFee: pdvDeliveryFee,
+      discount: pdvDiscountAmount,
+      discountAmount: pdvDiscountAmount,
       total: pdvCartTotal,
       paymentMethod: paymentMethodText,
       paymentStatus: (isConcludedDirect || pdvIsPaid) ? 'PAGO_APROVADO' : 'PENDENTE',
       orderStatus: isConcludedDirect ? 'CONCLUIDO' : 'RECEBIDO_COZINHA',
       source: 'PDV_BALCAO',
+      notes: (pdvOrderNotes.trim() + (pdvDiscountAmount > 0 ? ` [Desconto: R$ ${pdvDiscountAmount.toFixed(2).replace('.', ',')}]` : '')).trim(),
       orderNotes: pdvOrderNotes.trim(),
       baixaDadaEm: isConcludedDirect ? new Date().toISOString() : null,
       baixaDadaPor: isConcludedDirect ? (currentUser?.name || 'Balcão / PDV') : null
@@ -3467,6 +3509,7 @@ export function AdminDashboard({
 
     // Reset PDV form
     setPdvCart([]);
+    setPdvDiscount('');
     setPdvCustomerName('');
     setPdvCustomerPhone('');
     setPdvAddress('');
@@ -4878,9 +4921,16 @@ export function AdminDashboard({
                           {/* Total */}
                           <div className="flex justify-between items-baseline pt-3 text-xs">
                             <span className="text-slate-400">Total com Entrega:</span>
-                            <span className="text-lg font-black text-brand-gold">
-                              R$ {(order.total || 0).toFixed(2).replace('.', ',')}
-                            </span>
+                            <div className="text-right">
+                              {(Number(order.discountAmount || order.discount) > 0) && (
+                                <span className="text-[10px] text-emerald-400 font-bold block">
+                                  - R$ {Number(order.discountAmount || order.discount).toFixed(2).replace('.', ',')} desc.
+                                </span>
+                              )}
+                              <span className="text-lg font-black text-brand-gold">
+                                R$ {(order.total || 0).toFixed(2).replace('.', ',')}
+                              </span>
+                            </div>
                           </div>
                         </div>
 
@@ -5180,33 +5230,57 @@ export function AdminDashboard({
                     />
                   </div>
 
-                  {/* Category Pills */}
-                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+                  {/* Category Pills with Horizontal Scroll Controls (Arrows + Wheel + Dragbar) */}
+                  <div className="relative flex items-center gap-1.5">
                     <button
                       type="button"
-                      onClick={() => setPdvCategory('todos')}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                        pdvCategory === 'todos'
-                          ? 'bg-brand-gold text-dark-950 font-black'
-                          : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
-                      }`}
+                      onClick={() => scrollPdvCategories('left')}
+                      className="p-1.5 sm:p-2 rounded-xl bg-dark-950 hover:bg-dark-800 text-slate-300 hover:text-brand-gold border border-dark-750 transition-colors flex-shrink-0 cursor-pointer shadow-sm"
+                      title="Rolar categorias para esquerda"
                     >
-                      Todos
+                      <ChevronLeft className="w-4 h-4" />
                     </button>
-                    {deliveryCategories.map(cat => (
+
+                    <div 
+                      ref={pdvCategoryScrollRef}
+                      onWheel={handlePdvCategoryWheel}
+                      className="flex items-center gap-1.5 overflow-x-auto pb-1.5 pt-0.5 admin-tabs-scrollbar scroll-smooth flex-1"
+                    >
                       <button
-                        key={cat.id}
                         type="button"
-                        onClick={() => setPdvCategory(cat.id)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                          pdvCategory === cat.id
-                            ? 'bg-brand-gold text-dark-950 font-black'
+                        onClick={() => setPdvCategory('todos')}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex-shrink-0 ${
+                          pdvCategory === 'todos'
+                            ? 'bg-brand-gold text-dark-950 font-black shadow-glow-gold'
                             : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
                         }`}
                       >
-                        {cat.name}
+                        Todos
                       </button>
-                    ))}
+                      {deliveryCategories.map(cat => (
+                        <button
+                          key={cat.id}
+                          type="button"
+                          onClick={() => setPdvCategory(cat.id)}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex-shrink-0 ${
+                            pdvCategory === cat.id
+                              ? 'bg-brand-gold text-dark-950 font-black shadow-glow-gold'
+                              : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
+                          }`}
+                        >
+                          {cat.name}
+                        </button>
+                      ))}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => scrollPdvCategories('right')}
+                      className="p-1.5 sm:p-2 rounded-xl bg-dark-950 hover:bg-dark-800 text-slate-300 hover:text-brand-gold border border-dark-750 transition-colors flex-shrink-0 cursor-pointer shadow-sm"
+                      title="Rolar categorias para direita (Bebidas, Caldos, etc.)"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
 
@@ -5344,7 +5418,10 @@ export function AdminDashboard({
                     {pdvCart.length > 0 && (
                       <button
                         type="button"
-                        onClick={() => setPdvCart([])}
+                        onClick={() => {
+                          setPdvCart([]);
+                          setPdvDiscount('');
+                        }}
                         className="text-[11px] text-red-400 hover:underline cursor-pointer"
                       >
                         Limpar Itens
@@ -5760,6 +5837,66 @@ export function AdminDashboard({
                       />
                     </div>
 
+                    {/* Desconto no Balcão em Reais (R$) */}
+                    <div className="p-2.5 rounded-2xl bg-dark-950 border border-dark-800 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
+                          <Tag className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>Desconto no Balcão (em Reais):</span>
+                        </label>
+                        {pdvDiscountAmount > 0 && (
+                          <span className="text-[10px] font-black text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                            - R$ {pdvDiscountAmount.toFixed(2).replace('.', ',')}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <div className="relative flex-1">
+                          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-black text-emerald-400">
+                            R$
+                          </span>
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            placeholder="0,00"
+                            value={pdvDiscount}
+                            onChange={(e) => setPdvDiscount(e.target.value)}
+                            className="w-full pl-8 pr-7 py-1.5 rounded-xl bg-dark-900 border border-dark-750 text-white text-xs font-bold placeholder-slate-600 focus:outline-none focus:border-emerald-500 transition-colors"
+                          />
+                          {pdvDiscount && (
+                            <button
+                              type="button"
+                              onClick={() => setPdvDiscount('')}
+                              className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white cursor-pointer"
+                              title="Limpar desconto"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Quick preset buttons for common discounts */}
+                        <div className="flex items-center gap-1">
+                          {[2, 5, 10, 15].map(preset => (
+                            <button
+                              key={preset}
+                              type="button"
+                              onClick={() => setPdvDiscount(String(preset))}
+                              className={`px-2 py-1.5 rounded-lg text-[10px] font-black border transition-all cursor-pointer ${
+                                pdvDiscountAmount === preset
+                                  ? 'bg-emerald-500 text-dark-950 border-emerald-400 shadow-sm'
+                                  : 'bg-dark-900 hover:bg-dark-850 text-emerald-400 border-dark-750 hover:border-emerald-500/40'
+                              }`}
+                              title={`Aplicar R$ ${preset},00 de desconto`}
+                            >
+                              R${preset}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
                   </div>
 
                   {/* Summary Totals & Launch Button */}
@@ -5776,11 +5913,27 @@ export function AdminDashboard({
                       </div>
                     )}
 
+                    {pdvDiscountAmount > 0 && (
+                      <div className="flex justify-between text-xs font-bold text-emerald-400 animate-fade-in">
+                        <span className="flex items-center gap-1">
+                          <Tag className="w-3 h-3" /> Desconto Balcão:
+                        </span>
+                        <span>- R$ {pdvDiscountAmount.toFixed(2).replace('.', ',')}</span>
+                      </div>
+                    )}
+
                     <div className="flex justify-between text-sm font-black text-white pt-1 border-t border-dark-850">
-                      <span>Total Geral:</span>
-                      <span className="text-xl font-black text-brand-gold">
-                        R$ {pdvCartTotal.toFixed(2).replace('.', ',')}
-                      </span>
+                      <span>Total a Pagar:</span>
+                      <div className="text-right">
+                        {pdvDiscountAmount > 0 && (
+                          <span className="text-[11px] text-slate-500 line-through mr-2 font-normal">
+                            R$ {(pdvCartSubtotal + pdvDeliveryFee).toFixed(2).replace('.', ',')}
+                          </span>
+                        )}
+                        <span className="text-xl font-black text-brand-gold">
+                          R$ {pdvCartTotal.toFixed(2).replace('.', ',')}
+                        </span>
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
@@ -6152,9 +6305,16 @@ export function AdminDashboard({
                           <div className="p-4 sm:p-5 flex-1 space-y-2">
                             <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
                               <span>Itens do Pedido ({order.items?.length || 0})</span>
-                              <span className="text-brand-gold font-mono font-black text-xs">
-                                R$ {(Number(order.total) || 0).toFixed(2).replace('.', ',')}
-                              </span>
+                              <div className="text-right">
+                                {(Number(order.discountAmount || order.discount) > 0) && (
+                                  <div className="text-[10px] text-emerald-400 font-bold">
+                                    - R$ {Number(order.discountAmount || order.discount).toFixed(2).replace('.', ',')} desc.
+                                  </div>
+                                )}
+                                <span className="text-brand-gold font-mono font-black text-xs">
+                                  R$ {(Number(order.total) || 0).toFixed(2).replace('.', ',')}
+                                </span>
+                              </div>
                             </div>
 
                             <div className="bg-dark-950 p-2.5 rounded-2xl border border-dark-850 space-y-1.5 max-h-44 overflow-y-auto">
@@ -10579,6 +10739,11 @@ export function AdminDashboard({
               </p>
               <div className="text-sm font-bold text-slate-300 mt-2">
                 Cliente: {pdvSuccessOrder.customerName} • R$ {(pdvSuccessOrder.total || 0).toFixed(2).replace('.', ',')}
+                {(Number(pdvSuccessOrder.discountAmount || pdvSuccessOrder.discount) > 0) && (
+                  <span className="ml-2 text-xs text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                    (Desconto: R$ {Number(pdvSuccessOrder.discountAmount || pdvSuccessOrder.discount).toFixed(2).replace('.', ',')})
+                  </span>
+                )}
               </div>
             </div>
 
