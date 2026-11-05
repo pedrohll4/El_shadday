@@ -10,7 +10,7 @@ export const DEFAULT_WHATSAPP_SETTINGS = {
   notifyOnPrep: true,        // Ao mover para forno / preparo
   notifyOnDelivery: true,    // Ao despachar para entrega
   notifyOnReadyCounter: true,// Ao marcar pronto no balcão
-  notifyOnComplete: true,    // Ao marcar como concluído
+  notifyOnComplete: false,   // Desativado por padrão: evita mensagem redundante após pronto/entrega
   notifyOnCancel: true,      // Ao cancelar o pedido
   openDirectly: false        // Disparos 100% silenciosos quando o Baileys está conectado
 };
@@ -19,7 +19,12 @@ export function getWhatsAppSettings() {
   try {
     const raw = localStorage.getItem(STORAGE_SETTINGS_KEY);
     if (raw) {
-      return { ...DEFAULT_WHATSAPP_SETTINGS, ...JSON.parse(raw) };
+      const parsed = JSON.parse(raw);
+      return { 
+        ...DEFAULT_WHATSAPP_SETTINGS, 
+        ...parsed,
+        notifyOnComplete: parsed.notifyOnComplete === true
+      };
     }
   } catch (e) {
     console.error('Error reading WhatsApp settings:', e);
@@ -150,94 +155,69 @@ export function buildStatusMessage({ order, statusType, branch, reason = '' }) {
     case 'RECEBIDO':
     case 'RECEBIDO_COZINHA':
       return (
-`🍕 *EL SHADDAY DELIVERY - PEDIDO CONFIRMADO!*
-📍 *${branchName}*
-----------------------------------------
-Olá, *${customerName}*! Seu pedido *#${orderId}* foi recebido com sucesso pela nossa equipe e já está na fila de produção! ✅
+`🍕 *Pedido Confirmado! - El Shadday*
 
-📋 *ITENS:*
+Oi, *${customerName}*! Recebemos seu pedido *#${orderId}* e já mandamos pra cozinha! ✅
+
+📋 *Itens:*
 ${formatOrderItemsSummary(order?.items)}
 
-🛵 *Modalidade:* ${isBalcao ? 'Retirada no Balcão' : 'Delivery (Entrega em Domicílio)'}
-${!isBalcao && deliveryAddress ? `🏠 *Endereço:* ${deliveryAddress}\n` : ''}💰 *Total:* R$ ${(order?.total || 0).toFixed(2).replace('.', ',')}
-⏳ *Tempo Estimado:* ${branch?.deliveryTime || '45 - 75 min'}
+💰 *Total:* R$ ${(order?.total || 0).toFixed(2).replace('.', ',')}
+🛵 *Tipo:* ${isBalcao ? 'Retirada no Balcão' : 'Entrega em Domicílio'}
+${!isBalcao && deliveryAddress ? `📍 *Endereço:* ${deliveryAddress}\n` : ''}⏳ *Previsão:* ${branch?.deliveryTime || '45 - 60 min'}
 
-Passaremos todas as atualizações do seu pedido por aqui. Muito obrigado pela preferência! 💛`
+Te avisamos quando estiver ${isBalcao ? 'pronto' : 'a caminho'}! Qualquer coisa só chamar aqui. 😉`
       );
 
     case 'EM_PREPARO':
       return (
-`👨‍🍳🔥 *PEDIDO NO FORNO! - EL SHADDAY*
-📍 *${branchName}*
-----------------------------------------
-Olá, *${customerName}*! Passando para avisar que o seu pedido *#${orderId}* acabou de entrar no forno! 🔥
+`👨‍🍳 *Pedido no Forno! - El Shadday*
 
-Nossa equipe está preparando tudo com ingredientes frescos, massa artesanal e muito carinho.
+Oi, *${customerName}*! Seu pedido *#${orderId}* já foi pro forno e tá assando quentinho! 🔥
 
-⏳ Logo seu pedido estará no ponto ideal! Avisaremos assim que ${isBalcao ? 'estiver pronto para retirada' : 'o motoboy sair para entrega'}. ✨`
+Assim que ${isBalcao ? 'estiver pronto pra retirada' : 'sair com o motoboy'}, te avisamos por aqui! 🍕`
       );
 
     case 'SAIU_ENTREGA':
       return (
-`🛵💨 *PEDIDO A CAMINHO! - EL SHADDAY*
-📍 *${branchName}*
-----------------------------------------
-Boas notícias, *${customerName}*! O seu pedido *#${orderId}* acabou de sair da nossa cozinha e já está a caminho! 🛵💨
+`🛵 *Pedido a caminho! - El Shadday*
 
-${deliveryAddress ? `📍 *Destino:* ${deliveryAddress}\n` : ''}⚠️ *Dica:* Por favor, mantenha alguém atento ao portão/campainha para receber o entregador.
-
-Seu pedido está quentinho. Bom apetite! 🍕😋`
+Oi, *${customerName}*! O motoboy acabou de sair com o seu pedido *#${orderId}*! 🚀
+${deliveryAddress ? `📍 *Entrega:* ${deliveryAddress}\n` : ''}
+Fica de olho aí no portão ou campainha que tá quentinho chegando. Bom apetite! 🍕😋`
       );
 
     case 'PRONTO_BALCAO':
       return (
-`🛍️✨ *SEU PEDIDO ESTÁ PRONTO! - EL SHADDAY*
-📍 *${branchName}*
-----------------------------------------
-Olá, *${customerName}*! O seu pedido *#${orderId}* já ficou pronto, quentinho e embalado esperando por você no balcão! 🍕✨
+`🛍️ *Pedido Pronto! - El Shadday*
 
-🏢 *Local de Retirada:* ${branchAddress}
-⏰ Pode passar para retirar a qualquer momento.
+Oi, *${customerName}*! Seu pedido *#${orderId}* já tá prontinho no balcão te esperando! 🍕✨
 
-Estamos te esperando! 💛`
+📍 *Retirada:* ${branchAddress}
+Pode passar pra pegar quando quiser. Te esperamos aqui! 😉`
       );
 
     case 'CONCLUIDO':
       return (
-`🎉🍕 *PEDIDO ${isBalcao ? 'FINALIZADO' : 'ENTREGUE'} COM SUCESSO!*
-📍 *${branchName}*
-----------------------------------------
-Olá, *${customerName}*! Seu pedido *#${orderId}* foi finalizado! ✅
+`🎉 *Pedido Finalizado! - El Shadday*
 
-Esperamos que sua refeição esteja deliciosa e que tenha uma experiência incrível com a El Shadday.
-
-⭐ Se gostou, compartilhe nos stories e marque a gente!
-Qualquer feedback ou dúvida, estamos sempre à disposição por este WhatsApp.
-
-Muito obrigado e até a próxima! 💛`
+Obrigado pela preferência, *${customerName}*! Esperamos que goste de tudo. Se precisar de algo, só chamar aqui. Até a próxima! 💛🍕`
       );
 
     case 'CANCELADO':
       return (
-`⚠️ *AVISO: PEDIDO CANCELADO - EL SHADDAY*
-📍 *${branchName}*
-----------------------------------------
-Olá, *${customerName}*, informamos que o seu pedido *#${orderId}* precisou ser cancelado no sistema.
+`❌ *Pedido Cancelado - El Shadday*
 
-${reason ? `📝 *Motivo informado:* ${reason}\n` : ''}Se você já efetuou o pagamento via Pix ou precisa de qualquer esclarecimento, por favor responda esta mensagem para falar diretamente com nosso atendimento da unidade.
-
-WhatsApp da Filial: *${branchPhone}*
-Pedimos sinceras desculpas pelo inconveniente!`
+Oi, *${customerName}*, seu pedido *#${orderId}* foi cancelado.
+${reason ? `📝 *Motivo:* ${reason}\n` : ''}
+Se precisar de qualquer ajuda ou se já fez Pix, pode responder aqui que te atendemos na hora! Desculpe o transtorno.`
       );
 
     default:
       return (
-`🍕 *ATUALIZAÇÃO DO PEDIDO - EL SHADDAY*
-📍 *${branchName}*
-----------------------------------------
-Olá, *${customerName}*! Informamos que o status do seu pedido *#${orderId}* foi atualizado.
+`🍕 *El Shadday Informa*
 
-Em caso de dúvidas, estamos à disposição por aqui!`
+Oi, *${customerName}*! Seu pedido *#${orderId}* foi atualizado. Qualquer dúvida estamos por aqui!`
       );
   }
 }

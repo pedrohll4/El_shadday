@@ -2986,7 +2986,10 @@ export function AdminDashboard({
     // O sistema de abrir mensagem em nova guia NÃO É USADO! O envio é 100% invisível em segundo plano!
     const isBaileysActive = isCloudBaileysActive();
 
-    if (!isBaileysActive && whatsAppSettings?.autoNotify && whatsAppSettings?.notifyOnClick !== false) {
+    // Se o status for CONCLUIDO, NÃO envia WhatsApp automático para não gerar mensagem redundante pós-balcão/entrega
+    const shouldNotifyWhatsApp = normNewStatus !== 'CONCLUIDO';
+
+    if (shouldNotifyWhatsApp && !isBaileysActive && whatsAppSettings?.autoNotify && whatsAppSettings?.notifyOnClick !== false) {
       // Somente abre o WhatsApp Web com texto pronto se o Baileys NÃO estiver conectado
       const branchObj = branchesList.find(b => b.id === (order.branchId || currentBranch?.id)) || currentBranch;
       openWhatsAppInstantLink({
@@ -3000,8 +3003,10 @@ export function AdminDashboard({
     // 1. Update order status in app state / DB
     onUpdateOrderStatus(order.orderId, normNewStatus);
 
-    // 2. Dispatch background WhatsApp notification (Baileys Cloud)
-    handleTriggerCustomerWhatsApp(order, notifyType, customReason);
+    // 2. Dispatch background WhatsApp notification (Baileys Cloud) apenas se não for CONCLUIDO
+    if (shouldNotifyWhatsApp) {
+      handleTriggerCustomerWhatsApp(order, notifyType, customReason);
+    }
 
     // 3. Highlight this specific order card
     setHighlightedOrderId(order.orderId);
@@ -3538,8 +3543,8 @@ export function AdminDashboard({
       onCreateKitchenOrder(newOrder);
     }
 
-    if (newOrder.customerPhone) {
-      handleTriggerCustomerWhatsApp(newOrder, isConcludedDirect ? 'CONCLUIDO' : 'RECEBIDO_COZINHA');
+    if (newOrder.customerPhone && !isConcludedDirect) {
+      handleTriggerCustomerWhatsApp(newOrder, 'RECEBIDO_COZINHA');
     }
 
     playChime(isConcludedDirect);

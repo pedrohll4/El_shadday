@@ -471,28 +471,31 @@ export default function WhatsAppManagerView({
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-xs">
           {[
             { key: 'notifyOnReceive', label: 'Ao receber o pedido', desc: 'Confirmação e tempo estimado' },
-            { key: 'notifyOnPrep', label: 'Ao entrar no forno', desc: 'Avisa que a pizza começou a assar' },
+            { key: 'notifyOnPrep', label: 'Ao entrar no forno', desc: 'Avisa que o pedido começou a assar' },
             { key: 'notifyOnDelivery', label: 'Ao despachar entrega', desc: 'Avisa que o motoboy saiu com endereço' },
             { key: 'notifyOnReadyCounter', label: 'Pronto no balcão', desc: 'Avisa cliente para retirar' },
-            { key: 'notifyOnComplete', label: 'Ao concluir entrega', desc: 'Agradecimento e avaliação' },
+            { key: 'notifyOnComplete', label: 'Ao concluir pedido', desc: 'Desativado (evita envio repetido pós-entrega/balcão)' },
             { key: 'notifyOnCancel', label: 'Ao cancelar pedido', desc: 'Aviso com motivo informado' },
-          ].map((item) => (
-            <label 
-              key={item.key} 
-              className="flex items-start gap-3 p-3 rounded-xl bg-dark-950 border border-dark-800 cursor-pointer hover:border-dark-700 transition-colors"
-            >
-              <input
-                type="checkbox"
-                checked={settings[item.key] !== false}
-                onChange={() => handleToggleSetting(item.key)}
-                className="mt-0.5 rounded text-emerald-500 focus:ring-0 cursor-pointer accent-emerald-500"
-              />
-              <div>
-                <div className="font-bold text-slate-200">{item.label}</div>
-                <div className="text-[11px] text-slate-400">{item.desc}</div>
-              </div>
-            </label>
-          ))}
+          ].map((item) => {
+            const isChecked = item.key === 'notifyOnComplete' ? settings[item.key] === true : settings[item.key] !== false;
+            return (
+              <label 
+                key={item.key} 
+                className="flex items-start gap-3 p-3 rounded-xl bg-dark-950 border border-dark-800 cursor-pointer hover:border-dark-700 transition-colors"
+              >
+                <input
+                  type="checkbox"
+                  checked={isChecked}
+                  onChange={() => handleToggleSetting(item.key)}
+                  className="mt-0.5 rounded text-emerald-500 focus:ring-0 cursor-pointer accent-emerald-500"
+                />
+                <div>
+                  <div className="font-bold text-slate-200">{item.label}</div>
+                  <div className="text-[11px] text-slate-400">{item.desc}</div>
+                </div>
+              </label>
+            );
+          })}
         </div>
       </div>
 
