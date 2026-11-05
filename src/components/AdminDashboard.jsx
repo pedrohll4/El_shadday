@@ -2700,38 +2700,73 @@ export function AdminDashboard({
               box-sizing: border-box;
               margin: 0;
               padding: 0;
+              color: #000 !important;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
             }
             body {
-              font-family: 'Courier New', Courier, monospace;
-              font-size: 11px;
-              line-height: 1.25;
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+              font-size: 13px;
+              line-height: 1.35;
+              font-weight: 600;
               color: #000;
               background: #fff;
               width: 100%;
-              max-width: 280px;
-              padding: 4mm 3mm;
+              max-width: 290px;
+              padding: 4mm 3mm 0mm 3mm;
               margin: 0 auto;
+              -webkit-font-smoothing: antialiased;
+              text-rendering: optimizeLegibility;
             }
             .center { text-align: center; }
             .right { text-align: right; }
-            .bold { font-weight: bold; }
-            .title { font-size: 13px; letter-spacing: -0.3px; margin-bottom: 2px; }
-            .comanda-id { font-size: 20px; font-weight: 900; letter-spacing: 1px; border: 2px dashed #000; padding: 5px 3px; margin: 4px 0; }
-            .divider { border-top: 1px dashed #000; margin: 5px 0; }
-            .item-row { margin-bottom: 4px; }
-            .item-header { display: flex; justify-content: space-between; font-weight: bold; font-size: 11.5px; }
-            .item-sub { padding-left: 8px; font-size: 10px; color: #111; }
-            .total-row { display: flex; justify-content: space-between; font-size: 13.5px; font-weight: bold; margin: 3px 0; }
-            .info-row { margin: 2px 0; font-size: 11px; }
-            .cancel-badge { color: red; font-weight: bold; font-size: 13px; text-align: center; padding: 2px 0; }
-            .obs-box { border: 1px solid #000; padding: 3px; margin: 4px 0; font-weight: bold; font-size: 10.5px; }
+            .bold { font-weight: 900; }
+            .title { font-size: 15px; font-weight: 900; letter-spacing: 0.5px; margin-bottom: 2px; }
+            .comanda-id { 
+              font-size: 22px; 
+              font-weight: 900; 
+              letter-spacing: 1px; 
+              border: 2.5px solid #000; 
+              padding: 5px 2px; 
+              margin: 5px 0; 
+              text-align: center;
+            }
+            .divider { border-top: 1.5px solid #000; margin: 5px 0; }
+            .item-row { margin-bottom: 5px; }
+            .item-header { display: flex; justify-content: space-between; font-weight: 900; font-size: 13.5px; line-height: 1.25; }
+            .item-sub { padding-left: 8px; font-size: 12px; font-weight: 800; color: #000; line-height: 1.35; margin-top: 1px; }
+            .total-row { 
+              display: flex; 
+              justify-content: space-between; 
+              font-size: 16px; 
+              font-weight: 900; 
+              margin: 4px 0; 
+              padding: 3px 0;
+              border-top: 1.5px solid #000;
+              border-bottom: 1.5px solid #000;
+            }
+            .info-row { margin: 3px 0; font-size: 12.5px; font-weight: 600; line-height: 1.3; }
+            .destaque-box {
+              border: 2px solid #000;
+              background: #fff;
+              color: #000;
+              font-size: 13px;
+              font-weight: 900;
+              text-align: center;
+              padding: 3px 2px;
+              margin: 4px 0;
+              letter-spacing: 0.5px;
+            }
+            .cancel-badge { color: #000; border: 2px solid #000; font-weight: 900; font-size: 14px; text-align: center; padding: 4px 0; margin: 4px 0; }
+            .obs-box { border: 2px solid #000; padding: 4px; margin: 5px 0; font-weight: 900; font-size: 12px; line-height: 1.3; }
+            .troco-box { border: 1.5px dashed #000; padding: 4px; margin: 4px 0; font-weight: 900; font-size: 12px; }
           </style>
         </head>
         <body>
           <div class="center bold title">${branchName.toUpperCase()}</div>
           <div class="center bold comanda-id">*** COMANDA #${displayNumber} ***</div>
-          <div class="center" style="font-size: 11px; font-weight: bold; margin-bottom: 2px;">PEDIDO Nº ${displayNumber}</div>
-          <div class="center" style="font-size: 10px;">Data: ${formattedDate}</div>
+          <div class="center" style="font-size: 13px; font-weight: 900; margin-bottom: 2px;">PEDIDO Nº ${displayNumber}</div>
+          <div class="center" style="font-size: 11.5px; font-weight: 700;">Data: ${formattedDate}</div>
 
           ${order.orderStatus === 'CANCELADO' ? '<div class="cancel-badge">*** PEDIDO CANCELADO ***</div>' : ''}
 
@@ -2746,10 +2781,10 @@ export function AdminDashboard({
             ${address ? `<div class="info-row"><span class="bold">END:</span> ${address}${number ? `, Nº ${number}` : ''}</div>` : ''}
             ${complement ? `<div class="info-row"><span class="bold">COMPL:</span> ${complement}</div>` : ''}
             ${reference ? `<div class="info-row"><span class="bold">REF:</span> ${reference}</div>` : ''}
-          ` : '<div class="info-row bold" style="background:#000;color:#fff;text-align:center;padding:1px;margin:2px 0;">RETIRADA NO LOCAL (BALCÃO)</div>'}
+          ` : '<div class="destaque-box">>>> RETIRADA NO BALCÃO <<<</div>'}
 
           <div class="divider"></div>
-          <div class="bold" style="margin-bottom: 3px;">ITENS DO PEDIDO:</div>
+          <div class="bold" style="font-size: 13px; margin-bottom: 4px;">ITENS DO PEDIDO:</div>
 
           ${(order.items || []).map(it => {
             const itemTotal = Number(it.price || it.unitPrice || 0) * Number(it.quantity || 1);
@@ -2801,43 +2836,46 @@ export function AdminDashboard({
 
           <div class="divider"></div>
 
-          <div style="display:flex; justify-content:space-between; margin:1px 0; font-size:11px;">
+          <div style="display:flex; justify-content:space-between; margin:2px 0; font-size:12.5px; font-weight:700;">
             <span>Subtotal:</span>
             <span>R$ ${Number(order.subtotal || 0).toFixed(2)}</span>
           </div>
           ${!isBalcao ? `
-            <div style="display:flex; justify-content:space-between; margin:1px 0; font-size:11px;">
+            <div style="display:flex; justify-content:space-between; margin:2px 0; font-size:12.5px; font-weight:700;">
               <span>Taxa Entrega:</span>
               <span>R$ ${Number(order.deliveryFee || 0).toFixed(2)}</span>
             </div>
           ` : ''}
           ${discountAmount > 0 ? `
-            <div style="display:flex; justify-content:space-between; margin:1px 0; font-size:11px; font-weight:bold;">
+            <div style="display:flex; justify-content:space-between; margin:2px 0; font-size:12.5px; font-weight:900;">
               <span>Desconto Balcão:</span>
               <span>- R$ ${discountAmount.toFixed(2)}</span>
             </div>
           ` : ''}
           <div class="total-row">
             <span>TOTAL:</span>
-            <span>R$ ${Number(order.total || 0).toFixed(2)}</span>
+            <span style="font-size: 18px;">R$ ${Number(order.total || 0).toFixed(2)}</span>
           </div>
 
           <div class="divider"></div>
 
           <div class="info-row"><span class="bold">PAGAMENTO:</span> ${paymentMethod.toUpperCase()}</div>
-          <div class="info-row">
+          <div class="info-row" style="font-weight: 900;">
             <span class="bold">STATUS:</span> 
-            ${isPaid ? 'PAGO (Pix / Cartão)' : '⚠️ COBRAR NA ENTREGA'}
+            ${isPaid ? '[ PAGO ] (Pix / Cartão)' : '[ ! ] COBRAR NA ENTREGA'}
           </div>
           ${changeFor && Number(changeFor) > Number(order.total || 0) ? `
-            <div class="info-row bold" style="background:#f4f4f4;padding:2px;">
+            <div class="troco-box">
               TROCO PARA: R$ ${Number(changeFor).toFixed(2)} (Levar R$ ${(Number(changeFor) - Number(order.total || 0)).toFixed(2)})
             </div>
           ` : ''}
 
           <div class="divider"></div>
-          <div class="center" style="font-size: 10px;">${branchPhone}</div>
-          <div class="center" style="font-size: 9px; margin-top: 2px;">Obrigado pela preferência!</div>
+          <div class="center" style="font-size: 12px; font-weight: 800; margin-top: 3px;">${branchPhone}</div>
+          <div class="center" style="font-size: 11px; font-weight: 700; margin-top: 2px;">Obrigado pela preferência!</div>
+
+          <!-- Espaço de avanço do papel além da guilhotina/serrilha do corte -->
+          <div style="height: 25mm;"></div>
         </body>
       </html>
     `;
