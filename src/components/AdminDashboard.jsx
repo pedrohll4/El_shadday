@@ -12,7 +12,7 @@ import {
   Building2, Users, Crown, Sliders, BarChart3, Star, QrCode,
   Settings2, Smartphone, Banknote, Shuffle, Lock, ImageOff,
   GripVertical, ArrowUp, ArrowDown, ChevronsUp, HeartHandshake, IceCream, Soup, Wine,
-  ClipboardList
+  ClipboardList, Wrench
 } from 'lucide-react';
 import { 
   RESTAURANT_INFO, 
@@ -362,6 +362,8 @@ export function AdminDashboard({
   const [pdvCashChange, setPdvCashChange] = useState('');
   const [pdvOrderNotes, setPdvOrderNotes] = useState('');
   const [pdvDiscount, setPdvDiscount] = useState('');
+  const [pdvServiceName, setPdvServiceName] = useState('');
+  const [pdvServiceFee, setPdvServiceFee] = useState('');
   const [pdvSuccessOrder, setPdvSuccessOrder] = useState(null);
   const [pdvValidationError, setPdvValidationError] = useState('');
   const [pdvSubTab, setPdvSubTab] = useState('novo'); // 'novo' | 'baixa'
@@ -2676,6 +2678,8 @@ export function AdminDashboard({
     const changeFor = order.changeFor || order.cashChange || null;
     const orderNotes = order.notes || order.orderNotes || '';
     const discountAmount = Number(order.discountAmount || order.discount || 0);
+    const serviceFee = Number(order.serviceFee || order.serviceAmount || 0);
+    const serviceDescription = order.serviceDescription || 'Serviço';
     const formattedDate = order.createdAt ? new Date(order.createdAt).toLocaleString('pt-BR') : new Date().toLocaleString('pt-BR');
     const paymentMethod = order.paymentMethod || 'A Definir';
     const isPaid = order.paymentStatus === 'PAGO_APROVADO';
@@ -2844,6 +2848,12 @@ export function AdminDashboard({
             <div style="display:flex; justify-content:space-between; margin:2px 0; font-size:12.5px; font-weight:700;">
               <span>Taxa Entrega:</span>
               <span>R$ ${Number(order.deliveryFee || 0).toFixed(2)}</span>
+            </div>
+          ` : ''}
+          ${serviceFee > 0 ? `
+            <div style="display:flex; justify-content:space-between; margin:2px 0; font-size:12.5px; font-weight:700;">
+              <span>Serviço (${serviceDescription}):</span>
+              <span>+ R$ ${serviceFee.toFixed(2)}</span>
             </div>
           ` : ''}
           ${discountAmount > 0 ? `
@@ -3206,6 +3216,21 @@ export function AdminDashboard({
 
   const pdvDeliveryFee = pdvDeliveryType === 'delivery' ? (pdvDistrict?.price || 8) : 0;
 
+  // Serviço / Acréscimo em Reais no Balcão (PDV)
+  const pdvServiceAmount = useMemo(() => {
+    if (!pdvServiceFee) return 0;
+    let s = String(pdvServiceFee).trim().replace(/\s+/g, '');
+    if (!s) return 0;
+    if (s.includes(',') && s.includes('.')) {
+      s = s.replace(/\./g, '').replace(',', '.');
+    } else if (s.includes(',')) {
+      s = s.replace(',', '.');
+    }
+    const val = parseFloat(s);
+    if (isNaN(val) || val <= 0) return 0;
+    return val;
+  }, [pdvServiceFee]);
+
   // Desconto em Reais no Balcão (PDV)
   const pdvDiscountAmount = useMemo(() => {
     if (!pdvDiscount) return 0;
@@ -3218,10 +3243,10 @@ export function AdminDashboard({
     }
     const val = parseFloat(s);
     if (isNaN(val) || val <= 0) return 0;
-    return Math.min(val, pdvCartSubtotal + pdvDeliveryFee);
-  }, [pdvDiscount, pdvCartSubtotal, pdvDeliveryFee]);
+    return Math.min(val, pdvCartSubtotal + pdvDeliveryFee + pdvServiceAmount);
+  }, [pdvDiscount, pdvCartSubtotal, pdvDeliveryFee, pdvServiceAmount]);
 
-  const pdvCartTotal = Math.max(0, (pdvCartSubtotal + pdvDeliveryFee) - pdvDiscountAmount);
+  const pdvCartTotal = Math.max(0, (pdvCartSubtotal + pdvDeliveryFee + pdvServiceAmount) - pdvDiscountAmount);
 
   const scrollPdvCategories = (direction) => {
     if (pdvCategoryScrollRef.current) {
@@ -3522,6 +3547,9 @@ export function AdminDashboard({
       items: pdvCart,
       subtotal: pdvCartSubtotal,
       deliveryFee: pdvDeliveryFee,
+      serviceFee: pdvServiceAmount,
+      serviceAmount: pdvServiceAmount,
+      serviceDescription: pdvServiceName.trim(),
       discount: pdvDiscountAmount,
       discountAmount: pdvDiscountAmount,
       total: pdvCartTotal,
@@ -3529,7 +3557,11 @@ export function AdminDashboard({
       paymentStatus: (isConcludedDirect || pdvIsPaid) ? 'PAGO_APROVADO' : 'PENDENTE',
       orderStatus: isConcludedDirect ? 'CONCLUIDO' : 'RECEBIDO_COZINHA',
       source: 'PDV_BALCAO',
-      notes: (pdvOrderNotes.trim() + (pdvDiscountAmount > 0 ? ` [Desconto: R$ ${pdvDiscountAmount.toFixed(2).replace('.', ',')}]` : '')).trim(),
+      notes: (
+        pdvOrderNotes.trim() + 
+        (pdvServiceAmount > 0 ? ` [Serviço: ${pdvServiceName.trim() || 'Serviço'} (+R$ ${pdvServiceAmount.toFixed(2).replace('.', ',')})]` : '') +
+        (pdvDiscountAmount > 0 ? ` [Desconto: R$ ${pdvDiscountAmount.toFixed(2).replace('.', ',')}]` : '')
+      ).trim(),
       orderNotes: pdvOrderNotes.trim(),
       baixaDadaEm: isConcludedDirect ? new Date().toISOString() : null,
       baixaDadaPor: isConcludedDirect ? (currentUser?.name || 'Balcão / PDV') : null
@@ -3553,6 +3585,8 @@ export function AdminDashboard({
     // Reset PDV form
     setPdvCart([]);
     setPdvDiscount('');
+    setPdvServiceName('');
+    setPdvServiceFee('');
     setPdvCustomerName('');
     setPdvCustomerPhone('');
     setPdvAddress('');
@@ -4965,6 +4999,11 @@ export function AdminDashboard({
                           <div className="flex justify-between items-baseline pt-3 text-xs">
                             <span className="text-slate-400">Total com Entrega:</span>
                             <div className="text-right">
+                              {(Number(order.serviceAmount || order.serviceFee) > 0) && (
+                                <span className="text-[10px] text-amber-400 font-bold block">
+                                  + R$ {Number(order.serviceAmount || order.serviceFee).toFixed(2).replace('.', ',')} ({order.serviceDescription || 'serviço'})
+                                </span>
+                              )}
                               {(Number(order.discountAmount || order.discount) > 0) && (
                                 <span className="text-[10px] text-emerald-400 font-bold block">
                                   - R$ {Number(order.discountAmount || order.discount).toFixed(2).replace('.', ',')} desc.
@@ -5464,6 +5503,8 @@ export function AdminDashboard({
                         onClick={() => {
                           setPdvCart([]);
                           setPdvDiscount('');
+                          setPdvServiceName('');
+                          setPdvServiceFee('');
                         }}
                         className="text-[11px] text-red-400 hover:underline cursor-pointer"
                       >
@@ -5940,6 +5981,119 @@ export function AdminDashboard({
                       </div>
                     </div>
 
+                    {/* Serviços / Taxa Adicional no Balcão */}
+                    <div className="p-2.5 rounded-2xl bg-dark-950 border border-dark-800 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
+                          <Wrench className="w-3.5 h-3.5 text-amber-400" />
+                          <span>Serviços / Adicional (O que foi e Valor):</span>
+                        </label>
+                        {pdvServiceAmount > 0 && (
+                          <span className="text-[10px] font-black text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
+                            + R$ {pdvServiceAmount.toFixed(2).replace('.', ',')}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                          {/* O que foi o serviço */}
+                          <div className="sm:col-span-2 relative">
+                            <input
+                              type="text"
+                              placeholder="O que foi o serviço? (ex: Garçom, Embalagem...)"
+                              value={pdvServiceName}
+                              onChange={(e) => setPdvServiceName(e.target.value)}
+                              className="w-full px-2.5 py-1.5 rounded-xl bg-dark-900 border border-dark-750 text-white text-xs placeholder-slate-600 focus:outline-none focus:border-amber-400 transition-colors"
+                            />
+                            {pdvServiceName && (
+                              <button
+                                type="button"
+                                onClick={() => setPdvServiceName('')}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white cursor-pointer"
+                                title="Limpar descrição"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Valor do serviço em R$ */}
+                          <div className="relative">
+                            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-black text-amber-400">
+                              R$
+                            </span>
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              placeholder="0,00"
+                              value={pdvServiceFee}
+                              onChange={(e) => setPdvServiceFee(e.target.value)}
+                              className="w-full pl-8 pr-7 py-1.5 rounded-xl bg-dark-900 border border-dark-750 text-white text-xs font-bold placeholder-slate-600 focus:outline-none focus:border-amber-400 transition-colors"
+                            />
+                            {pdvServiceFee && (
+                              <button
+                                type="button"
+                                onClick={() => setPdvServiceFee('')}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white cursor-pointer"
+                                title="Limpar valor"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Presets rápidos */}
+                        <div className="flex items-center gap-1 flex-wrap pt-0.5">
+                          <span className="text-[10px] text-slate-500 mr-0.5">Sugestões:</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPdvServiceName('10% Garçom');
+                              const tenPct = (pdvCartSubtotal * 0.1).toFixed(2).replace('.', ',');
+                              setPdvServiceFee(tenPct);
+                            }}
+                            className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-dark-900 hover:bg-dark-850 text-amber-400 border border-dark-750 hover:border-amber-500/40 transition-all cursor-pointer"
+                            title="Calcular 10% de atendimento sobre os itens"
+                          >
+                            10% Garçom
+                          </button>
+                          {[5, 10, 15].map(preset => (
+                            <button
+                              key={preset}
+                              type="button"
+                              onClick={() => {
+                                if (!pdvServiceName.trim()) setPdvServiceName('Taxa de Serviço');
+                                setPdvServiceFee(String(preset));
+                              }}
+                              className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-all cursor-pointer ${
+                                pdvServiceAmount === preset
+                                  ? 'bg-amber-500 text-dark-950 border-amber-400 shadow-sm'
+                                  : 'bg-dark-900 hover:bg-dark-850 text-amber-400 border-dark-750 hover:border-amber-500/40'
+                              }`}
+                              title={`Aplicar R$ ${preset},00 de serviço`}
+                            >
+                              R${preset}
+                            </button>
+                          ))}
+                          {(pdvServiceName || pdvServiceFee) && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPdvServiceName('');
+                                setPdvServiceFee('');
+                              }}
+                              className="px-1.5 py-0.5 rounded-lg text-[10px] text-slate-400 hover:text-red-400 transition-colors ml-auto cursor-pointer"
+                              title="Limpar serviço"
+                            >
+                              Limpar
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
                   </div>
 
                   {/* Summary Totals & Launch Button */}
@@ -5953,6 +6107,15 @@ export function AdminDashboard({
                       <div className="flex justify-between text-xs text-slate-400">
                         <span>Taxa de Entrega ({pdvDistrict.name}):</span>
                         <span>R$ {pdvDeliveryFee.toFixed(2).replace('.', ',')}</span>
+                      </div>
+                    )}
+
+                    {pdvServiceAmount > 0 && (
+                      <div className="flex justify-between text-xs font-bold text-amber-400 animate-fade-in">
+                        <span className="flex items-center gap-1">
+                          <Wrench className="w-3 h-3" /> {pdvServiceName.trim() ? `Serviço (${pdvServiceName.trim()}):` : 'Serviço:'}
+                        </span>
+                        <span>+ R$ {pdvServiceAmount.toFixed(2).replace('.', ',')}</span>
                       </div>
                     )}
 
@@ -5970,7 +6133,7 @@ export function AdminDashboard({
                       <div className="text-right">
                         {pdvDiscountAmount > 0 && (
                           <span className="text-[11px] text-slate-500 line-through mr-2 font-normal">
-                            R$ {(pdvCartSubtotal + pdvDeliveryFee).toFixed(2).replace('.', ',')}
+                            R$ {(pdvCartSubtotal + pdvDeliveryFee + pdvServiceAmount).toFixed(2).replace('.', ',')}
                           </span>
                         )}
                         <span className="text-xl font-black text-brand-gold">
@@ -6349,7 +6512,12 @@ export function AdminDashboard({
                             <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
                               <span>Itens do Pedido ({order.items?.length || 0})</span>
                               <div className="text-right">
-                                {(Number(order.discountAmount || order.discount) > 0) && (
+                                {(Number(order.serviceAmount || order.serviceFee) > 0) && (
+                                <span className="text-[10px] text-amber-400 font-bold block">
+                                  + R$ {Number(order.serviceAmount || order.serviceFee).toFixed(2).replace('.', ',')} ({order.serviceDescription || 'serviço'})
+                                </span>
+                              )}
+                              {(Number(order.discountAmount || order.discount) > 0) && (
                                   <div className="text-[10px] text-emerald-400 font-bold">
                                     - R$ {Number(order.discountAmount || order.discount).toFixed(2).replace('.', ',')} desc.
                                   </div>
@@ -10782,6 +10950,11 @@ export function AdminDashboard({
               </p>
               <div className="text-sm font-bold text-slate-300 mt-2">
                 Cliente: {pdvSuccessOrder.customerName} • R$ {(pdvSuccessOrder.total || 0).toFixed(2).replace('.', ',')}
+                {(Number(pdvSuccessOrder.serviceAmount || pdvSuccessOrder.serviceFee) > 0) && (
+                  <span className="ml-2 text-xs text-amber-400 font-bold bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
+                    (+ {pdvSuccessOrder.serviceDescription || 'Serviço'}: R$ {Number(pdvSuccessOrder.serviceAmount || pdvSuccessOrder.serviceFee).toFixed(2).replace('.', ',')})
+                  </span>
+                )}
                 {(Number(pdvSuccessOrder.discountAmount || pdvSuccessOrder.discount) > 0) && (
                   <span className="ml-2 text-xs text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
                     (Desconto: R$ {Number(pdvSuccessOrder.discountAmount || pdvSuccessOrder.discount).toFixed(2).replace('.', ',')})
