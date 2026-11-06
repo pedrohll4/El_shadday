@@ -240,6 +240,40 @@ export function CartDrawer({
                       </div>
                     )}
 
+                    {/* Breakdown for custom pizza */}
+                    {(item.isCustomPizza || (item.flavors && item.flavors.length > 0 && !item.isCombo)) && (
+                      <div className="mt-1 space-y-0.5 text-[10px] text-brand-goldLight">
+                        {item.flavors && item.flavors.length > 0 && (
+                          <div>🍕 <strong>Sabores:</strong> {item.flavors.join(' / ')}</div>
+                        )}
+                        {item.bordaGratis && (
+                          <div className="text-emerald-400 font-semibold">✨ Borda: {item.bordaGratis}</div>
+                        )}
+                        {item.notes && <div className="text-[10px] text-slate-300 italic">Obs: {item.notes}</div>}
+                      </div>
+                    )}
+
+                    {/* Bebida Escolhida */}
+                    {item.beverage && (
+                      <div className="text-cyan-300 font-semibold text-[10px] mt-1 flex items-center gap-1">
+                        <span>🥤</span>
+                        <span><strong>Bebida:</strong> {item.beverage}</span>
+                      </div>
+                    )}
+
+                    {/* Molho Extra */}
+                    {item.hasExtraSauce && (
+                      <div className="text-amber-200 font-semibold text-[10px] mt-0.5 flex items-center gap-1">
+                        <span>🍯</span>
+                        <span><strong>Molho Extra:</strong> {item.extraSauceName || 'Molho Especial'}</span>
+                        {item.extraSaucePrice > 0 && (
+                          <span className="text-[9px] text-amber-400 font-normal">
+                            (+R$ {Number(item.extraSaucePrice).toFixed(2).replace('.', ',')})
+                          </span>
+                        )}
+                      </div>
+                    )}
+
                     <div className="mt-2 flex items-center justify-between">
                       <span className="text-xs font-black text-brand-gold">
                         R$ {(item.price * item.quantity).toFixed(2).replace('.', ',')}

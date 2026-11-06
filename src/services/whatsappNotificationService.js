@@ -5,14 +5,14 @@ const STORAGE_SETTINGS_KEY = 'el_shadday_whatsapp_settings_v1';
 
 export const DEFAULT_WHATSAPP_SETTINGS = {
   autoNotify: true,          // Disparo automático ao mudar status no KDS
-  notifyOnClick: true,       // Fallback: Abre WhatsApp no clique se o motor Baileys não estiver conectado
+  notifyOnClick: false,      // NUNCA abre nova aba no navegador ao clicar em avançar etapa
   notifyOnReceive: true,     // Ao criar/receber o pedido
   notifyOnPrep: true,        // Ao mover para forno / preparo
   notifyOnDelivery: true,    // Ao despachar para entrega
   notifyOnReadyCounter: true,// Ao marcar pronto no balcão
   notifyOnComplete: false,   // Desativado por padrão: evita mensagem redundante após pronto/entrega
   notifyOnCancel: true,      // Ao cancelar o pedido
-  openDirectly: false        // Disparos 100% silenciosos quando o Baileys está conectado
+  openDirectly: false        // Disparos 100% silenciosos em segundo plano
 };
 
 export function getWhatsAppSettings() {
@@ -23,6 +23,8 @@ export function getWhatsAppSettings() {
       return { 
         ...DEFAULT_WHATSAPP_SETTINGS, 
         ...parsed,
+        notifyOnClick: false, // Força false: nunca abrir nova aba ao avançar etapa
+        openDirectly: false,  // Força false: envio 100% silencioso em segundo plano
         notifyOnComplete: parsed.notifyOnComplete === true
       };
     }
@@ -131,6 +133,12 @@ function formatOrderItemsSummary(items = []) {
     }
     if (it.dydyoFlavor) {
       details.push(`Refri: ${it.dydyoFlavor}`);
+    }
+    if (it.beverage) {
+      details.push(`Bebida: ${it.beverage}`);
+    }
+    if (it.hasExtraSauce) {
+      details.push(`Molho Extra`);
     }
     if (details.length > 0) {
       line += ` (${details.join(' | ')})`;
@@ -384,8 +392,8 @@ export async function sendCustomerWhatsAppNotification({
     }
   }
 
-  // 3. Fallback MANUAL: se for forceOpen (ex: clique no botão 'Avisar Cliente') e não tiver disparado
-  if (!apiSuccess && (forceOpen || settings.openDirectly)) {
+  // 3. Fallback MANUAL: se for forceOpen (ex: clique explícito no botão 'Avisar Cliente Manualmente') e não tiver disparado pela API
+  if (!apiSuccess && forceOpen) {
     try {
       window.open(whatsappUrl, '_blank');
     } catch (e) {

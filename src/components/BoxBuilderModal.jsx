@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   X, Package, Check, Sparkles, MessageSquare, Flame 
 } from 'lucide-react';
-import { DYDYO_FLAVORS } from '../data/menuData';
+import { DYDYO_FLAVORS, BEVERAGE_OPTIONS, getStoredExtraSauceConfig } from '../data/menuData';
 
 // Tamanhos disponíveis das Caixas de Esfirras (mantidos para export/referência)
 export const BOX_CONFIGS = [
@@ -148,6 +148,9 @@ export const isCarneFlavor = (flavorName) => {
 export function BoxBuilderModal({ isOpen, onClose, onAddBoxToCart, initialBox = null, isStoreOpen = true }) {
   const [selectedOptionId, setSelectedOptionId] = useState(BOX_SORTIDO_OPTIONS[0].id);
   const [selectedDydyo, setSelectedDydyo] = useState('Dydyo Guaraná 2L');
+  const [selectedBeverageId, setSelectedBeverageId] = useState('none');
+  const [extraSauceConfig, setExtraSauceConfig] = useState(() => getStoredExtraSauceConfig());
+  const [wantsExtraSauce, setWantsExtraSauce] = useState(false);
   const [notes, setNotes] = useState('');
 
   // Sempre que o modal abre, reseta a opção, refrigerante e observações
@@ -155,9 +158,21 @@ export function BoxBuilderModal({ isOpen, onClose, onAddBoxToCart, initialBox = 
     if (isOpen) {
       setSelectedOptionId(BOX_SORTIDO_OPTIONS[0].id);
       setSelectedDydyo('Dydyo Guaraná 2L');
+      setSelectedBeverageId('none');
+      setWantsExtraSauce(false);
+      setExtraSauceConfig(getStoredExtraSauceConfig());
       setNotes('');
     }
   }, [isOpen, initialBox]);
+
+  useEffect(() => {
+    const handleSauceUpdated = (e) => {
+      if (e?.detail) setExtraSauceConfig(e.detail);
+      else setExtraSauceConfig(getStoredExtraSauceConfig());
+    };
+    window.addEventListener('extra_sauce_config_updated', handleSauceUpdated);
+    return () => window.removeEventListener('extra_sauce_config_updated', handleSauceUpdated);
+  }, []);
 
   if (!isOpen) return null;
 
@@ -208,6 +223,20 @@ export function BoxBuilderModal({ isOpen, onClose, onAddBoxToCart, initialBox = 
   const isDydyoCombo = (name.toLowerCase().includes('dydyo') || (initialBox?.id || '').toLowerCase().includes('dydyo'));
   const boxImage = initialBox?.image || knownConfig?.image || "https://assets.olaclick.app/companies/products/images/800/4cfa4549-ad5f-4b4e-b539-468584a0eeba.png";
 
+  const selectedBeverage = useMemo(() => {
+    if (isDydyoCombo) {
+      return BEVERAGE_OPTIONS.find(b => b.name === selectedDydyo) || BEVERAGE_OPTIONS[0];
+    }
+    if (selectedBeverageId === 'none') return null;
+    return BEVERAGE_OPTIONS.find(b => b.id === selectedBeverageId) || null;
+  }, [isDydyoCombo, selectedDydyo, selectedBeverageId]);
+
+  const beveragePrice = isDydyoCombo ? 0 : (selectedBeverage ? Number(selectedBeverage.price || 0) : 0);
+  const extraSaucePrice = (wantsExtraSauce && extraSauceConfig?.active !== false) ? Number(extraSauceConfig.price || 0) : 0;
+
+  const finalPrice = price + beveragePrice + extraSaucePrice;
+  const finalCreditPrice = (creditPrice || price) + beveragePrice + extraSaucePrice;
+
   const currentOption = BOX_SORTIDO_OPTIONS.find(o => o.id === selectedOptionId) || BOX_SORTIDO_OPTIONS[0];
 
   const getOptionDescription = (opt) => {
@@ -230,11 +259,20 @@ export function BoxBuilderModal({ isOpen, onClose, onAddBoxToCart, initialBox = 
     const isDoces = currentOption.hasDoces;
     const isSemSuinos = currentOption.semSuinos;
 
+    const beverageText = isDydyoCombo
+      ? ` • 🥤 + ${selectedDydyo}`
+      : (selectedBeverage ? ` • 🥤 + ${selectedBeverage.name} (R$ ${beveragePrice.toFixed(2).replace('.', ',')})` : '');
+
+    const sauceText = (wantsExtraSauce && extraSauceConfig?.active !== false)
+      ? ` • 🧂 + ${extraSauceConfig.name || 'Molho Extra'} (R$ ${extraSaucePrice.toFixed(2).replace('.', ',')})`
+      : '';
+
     const customItem = {
       id: `custom-box-${initialBox?.id || 'box'}-${Date.now()}`,
       name: name,
-      price: price,
-      creditPrice: creditPrice,
+      price: finalPrice,
+      creditPrice: finalCreditPrice,
+      basePrice: price,
       isCustomBox: true,
       isBox: true,
       isSortido: true,
@@ -245,10 +283,15 @@ export function BoxBuilderModal({ isOpen, onClose, onAddBoxToCart, initialBox = 
       semSuinos: isSemSuinos,
       salgadasCount: isDoces ? salgadasCount : totalCount,
       docesCount: isDoces ? docesCount : 0,
-      dydyoFlavor: isDydyoCombo ? selectedDydyo : null,
+      dydyoFlavor: isDydyoCombo ? selectedDydyo : (selectedBeverage?.isDydyo ? selectedBeverage.name : null),
+      beverage: isDydyoCombo ? selectedDydyo : (selectedBeverage ? selectedBeverage.name : null),
+      beveragePrice: beveragePrice,
+      hasExtraSauce: Boolean(wantsExtraSauce && extraSauceConfig?.active !== false),
+      extraSaucePrice: extraSaucePrice,
+      extraSauceName: wantsExtraSauce ? (extraSauceConfig.name || 'Molho Extra da Casa') : null,
       notes: notes.trim(),
       image: boxImage,
-      description: `${currentOption.displayTitle} (${isDoces ? `${salgadasCount} Salgadas + ${docesCount} Doces` : `${totalCount} Salgadas`})${isSemSuinos ? ' • 🚫 Sem carne suína' : ''}${isDydyoCombo ? ` • 🥤 + ${selectedDydyo}` : ''}${notes.trim() ? ` • Obs: ${notes.trim()}` : ''}`
+      description: `${currentOption.displayTitle} (${isDoces ? `${salgadasCount} Salgadas + ${docesCount} Doces` : `${totalCount} Salgadas`})${isSemSuinos ? ' • 🚫 Sem carne suína' : ''}${beverageText}${sauceText}${notes.trim() ? ` • Obs: ${notes.trim()}` : ''}`
     };
 
     onAddBoxToCart(customItem);
@@ -406,8 +449,8 @@ export function BoxBuilderModal({ isOpen, onClose, onAddBoxToCart, initialBox = 
             </div>
           </div>
 
-          {/* Escolha do Sabor do Refrigerante Dydyo 2L (Incluso no Combo) */}
-          {isDydyoCombo && (
+          {/* 1. SELEÇÃO DE REFRIGERANTE / BEBIDA */}
+          {isDydyoCombo ? (
             <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-dark-950 to-dark-900 border border-amber-500/40 space-y-2.5">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
@@ -451,6 +494,114 @@ export function BoxBuilderModal({ isOpen, onClose, onAddBoxToCart, initialBox = 
                 })}
               </div>
             </div>
+          ) : (
+            <div className="p-3.5 sm:p-4 rounded-2xl bg-dark-900 border border-dark-750 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
+                  <span className="text-base">🥤</span>
+                  <span>Deseja Adicionar Refrigerante ou Bebida Gelada? (Opcional)</span>
+                </label>
+                <span className="text-[10px] text-slate-400 bg-dark-800 px-2 py-0.5 rounded">
+                  {selectedBeverageId === 'none' ? 'Sem Bebida' : 'Bebida Adicionada'}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
+                {/* Opção Sem Bebida */}
+                <button
+                  type="button"
+                  onClick={() => setSelectedBeverageId('none')}
+                  className={`p-2.5 rounded-xl border text-left transition-all flex items-center justify-between cursor-pointer ${
+                    selectedBeverageId === 'none'
+                      ? 'bg-brand-gold/15 border-brand-gold text-white font-bold'
+                      : 'bg-dark-850 hover:bg-dark-800 border-dark-800 text-slate-400'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                      selectedBeverageId === 'none' ? 'border-brand-gold bg-brand-gold text-dark-950' : 'border-dark-600'
+                    }`}>
+                      {selectedBeverageId === 'none' && <Check className="w-3 h-3 stroke-[3]" />}
+                    </div>
+                    <span className="text-xs font-semibold">Apenas as esfirras (Sem bebida)</span>
+                  </div>
+                  <span className="text-[11px] text-slate-400">R$ 0,00</span>
+                </button>
+
+                {/* Lista de Bebidas */}
+                {BEVERAGE_OPTIONS.map((bev) => {
+                  const isSelected = selectedBeverageId === bev.id;
+                  return (
+                    <button
+                      key={bev.id}
+                      type="button"
+                      onClick={() => setSelectedBeverageId(bev.id)}
+                      className={`p-2.5 rounded-xl border text-left transition-all flex items-center justify-between cursor-pointer ${
+                        isSelected
+                          ? 'bg-amber-500/20 border-amber-400 text-white font-bold shadow-md'
+                          : 'bg-dark-850 hover:bg-dark-800 border-dark-800 text-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                          isSelected ? 'border-amber-400 bg-amber-400 text-dark-950' : 'border-dark-600'
+                        }`}>
+                          {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                        </div>
+                        <div className="min-w-0 truncate">
+                          <span className="text-xs block truncate font-medium">{bev.name}</span>
+                          {bev.badge && <span className="text-[9px] text-amber-300 font-normal">{bev.badge}</span>}
+                        </div>
+                      </div>
+                      <span className="text-xs font-black text-amber-300 whitespace-nowrap ml-2">
+                        + R$ {bev.price.toFixed(2).replace('.', ',')}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* 2. SELEÇÃO DE MOLHO EXTRA DA CASA */}
+          {extraSauceConfig?.active !== false && (
+            <div className={`p-3.5 sm:p-4 rounded-2xl border transition-all ${
+              wantsExtraSauce 
+                ? 'bg-amber-500/15 border-amber-400 shadow-md ring-1 ring-amber-400/40' 
+                : 'bg-dark-900 border-dark-750'
+            }`}>
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-start gap-2.5 min-w-0">
+                  <span className="text-xl flex-shrink-0">🧂</span>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-bold text-white">
+                        {extraSauceConfig.name || 'Molho Especial da Casa'}
+                      </span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-black border border-amber-500/30">
+                        + R$ {Number(extraSauceConfig.price || 0).toFixed(2).replace('.', ',')}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      {extraSauceConfig.description || 'Pote generoso de molho artesanal especial da El Shadday (perfeito para molhar as esfirras quentinhas).'}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setWantsExtraSauce(!wantsExtraSauce)}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap flex-shrink-0 ${
+                    wantsExtraSauce
+                      ? 'bg-amber-400 text-dark-950 shadow-md scale-102'
+                      : 'bg-dark-800 hover:bg-dark-750 text-slate-300 border border-dark-700'
+                  }`}
+                >
+                  <Check className={`w-3.5 h-3.5 stroke-[3] ${wantsExtraSauce ? 'opacity-100' : 'opacity-30'}`} />
+                  <span>{wantsExtraSauce ? 'Molho Adicionado' : 'Adicionar Molho'}</span>
+                </button>
+              </div>
+            </div>
           )}
 
           {/* Observações para a Cozinha (Opcional) */}
@@ -477,13 +628,13 @@ export function BoxBuilderModal({ isOpen, onClose, onAddBoxToCart, initialBox = 
             <div>
               <span className="text-[11px] text-slate-400 block">Total do Pedido:</span>
               <div className="text-xl sm:text-2xl font-black text-brand-gold leading-tight">
-                R$ {price.toFixed(2).replace('.', ',')}
+                R$ {finalPrice.toFixed(2).replace('.', ',')}
               </div>
             </div>
 
             {creditPrice && (
               <span className="text-[10px] text-slate-500">
-                *No crédito: R$ {creditPrice.toFixed(2).replace('.', ',')}
+                *No crédito: R$ {finalCreditPrice.toFixed(2).replace('.', ',')}
               </span>
             )}
           </div>

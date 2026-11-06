@@ -135,6 +135,18 @@ export function DesktopSidebarCart({
                       </p>
                     )}
 
+                    {item.beverage && (
+                      <p className="text-[10px] text-cyan-300 font-medium mt-0.5 leading-snug">
+                        🥤 <span className="text-white font-bold">Bebida:</span> {item.beverage}
+                      </p>
+                    )}
+
+                    {item.hasExtraSauce && (
+                      <p className="text-[10px] text-amber-200 font-medium mt-0.5 leading-snug">
+                        🍯 <span className="text-white font-bold">Molho Extra:</span> {item.extraSauceName || 'Molho Especial'}
+                      </p>
+                    )}
+
                     {item.flavors && !item.pizzaSelections && (
                       <p className="text-[10px] text-brand-gold/90 mt-0.5 leading-snug">
                         {Array.isArray(item.flavors) ? item.flavors.join(' + ') : item.flavors}

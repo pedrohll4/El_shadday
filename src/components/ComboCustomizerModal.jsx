@@ -11,7 +11,8 @@ import {
   getFlavorSurchargeForPizza,
   getStoredAcaiSettings,
   DYDYO_FLAVORS,
-  INITIAL_PIZZA_FLAVORS 
+  INITIAL_PIZZA_FLAVORS,
+  getStoredExtraSauceConfig
 } from '../data/menuData';
 
 // Helper to determine the pizza configuration for any combo with size & base price
@@ -100,6 +101,8 @@ export function ComboCustomizerModal({
   const [selectedAcaiComplements, setSelectedAcaiComplements] = useState([]);
   const [selectedAcaiCobertura, setSelectedAcaiCobertura] = useState('Sem Cobertura');
   const [selectedDydyo, setSelectedDydyo] = useState('Dydyo Guaraná 2L');
+  const [extraSauceConfig, setExtraSauceConfig] = useState(() => getStoredExtraSauceConfig());
+  const [wantsExtraSauce, setWantsExtraSauce] = useState(false);
   const [notes, setNotes] = useState('');
   const [validationError, setValidationError] = useState('');
   const [semSuinosEsfirras, setSemSuinosEsfirras] = useState(false);
@@ -148,12 +151,18 @@ export function ComboCustomizerModal({
       if (e?.detail) setAcaiConfig(e.detail);
       else setAcaiConfig(getStoredAcaiSettings());
     };
+    const handleSauceUpdated = (e) => {
+      if (e?.detail) setExtraSauceConfig(e.detail);
+      else setExtraSauceConfig(getStoredExtraSauceConfig());
+    };
     window.addEventListener('pizza_flavors_updated', handleFlavorsUpdated);
     window.addEventListener('acai_settings_updated', handleAcaiUpdated);
+    window.addEventListener('extra_sauce_config_updated', handleSauceUpdated);
     window.addEventListener('storage', handleFlavorsUpdated);
     return () => {
       window.removeEventListener('pizza_flavors_updated', handleFlavorsUpdated);
       window.removeEventListener('acai_settings_updated', handleAcaiUpdated);
+      window.removeEventListener('extra_sauce_config_updated', handleSauceUpdated);
       window.removeEventListener('storage', handleFlavorsUpdated);
     };
   }, []);
@@ -216,6 +225,8 @@ export function ComboCustomizerModal({
       setSelectedAcaiComplements(lim > 0 ? defaultComplements.slice(0, lim) : defaultComplements);
       setSelectedAcaiCobertura('Sem Cobertura');
       setSelectedDydyo('Dydyo Guaraná 2L');
+      setWantsExtraSauce(false);
+      setExtraSauceConfig(getStoredExtraSauceConfig());
 
       // Initialize empty selection for each pizza in the combo
       const initial = {};
@@ -274,7 +285,8 @@ export function ComboCustomizerModal({
   }, [pizzaSurcharges, acaiExtrasSurcharge]);
 
   const baseComboPrice = Number(comboProduct?.price) || 0;
-  const finalComboPrice = baseComboPrice + totalComboSurcharge;
+  const extraSaucePrice = (wantsExtraSauce && extraSauceConfig?.active !== false) ? Number(extraSauceConfig.price || 0) : 0;
+  const finalComboPrice = baseComboPrice + totalComboSurcharge + extraSaucePrice;
 
   if (!isOpen || !comboProduct) return null;
 
@@ -374,6 +386,9 @@ export function ComboCustomizerModal({
     if (hasDydyoInCombo) {
       extras.push(selectedDydyo || 'Dydyo 2L');
     }
+    if (wantsExtraSauce && extraSauceConfig?.active !== false) {
+      extras.push(`${extraSauceConfig.name || 'Molho Extra'} (+ R$ ${extraSaucePrice.toFixed(2).replace('.', ',')})`);
+    }
     const extrasText = extras.length > 0 ? ` • Acompanha: ${extras.join(' + ')}` : '';
     const surchargeNotice = totalComboSurcharge > 0 
       ? ` • Sabores especiais: + R$ ${totalComboSurcharge.toFixed(2).replace('.', ',')}` 
@@ -386,6 +401,9 @@ export function ComboCustomizerModal({
       basePrice: baseComboPrice,
       totalSurcharge: totalComboSurcharge,
       isCombo: true,
+      hasExtraSauce: Boolean(wantsExtraSauce && extraSauceConfig?.active !== false),
+      extraSaucePrice: extraSaucePrice,
+      extraSauceName: wantsExtraSauce ? (extraSauceConfig.name || 'Molho Extra da Casa') : null,
       semSuinosEsfirras: hasEsfirrasInCombo ? semSuinosEsfirras : false,
       pizzaSelections: pizzasConfig.map(p => ({
         pizzaTitle: p.title,
@@ -1105,6 +1123,47 @@ export function ComboCustomizerModal({
                     🍫 1 Pizza P Doce Brigadeiro
                   </span>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* Molho Extra da Casa */}
+          {extraSauceConfig?.active !== false && (
+            <div className={`p-3.5 sm:p-4 rounded-2xl border transition-all ${
+              wantsExtraSauce 
+                ? 'bg-amber-500/15 border-amber-400 shadow-md ring-1 ring-amber-400/40' 
+                : 'bg-dark-950 border-dark-800'
+            }`}>
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-start gap-2.5 min-w-0">
+                  <span className="text-xl flex-shrink-0">🧂</span>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-bold text-white">
+                        {extraSauceConfig.name || 'Molho Especial da Casa'}
+                      </span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-black border border-amber-500/30">
+                        + R$ {Number(extraSauceConfig.price || 0).toFixed(2).replace('.', ',')}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      {extraSauceConfig.description || 'Pote generoso de molho artesanal especial da El Shadday (perfeito para bordas e esfirras).'}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setWantsExtraSauce(!wantsExtraSauce)}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap flex-shrink-0 ${
+                    wantsExtraSauce
+                      ? 'bg-amber-400 text-dark-950 shadow-md scale-102'
+                      : 'bg-dark-900 hover:bg-dark-850 text-slate-300 border border-dark-750'
+                  }`}
+                >
+                  <Check className={`w-3.5 h-3.5 stroke-[3] ${wantsExtraSauce ? 'opacity-100' : 'opacity-30'}`} />
+                  <span>{wantsExtraSauce ? 'Molho Adicionado' : 'Adicionar Molho'}</span>
+                </button>
               </div>
             </div>
           )}

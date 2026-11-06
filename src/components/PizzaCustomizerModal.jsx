@@ -1,6 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, Pizza, Check, Sparkles, AlertCircle, Info, Search, Flame, ArrowUpRight } from 'lucide-react';
-import { getStoredPizzaFlavors, calculatePizzaPrice, getPizzaFlavorPrice, getPizzaSizeKey, INITIAL_PIZZA_FLAVORS } from '../data/menuData';
+import { X, Pizza, Check, Sparkles, AlertCircle, Info, Search, Flame, ArrowUpRight, Wine, Plus } from 'lucide-react';
+import { 
+  getStoredPizzaFlavors, 
+  calculatePizzaPrice, 
+  getPizzaFlavorPrice, 
+  getPizzaSizeKey, 
+  INITIAL_PIZZA_FLAVORS,
+  BEVERAGE_OPTIONS,
+  DYDYO_FLAVORS,
+  getStoredExtraSauceConfig
+} from '../data/menuData';
 
 export function PizzaCustomizerModal({ isOpen, onClose, pizzaProduct, onAddPizzaToCart, flavors, isStoreOpen = true }) {
   const [flavorsList, setFlavorsList] = useState(() => {
@@ -12,6 +21,19 @@ export function PizzaCustomizerModal({ isOpen, onClose, pizzaProduct, onAddPizza
   const [flavorSearch, setFlavorSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('todos');
   const [notes, setNotes] = useState('');
+
+  // Refrigerante & Bebidas
+  const isDydyoIncluded = useMemo(() => {
+    const text = `${pizzaProduct?.name || ''} ${pizzaProduct?.description || ''} ${pizzaProduct?.details || ''}`.toLowerCase();
+    return text.includes('dydyo');
+  }, [pizzaProduct]);
+
+  const [selectedDydyo, setSelectedDydyo] = useState('Dydyo Guaraná 2L');
+  const [selectedBeverageId, setSelectedBeverageId] = useState('none');
+
+  // Molho Extra da Casa
+  const [extraSauceConfig, setExtraSauceConfig] = useState(() => getStoredExtraSauceConfig());
+  const [wantsExtraSauce, setWantsExtraSauce] = useState(false);
 
   const maxFlavors = useMemo(() => {
     if (pizzaProduct?.maxSabores) return Number(pizzaProduct.maxSabores);
@@ -43,9 +65,16 @@ export function PizzaCustomizerModal({ isOpen, onClose, pizzaProduct, onAddPizza
     window.addEventListener('pizza_flavors_updated', handleFlavorsUpdated);
     window.addEventListener('storage', handleFlavorsUpdated);
 
+    const handleSauceUpdated = (e) => {
+      if (e?.detail) setExtraSauceConfig(e.detail);
+      else setExtraSauceConfig(getStoredExtraSauceConfig());
+    };
+    window.addEventListener('extra_sauce_config_updated', handleSauceUpdated);
+
     return () => {
       window.removeEventListener('pizza_flavors_updated', handleFlavorsUpdated);
       window.removeEventListener('storage', handleFlavorsUpdated);
+      window.removeEventListener('extra_sauce_config_updated', handleSauceUpdated);
     };
   }, []);
 
@@ -59,6 +88,10 @@ export function PizzaCustomizerModal({ isOpen, onClose, pizzaProduct, onAddPizza
       setFlavorSearch('');
       setCategoryFilter('todos');
       setNotes('');
+      setSelectedDydyo('Dydyo Guaraná 2L');
+      setSelectedBeverageId('none');
+      setWantsExtraSauce(false);
+      setExtraSauceConfig(getStoredExtraSauceConfig());
     }
   }, [isOpen, pizzaProduct, flavors]);
 
@@ -101,6 +134,22 @@ export function PizzaCustomizerModal({ isOpen, onClose, pizzaProduct, onAddPizza
     return calculatePizzaPrice(basePrice, selectedFlavors, sizeKey);
   }, [basePrice, selectedFlavors, sizeKey]);
 
+  // Bebida Selecionada
+  const selectedBeverage = useMemo(() => {
+    if (isDydyoIncluded) {
+      return BEVERAGE_OPTIONS.find(b => b.name === selectedDydyo) || BEVERAGE_OPTIONS[0];
+    }
+    if (selectedBeverageId === 'none') return null;
+    return BEVERAGE_OPTIONS.find(b => b.id === selectedBeverageId) || null;
+  }, [isDydyoIncluded, selectedDydyo, selectedBeverageId]);
+
+  const beveragePrice = isDydyoIncluded ? 0 : (selectedBeverage ? Number(selectedBeverage.price || 0) : 0);
+  const extraSaucePrice = (wantsExtraSauce && extraSauceConfig?.active !== false) ? Number(extraSauceConfig.price || 0) : 0;
+
+  const totalPizzaPrice = useMemo(() => {
+    return calculatedPrice + beveragePrice + extraSaucePrice;
+  }, [calculatedPrice, beveragePrice, extraSaucePrice]);
+
   // Identifica o sabor de maior valor selecionado que causa acréscimo
   const highestPricedFlavor = useMemo(() => {
     if (!selectedFlavors || selectedFlavors.length === 0) return null;
@@ -137,20 +186,34 @@ export function PizzaCustomizerModal({ isOpen, onClose, pizzaProduct, onAddPizza
       ? ` (Valor cobrado pelo maior sabor: ${highestPricedFlavor.name} - R$ ${calculatedPrice.toFixed(2).replace('.', ',')})`
       : '';
 
+    const beverageText = isDydyoIncluded
+      ? ` • 🥤 Refri Incluso: ${selectedDydyo}`
+      : (selectedBeverage ? ` • 🥤 + ${selectedBeverage.name} (R$ ${beveragePrice.toFixed(2).replace('.', ',')})` : '');
+
+    const sauceText = (wantsExtraSauce && extraSauceConfig?.active !== false)
+      ? ` • 🧂 + ${extraSauceConfig.name || 'Molho Extra'} (R$ ${extraSaucePrice.toFixed(2).replace('.', ',')})`
+      : '';
+
     const customPizza = {
       id: `custom-pizza-${Date.now()}`,
       name: `${pizzaProduct.name} (${flavorNames.join(' / ')})`,
-      price: calculatedPrice,
+      price: totalPizzaPrice,
       basePrice: basePrice,
       isCustomPizza: true,
       tamanho: pizzaProduct.tamanho || 'Pizza',
       flavors: flavorNames,
       flavorDetails: selectedFlavors,
       highestFlavor: highestPricedFlavor,
+      dydyoFlavor: isDydyoIncluded ? selectedDydyo : (selectedBeverage?.isDydyo ? selectedBeverage.name : null),
+      beverage: isDydyoIncluded ? selectedDydyo : (selectedBeverage ? selectedBeverage.name : null),
+      beveragePrice: beveragePrice,
+      hasExtraSauce: Boolean(wantsExtraSauce && extraSauceConfig?.active !== false),
+      extraSaucePrice: extraSaucePrice,
+      extraSauceName: wantsExtraSauce ? (extraSauceConfig.name || 'Molho Extra da Casa') : null,
       notes: notes.trim(),
       bordaGratis: Boolean(pizzaProduct.bordaGratis),
       image: pizzaProduct.image,
-      description: `Sabores: ${flavorNames.join(' e ')}.${pizzaProduct.bordaGratis ? ' Acompanha borda de Catupiry grátis.' : ''}${upgradeText}${notes ? ` Obs: ${notes}` : ''}`
+      description: `Sabores: ${flavorNames.join(' e ')}.${pizzaProduct.bordaGratis ? ' Acompanha borda de Catupiry grátis.' : ''}${upgradeText}${beverageText}${sauceText}${notes ? ` Obs: ${notes}` : ''}`
     };
 
     onAddPizzaToCart(customPizza);
@@ -370,8 +433,159 @@ export function PizzaCustomizerModal({ isOpen, onClose, pizzaProduct, onAddPizza
             })
           )}
 
+          {/* 1. SELEÇÃO DE REFRIGERANTE / BEBIDA */}
+          {isDydyoIncluded ? (
+            <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-dark-950 to-dark-900 border border-amber-500/40 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
+                  <span className="text-base">🥤</span>
+                  <span>Escolha o Sabor do seu Dydyo 2L:</span>
+                </span>
+                <span className="text-[10px] text-amber-300 font-bold bg-amber-500/15 px-2 py-0.5 rounded border border-amber-500/30">
+                  Incluso no Combo
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {DYDYO_FLAVORS.map((dydyo) => {
+                  const isSelected = selectedDydyo === dydyo.name;
+                  return (
+                    <button
+                      key={dydyo.id}
+                      type="button"
+                      onClick={() => setSelectedDydyo(dydyo.name)}
+                      className={`p-2.5 rounded-xl border text-left transition-all flex items-center gap-2 cursor-pointer ${
+                        isSelected
+                          ? 'bg-amber-500/20 border-amber-400 text-white ring-1 ring-amber-400/50 shadow-md'
+                          : 'bg-dark-850 hover:bg-dark-800 border-dark-750 text-slate-300'
+                      }`}
+                    >
+                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                        isSelected ? 'border-amber-400 bg-amber-400 text-dark-950' : 'border-dark-600'
+                      }`}>
+                        {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-xs font-bold leading-tight truncate">{dydyo.flavor}</div>
+                        <div className="text-[10px] text-slate-400 truncate">{dydyo.badge || '2L Gelado'}</div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <div className="p-3.5 sm:p-4 rounded-2xl bg-dark-900 border border-dark-750 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
+                  <span className="text-base">🥤</span>
+                  <span>Deseja Adicionar Refrigerante ou Bebida Gelada? (Opcional)</span>
+                </label>
+                <span className="text-[10px] text-slate-400 bg-dark-800 px-2 py-0.5 rounded">
+                  {selectedBeverageId === 'none' ? 'Sem Bebida' : 'Bebida Adicionada'}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-52 overflow-y-auto pr-1">
+                {/* Opção Sem Bebida */}
+                <button
+                  type="button"
+                  onClick={() => setSelectedBeverageId('none')}
+                  className={`p-2.5 rounded-xl border text-left transition-all flex items-center justify-between cursor-pointer ${
+                    selectedBeverageId === 'none'
+                      ? 'bg-brand-gold/15 border-brand-gold text-white font-bold'
+                      : 'bg-dark-850 hover:bg-dark-800 border-dark-800 text-slate-400'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                      selectedBeverageId === 'none' ? 'border-brand-gold bg-brand-gold text-dark-950' : 'border-dark-600'
+                    }`}>
+                      {selectedBeverageId === 'none' && <Check className="w-3 h-3 stroke-[3]" />}
+                    </div>
+                    <span className="text-xs font-semibold">Apenas a pizza (Sem bebida)</span>
+                  </div>
+                  <span className="text-[11px] text-slate-400">R$ 0,00</span>
+                </button>
+
+                {/* Lista de Bebidas Disponíveis */}
+                {BEVERAGE_OPTIONS.map((bev) => {
+                  const isSelected = selectedBeverageId === bev.id;
+                  return (
+                    <button
+                      key={bev.id}
+                      type="button"
+                      onClick={() => setSelectedBeverageId(bev.id)}
+                      className={`p-2.5 rounded-xl border text-left transition-all flex items-center justify-between cursor-pointer ${
+                        isSelected
+                          ? 'bg-amber-500/20 border-amber-400 text-white font-bold shadow-md'
+                          : 'bg-dark-850 hover:bg-dark-800 border-dark-800 text-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                          isSelected ? 'border-amber-400 bg-amber-400 text-dark-950' : 'border-dark-600'
+                        }`}>
+                          {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                        </div>
+                        <div className="min-w-0 truncate">
+                          <span className="text-xs block truncate font-medium">{bev.name}</span>
+                          {bev.badge && <span className="text-[9px] text-amber-300 font-normal">{bev.badge}</span>}
+                        </div>
+                      </div>
+                      <span className="text-xs font-black text-amber-300 whitespace-nowrap ml-2">
+                        + R$ {bev.price.toFixed(2).replace('.', ',')}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* 2. SELEÇÃO DE MOLHO EXTRA DA CASA */}
+          {extraSauceConfig?.active !== false && (
+            <div className={`p-3.5 sm:p-4 rounded-2xl border transition-all ${
+              wantsExtraSauce 
+                ? 'bg-amber-500/15 border-amber-400 shadow-md ring-1 ring-amber-400/40' 
+                : 'bg-dark-900 border-dark-750'
+            }`}>
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-start gap-2.5 min-w-0">
+                  <span className="text-xl flex-shrink-0">🧂</span>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-bold text-white">
+                        {extraSauceConfig.name || 'Molho Especial da Casa'}
+                      </span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-black border border-amber-500/30">
+                        + R$ {Number(extraSauceConfig.price || 0).toFixed(2).replace('.', ',')}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      {extraSauceConfig.description || 'Pote generoso de molho artesanal especial da El Shadday (perfeito para bordas e recheios).'}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setWantsExtraSauce(!wantsExtraSauce)}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap flex-shrink-0 ${
+                    wantsExtraSauce
+                      ? 'bg-amber-400 text-dark-950 shadow-md scale-102'
+                      : 'bg-dark-800 hover:bg-dark-750 text-slate-300 border border-dark-700'
+                  }`}
+                >
+                  <Check className={`w-3.5 h-3.5 stroke-[3] ${wantsExtraSauce ? 'opacity-100' : 'opacity-30'}`} />
+                  <span>{wantsExtraSauce ? 'Molho Adicionado' : 'Adicionar Molho'}</span>
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Observations */}
-          <div className="pt-2">
+          <div className="pt-1">
             <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
               Observações (opcional):
             </label>
@@ -399,19 +613,33 @@ export function PizzaCustomizerModal({ isOpen, onClose, pizzaProduct, onAddPizza
             </div>
             <div className="flex items-baseline gap-2">
               <div className="text-2xl font-black text-brand-gold">
-                R$ {calculatedPrice.toFixed(2).replace('.', ',')}
+                R$ {totalPizzaPrice.toFixed(2).replace('.', ',')}
               </div>
-              {isPriceUpgraded && (
+              {(isPriceUpgraded || beveragePrice > 0 || extraSaucePrice > 0) && (
                 <div className="text-[11px] text-slate-500 line-through">
                   R$ {basePrice.toFixed(2).replace('.', ',')}
                 </div>
               )}
             </div>
-            {isPriceUpgraded && highestPricedFlavor && (
-              <p className="text-[10px] text-amber-300/90 font-medium">
-                Puxado por: <strong>{highestPricedFlavor.name}</strong>
-              </p>
-            )}
+            
+            {/* Detalhamento de Adicionais no rodapé */}
+            <div className="flex flex-wrap items-center gap-2 mt-0.5 text-[10px] text-slate-400">
+              {isPriceUpgraded && highestPricedFlavor && (
+                <span className="text-amber-300 font-medium">
+                  Sabor: {highestPricedFlavor.name}
+                </span>
+              )}
+              {beveragePrice > 0 && selectedBeverage && (
+                <span className="text-cyan-300 font-medium">
+                  • Bebida: +R$ {beveragePrice.toFixed(2).replace('.', ',')}
+                </span>
+              )}
+              {extraSaucePrice > 0 && (
+                <span className="text-amber-200 font-medium">
+                  • Molho: +R$ {extraSaucePrice.toFixed(2).replace('.', ',')}
+                </span>
+              )}
+            </div>
           </div>
 
           <div className="flex items-center gap-2">

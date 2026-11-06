@@ -45,7 +45,9 @@ import {
   PIZZA_SIZES,
   DEFAULT_PIZZA_BASE_PRICES,
   getPizzaSizeKey,
-  getPizzaFlavorPrice
+  getPizzaFlavorPrice,
+  getStoredExtraSauceConfig,
+  saveStoredExtraSauceConfig
 } from '../data/menuData';
 import { PizzaCustomizerModal } from './PizzaCustomizerModal';
 import { BoxBuilderModal } from './BoxBuilderModal';
@@ -811,6 +813,13 @@ export function AdminDashboard({
   const [tempCardAutoAdd, setTempCardAutoAdd] = useState(currentCardSettings.autoAddToTotal !== false);
   const [tempCardCustomNotice, setTempCardCustomNotice] = useState(currentCardSettings.customNotice || '');
 
+  // Extra Sauce Settings Form Fields
+  const [extraSauceConfig, setExtraSauceConfig] = useState(() => getStoredExtraSauceConfig());
+  const [tempSauceActive, setTempSauceActive] = useState(extraSauceConfig.active !== false);
+  const [tempSauceName, setTempSauceName] = useState(extraSauceConfig.name || 'Molho Especial da Casa');
+  const [tempSaucePrice, setTempSaucePrice] = useState(extraSauceConfig.price !== undefined ? extraSauceConfig.price.toString() : '3.00');
+  const [tempSauceDescription, setTempSauceDescription] = useState(extraSauceConfig.description || '');
+
   // Supabase Custom Config State
   const [customSupabaseUrl, setCustomSupabaseUrl] = useState(() => {
     try { return localStorage.getItem('el_shadday_supabase_url') || ''; } catch (e) { return ''; }
@@ -897,12 +906,22 @@ export function AdminDashboard({
       else setDeliveryCategories(getStoredCategories());
     };
 
+    const handleSauceSync = (e) => {
+      const cfg = e?.detail || getStoredExtraSauceConfig();
+      setExtraSauceConfig(cfg);
+      setTempSauceActive(cfg.active !== false);
+      setTempSauceName(cfg.name || 'Molho Especial da Casa');
+      setTempSaucePrice(cfg.price !== undefined ? cfg.price.toString() : '3.00');
+      setTempSauceDescription(cfg.description || '');
+    };
+
     window.addEventListener('delivery_products_updated', handleProductsSync);
     window.addEventListener('delivery_promos_updated', handlePromosSync);
     window.addEventListener('delivery_restaurant_info_updated', handleStoreSync);
     window.addEventListener('pizza_flavors_updated', handleFlavorsSync);
     window.addEventListener('acai_settings_updated', handleAcaiSync);
     window.addEventListener('delivery_categories_updated', handleCategoriesSync);
+    window.addEventListener('extra_sauce_config_updated', handleSauceSync);
     window.addEventListener('storage', handleProductsSync);
 
     let channelCompanySettingsAdmin = null;
@@ -924,6 +943,14 @@ export function AdminDashboard({
             if (data.promo_settings && typeof data.promo_settings === 'object' && Object.keys(data.promo_settings).length > 0) {
               setPromoSettings(data.promo_settings);
               saveStoredPromoSettings(data.promo_settings);
+              if (data.promo_settings.extra_sauce_config) {
+                const normSauce = saveStoredExtraSauceConfig(data.promo_settings.extra_sauce_config);
+                setExtraSauceConfig(normSauce);
+                setTempSauceActive(normSauce.active !== false);
+                setTempSauceName(normSauce.name || 'Molho Especial da Casa');
+                setTempSaucePrice(normSauce.price !== undefined ? normSauce.price.toString() : '3.00');
+                setTempSauceDescription(normSauce.description || '');
+              }
             }
             if (Array.isArray(data.pizza_flavors)) {
               const normFlavors = normalizePizzaFlavors(data.pizza_flavors);
@@ -1010,6 +1037,14 @@ export function AdminDashboard({
               if (fresh.promo_settings) {
                 setPromoSettings(fresh.promo_settings);
                 saveStoredPromoSettings(fresh.promo_settings);
+                if (fresh.promo_settings.extra_sauce_config) {
+                  const normSauce = saveStoredExtraSauceConfig(fresh.promo_settings.extra_sauce_config);
+                  setExtraSauceConfig(normSauce);
+                  setTempSauceActive(normSauce.active !== false);
+                  setTempSauceName(normSauce.name || 'Molho Especial da Casa');
+                  setTempSaucePrice(normSauce.price !== undefined ? normSauce.price.toString() : '3.00');
+                  setTempSauceDescription(normSauce.description || '');
+                }
               }
             }
           })
@@ -1026,6 +1061,7 @@ export function AdminDashboard({
       window.removeEventListener('pizza_flavors_updated', handleFlavorsSync);
       window.removeEventListener('acai_settings_updated', handleAcaiSync);
       window.removeEventListener('delivery_categories_updated', handleCategoriesSync);
+      window.removeEventListener('extra_sauce_config_updated', handleSauceSync);
       window.removeEventListener('storage', handleProductsSync);
       if (channelCompanySettingsAdmin && supabase) {
         supabase.removeChannel(channelCompanySettingsAdmin);
@@ -1310,6 +1346,21 @@ export function AdminDashboard({
     syncPromosToCloud(newSettings);
     dispatchConfigSync('PROMOS_UPDATE', newSettings);
     triggerMenuToast('Promoções e Cupons salvos com sucesso!');
+  };
+
+  const handleSaveExtraSauceConfig = (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    const parsedPrice = parseFloat(tempSaucePrice.toString().replace(',', '.')) || 0;
+    const updated = {
+      active: tempSauceActive,
+      name: tempSauceName.trim() || 'Molho Especial da Casa',
+      price: parsedPrice,
+      description: tempSauceDescription.trim()
+    };
+    saveStoredExtraSauceConfig(updated);
+    setExtraSauceConfig(updated);
+    dispatchConfigSync('EXTRA_SAUCE_UPDATE', updated);
+    triggerMenuToast('Configurações de Molho Extra salvas com sucesso!');
   };
 
   const handleSaveStoreSettings = (e) => {
@@ -2808,7 +2859,13 @@ export function AdminDashboard({
               details.push(`Cobertura: ${it.acaiCobertura || it.cobertura}`);
             }
             if (it.dydyoFlavor) {
-              details.push(`Refri: ${it.dydyoFlavor}`);
+              details.push(`Refri Incluso: ${it.dydyoFlavor}`);
+            }
+            if (it.beverage) {
+              details.push(`Bebida: ${it.beverage}`);
+            }
+            if (it.hasExtraSauce) {
+              details.push(`Molho Extra: ${it.extraSauceName || 'Sim'}${it.extraSaucePrice > 0 ? ` (+R$ ${Number(it.extraSaucePrice).toFixed(2)})` : ''}`);
             }
             if (it.boxOptionTitle) {
               details.push(`Opção: ${it.boxOptionTitle}`);
@@ -2992,28 +3049,13 @@ export function AdminDashboard({
     const normNewStatus = normalizeOrderStatus(newStatus);
     const notifyType = normNewStatus;
 
-    // REGRA DE OURO: Se o motor Baileys na nuvem estiver ATIVADO/CONECTADO:
-    // O sistema de abrir mensagem em nova guia NÃO É USADO! O envio é 100% invisível em segundo plano!
-    const isBaileysActive = isCloudBaileysActive();
-
     // Se o status for CONCLUIDO, NÃO envia WhatsApp automático para não gerar mensagem redundante pós-balcão/entrega
     const shouldNotifyWhatsApp = normNewStatus !== 'CONCLUIDO';
-
-    if (shouldNotifyWhatsApp && !isBaileysActive && whatsAppSettings?.autoNotify && whatsAppSettings?.notifyOnClick !== false) {
-      // Somente abre o WhatsApp Web com texto pronto se o Baileys NÃO estiver conectado
-      const branchObj = branchesList.find(b => b.id === (order.branchId || currentBranch?.id)) || currentBranch;
-      openWhatsAppInstantLink({
-        order,
-        statusType: notifyType,
-        branch: branchObj,
-        reason: customReason
-      });
-    }
 
     // 1. Update order status in app state / DB
     onUpdateOrderStatus(order.orderId, normNewStatus);
 
-    // 2. Dispatch background WhatsApp notification (Baileys Cloud) apenas se não for CONCLUIDO
+    // 2. Dispatch background WhatsApp notification (100% invisível em segundo plano, NUNCA abre popup/nova aba no navegador)
     if (shouldNotifyWhatsApp) {
       handleTriggerCustomerWhatsApp(order, notifyType, customReason);
     }
@@ -3326,7 +3368,13 @@ export function AdminDashboard({
       bordaGratis: customPizza.bordaGratis,
       tamanho: customPizza.tamanho,
       isCustomPizza: true,
-      description: customPizza.description
+      description: customPizza.description,
+      beverage: customPizza.beverage || null,
+      beveragePrice: customPizza.beveragePrice || 0,
+      dydyoFlavor: customPizza.dydyoFlavor || null,
+      hasExtraSauce: Boolean(customPizza.hasExtraSauce),
+      extraSaucePrice: customPizza.extraSaucePrice || 0,
+      extraSauceName: customPizza.extraSauceName || null
     }]);
     setPdvPizzaToCustomize(null);
   };
@@ -3349,6 +3397,11 @@ export function AdminDashboard({
       salgadasDetails: customBox.salgadasDetails,
       docesDetails: customBox.docesDetails,
       dydyoFlavor: customBox.dydyoFlavor || null,
+      beverage: customBox.beverage || null,
+      beveragePrice: customBox.beveragePrice || 0,
+      hasExtraSauce: Boolean(customBox.hasExtraSauce),
+      extraSaucePrice: customBox.extraSaucePrice || 0,
+      extraSauceName: customBox.extraSauceName || null,
       description: customBox.description
     }]);
     setPdvBoxToCustomize(null);
@@ -3381,6 +3434,9 @@ export function AdminDashboard({
       acaiComplements: customCombo.acaiComplements || [],
       acaiCobertura: customCombo.acaiCobertura || '',
       dydyoFlavor: customCombo.dydyoFlavor || null,
+      hasExtraSauce: Boolean(customCombo.hasExtraSauce),
+      extraSaucePrice: customCombo.extraSaucePrice || 0,
+      extraSauceName: customCombo.extraSauceName || null,
       notes: customCombo.notes || '',
       description: customCombo.description
     }]);
@@ -3403,6 +3459,29 @@ export function AdminDashboard({
         isBox: product.isBox,
         totalCount: product.totalCount,
         image: product.image
+      }];
+    });
+  };
+
+  const handleAddStandaloneSauceToPDV = () => {
+    const saucePrice = Number(extraSauceConfig.price !== undefined ? extraSauceConfig.price : 3.00);
+    const sauceName = `Potinho de ${extraSauceConfig.name || 'Molho Especial da Casa'}`;
+    setPdvValidationError('');
+    setPdvCart(prev => {
+      const existing = prev.find(i => i.isStandaloneSauce);
+      if (existing) {
+        return prev.map(i => i.isStandaloneSauce ? { ...i, quantity: i.quantity + 1 } : i);
+      }
+      return [...prev, {
+        id: `sauce-standalone-${Date.now()}`,
+        name: sauceName,
+        price: saucePrice,
+        quantity: 1,
+        isStandaloneSauce: true,
+        hasExtraSauce: true,
+        extraSauceName: extraSauceConfig.name || 'Molho Especial da Casa',
+        extraSaucePrice: saucePrice,
+        description: 'Potinho artesanal de molho extra da casa'
       }];
     });
   };
@@ -4956,6 +5035,27 @@ export function AdminDashboard({
                                     </div>
                                   )}
 
+                                  {/* Bebida Escolhida */}
+                                  {it.beverage && (
+                                    <div className="text-[11px] text-cyan-300 font-semibold pl-2 mt-1 bg-cyan-950/40 p-1.5 rounded border border-cyan-500/40 flex items-center gap-1.5">
+                                      <span>🥤</span>
+                                      <span><strong>Bebida:</strong> {it.beverage}</span>
+                                    </div>
+                                  )}
+
+                                  {/* Molho Extra */}
+                                  {it.hasExtraSauce && (
+                                    <div className="text-[11px] text-amber-200 font-semibold pl-2 mt-1 bg-amber-950/40 p-1.5 rounded border border-amber-600/40 flex items-center gap-1.5">
+                                      <span>🍯</span>
+                                      <span><strong>Molho Extra:</strong> {it.extraSauceName || 'Molho Especial'}</span>
+                                      {it.extraSaucePrice > 0 && (
+                                        <span className="text-[10px] text-amber-400 font-normal">
+                                          (+R$ {Number(it.extraSaucePrice).toFixed(2).replace('.', ',')})
+                                        </span>
+                                      )}
+                                    </div>
+                                  )}
+
                                   {/* Custom Box details */}
                                   {it.isCustomBox && (
                                     <div className="text-[11px] text-brand-goldLight pl-2 mt-0.5 space-y-0.5">
@@ -5368,6 +5468,40 @@ export function AdminDashboard({
 
                 {/* Products Grid */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[600px] overflow-y-auto pr-1">
+                  {/* Standalone Sauce Quick Add */}
+                  <div className="sm:col-span-2 p-3 rounded-2xl bg-gradient-to-r from-dark-900 via-amber-950/20 to-dark-900 border border-amber-500/40 flex items-center justify-between gap-3 shadow-md">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-10 h-10 rounded-xl bg-amber-400/20 text-amber-300 flex items-center justify-center text-xl flex-shrink-0 border border-amber-400/30">
+                        🍯
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-xs font-bold text-white">{extraSauceConfig.name || 'Molho Especial da Casa'} (Potinho Avulso)</h4>
+                          <span className="text-xs font-black text-brand-gold font-mono">
+                            R$ {Number(extraSauceConfig.price || 0).toFixed(2).replace('.', ',')}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-slate-400">Adicione potinhos avulsos ao pedido ou configure no Cardápio</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      {pdvCart.find(i => i.isStandaloneSauce) && (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-brand-gold text-dark-950 font-black">
+                          {pdvCart.find(i => i.isStandaloneSauce).quantity}x na comanda
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={handleAddStandaloneSauceToPDV}
+                        className="px-3 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-dark-950 font-black text-xs transition-colors flex items-center gap-1 cursor-pointer shadow-sm"
+                      >
+                        <Plus className="w-3.5 h-3.5 stroke-[3]" />
+                        <span>+ Potinho</span>
+                      </button>
+                    </div>
+                  </div>
+
                   {pdvFilteredProducts.map(prod => {
                     const inCart = pdvCart.find(i => i.id === prod.id);
 
@@ -5561,6 +5695,17 @@ export function AdminDashboard({
                         </div>
                       ))
                     )}
+                  </div>
+
+                  {/* Quick Add Extra Sauce to Order */}
+                  <div className="pt-1">
+                    <button
+                      type="button"
+                      onClick={handleAddStandaloneSauceToPDV}
+                      className="w-full py-2 px-3 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/35 text-amber-300 hover:text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                    >
+                      <span>🍯 + Incluir Potinho de Molho Extra (+ R$ {Number(extraSauceConfig.price || 0).toFixed(2).replace('.', ',')})</span>
+                    </button>
                   </div>
 
                   {/* Customer Information Form */}
@@ -6547,6 +6692,16 @@ export function AdminDashboard({
                                       {it.boxSelections.map(f => `${f.quantity}x ${f.name}`).join(' • ')}
                                     </div>
                                   )}
+                                  {it.beverage && (
+                                    <div className="text-[11px] text-cyan-300 font-semibold pl-2 mt-0.5">
+                                      🥤 Bebida: {it.beverage}
+                                    </div>
+                                  )}
+                                  {it.hasExtraSauce && (
+                                    <div className="text-[11px] text-amber-200 font-semibold pl-2 mt-0.5">
+                                      🍯 Molho Extra: {it.extraSauceName || 'Molho Especial'}{it.extraSaucePrice > 0 ? ` (+R$ ${Number(it.extraSaucePrice).toFixed(2)})` : ''}
+                                    </div>
+                                  )}
                                 </div>
                               ))}
                             </div>
@@ -6673,12 +6828,14 @@ export function AdminDashboard({
                       <h2 className="font-display font-extrabold text-base sm:text-lg text-white flex items-center gap-2">
                         <span>Cardápio & Preços da {currentBranch?.name || 'Filial'}</span>
                         <span className="text-[10px] px-2 py-0.5 rounded-full bg-brand-gold/20 text-brand-gold border border-brand-gold/30 font-bold">
-                          {menuSubTab === 'flavors' ? `${pizzaFlavors.length} sabores` : menuSubTab === 'categories' ? `${deliveryCategories.length} tópicos` : `${productsList.length} itens`}
+                          {menuSubTab === 'flavors' ? `${pizzaFlavors.length} sabores` : menuSubTab === 'categories' ? `${deliveryCategories.length} tópicos` : menuSubTab === 'extra-sauce' ? 'Molho Extra' : `${productsList.length} itens`}
                         </span>
                       </h2>
                       <p className="text-xs text-slate-400">
                         {menuSubTab === 'categories' 
                           ? 'Defina a ordem e quais tópicos/categorias aparecem primeiro no cardápio do cliente.'
+                          : menuSubTab === 'extra-sauce'
+                          ? 'Configure o valor adicional cobrado e o nome do molho artesanal oferecido nas caixas de esfirras, pizzas e combos.'
                           : 'Crie novos itens, edite preços de pizzas e sabores individuais, pause produtos esgotados.'}
                       </p>
                     </div>
@@ -6744,6 +6901,16 @@ export function AdminDashboard({
                       </>
                     ) : (
                       <>
+                        <button
+                          type="button"
+                          onClick={() => setMenuSubTab('extra-sauce')}
+                          className="px-3.5 py-2.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 hover:text-white border border-amber-500/40 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                          title="Configurar o valor cobrado e nome do Molho Extra"
+                        >
+                          <span className="text-base">🍯</span>
+                          <span>Configurar Molho Extra (R$ {Number(extraSauceConfig.price || 0).toFixed(2).replace('.', ',')})</span>
+                        </button>
+
                         <button
                           type="button"
                           onClick={handleOpenCreateProduct}
@@ -6842,6 +7009,19 @@ export function AdminDashboard({
                     <Sparkles className="w-3.5 h-3.5" />
                     <span>🏷️ Promoções & Cupons</span>
                   </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setSettingsSubTab('extra-sauce')}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                      settingsSubTab === 'extra-sauce'
+                        ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
+                        : 'bg-dark-800/80 text-amber-300 hover:text-white hover:bg-dark-800'
+                    }`}
+                  >
+                    <span>🍯</span>
+                    <span>Molho Extra (R$ {Number(extraSauceConfig.price || 0).toFixed(2).replace('.', ',')})</span>
+                  </button>
                 </div>
               ) : (
                 <div className="flex items-center justify-between gap-2 mt-5 border-b border-dark-800 pb-3 flex-wrap">
@@ -6900,6 +7080,19 @@ export function AdminDashboard({
 
                     <button
                       type="button"
+                      onClick={() => setMenuSubTab('extra-sauce')}
+                      className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                        menuSubTab === 'extra-sauce'
+                          ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
+                          : 'bg-amber-500/15 text-amber-300 hover:text-white hover:bg-amber-500/25 border border-amber-500/30'
+                      }`}
+                    >
+                      <span>🍯</span>
+                      <span>Molho Extra ({extraSauceConfig.active !== false ? `Ativo • R$ ${Number(extraSauceConfig.price || 0).toFixed(2).replace('.', ',')}` : 'Desativado'})</span>
+                    </button>
+
+                    <button
+                      type="button"
                       onClick={() => {
                         setActiveAdminTab('settings');
                         setSettingsSubTab('delivery-fees');
@@ -6929,6 +7122,38 @@ export function AdminDashboard({
               {/* SUBTAB 1: PRODUTOS & PREÇOS */}
               {activeAdminTab === 'menu' && menuSubTab === 'products' && (
                 <div className="mt-5 space-y-4">
+                  {/* Banner de Acesso Rápido ao Molho Extra */}
+                  <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-dark-850 via-dark-800 to-dark-850 border border-amber-500/35 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-md">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-amber-400/20 text-amber-300 flex items-center justify-center text-xl flex-shrink-0 border border-amber-400/30">
+                        🍯
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="text-xs sm:text-sm font-bold text-white">Opção de Molho Extra: {extraSauceConfig.name || 'Molho Especial da Casa'}</h4>
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                            extraSauceConfig.active !== false
+                              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                              : 'bg-dark-900 text-slate-400 border border-dark-700'
+                          }`}>
+                            {extraSauceConfig.active !== false ? `Ativo • + R$ ${Number(extraSauceConfig.price || 0).toFixed(2).replace('.', ',')} adicionais` : 'Desativado'}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          Oferecido aos clientes no final da montagem de Caixas de Esfirras, Pizzas e Combos com acréscimo automático.
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setMenuSubTab('extra-sauce')}
+                      className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-brand-gold to-amber-400 text-dark-950 font-black text-xs hover:brightness-110 shadow-sm flex items-center gap-1.5 cursor-pointer whitespace-nowrap self-end sm:self-auto"
+                    >
+                      <Settings2 className="w-3.5 h-3.5" />
+                      <span>Configurar Molho Extra</span>
+                    </button>
+                  </div>
                   {/* Search and Category Filters */}
                   <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
                     <div className="relative flex-1 max-w-md">
@@ -8734,6 +8959,143 @@ export function AdminDashboard({
                       💡 <strong>Dica:</strong> Você também pode ligar ou desligar a borda grátis individualmente em cada pizza na aba <strong>Cardápio</strong>, clicando no botão <strong>🧀 Borda Grátis / Sem Borda</strong> do card da pizza ou editando o produto.
                     </p>
                   </div>
+                </div>
+              )}
+
+              {/* SUBTAB: MOLHO EXTRA ADICIONAL */}
+              {(activeAdminTab === 'settings' ? settingsSubTab === 'extra-sauce' : menuSubTab === 'extra-sauce') && (
+                <div className="mt-5 space-y-6">
+                  <form onSubmit={handleSaveExtraSauceConfig} className="p-5 rounded-2xl bg-dark-800/60 border border-dark-700 space-y-5">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-dark-700">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-2xl bg-amber-400/20 text-amber-300 flex items-center justify-center border border-amber-400/30 text-xl flex-shrink-0">
+                          🍯
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-bold text-white">Opção de Molho Extra Adicional</h3>
+                          <p className="text-xs text-slate-400">
+                            Configure o valor adicional e o nome do molho oferecido na escolha de Caixas de Esfirras, Pizzas e Combos.
+                          </p>
+                        </div>
+                      </div>
+
+                      <label className="flex items-center gap-2 cursor-pointer bg-dark-900/80 px-3.5 py-2 rounded-xl border border-dark-750">
+                        <input
+                          type="checkbox"
+                          checked={tempSauceActive}
+                          onChange={(e) => setTempSauceActive(e.target.checked)}
+                          className="w-4 h-4 accent-amber-400 cursor-pointer"
+                        />
+                        <span className={`text-xs font-bold ${tempSauceActive ? 'text-emerald-400' : 'text-slate-400'}`}>
+                          {tempSauceActive ? 'Ativo no Cardápio' : 'Desativado'}
+                        </span>
+                      </label>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-300 mb-1">
+                          Nome do Molho / Apresentação:
+                        </label>
+                        <input
+                          type="text"
+                          value={tempSauceName}
+                          onChange={(e) => setTempSauceName(e.target.value)}
+                          placeholder="Ex: Molho Especial da Casa"
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-dark-900 border border-dark-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand-gold"
+                        />
+                        <span className="text-[10px] text-slate-500 mt-1 block">
+                          Nome que aparece para o cliente na hora de escolher.
+                        </span>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-300 mb-1">
+                          Valor Adicional Cobrado (R$):
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
+                            R$
+                          </span>
+                          <input
+                            type="number"
+                            step="0.50"
+                            min="0"
+                            value={tempSaucePrice}
+                            onChange={(e) => setTempSaucePrice(e.target.value)}
+                            placeholder="3.00"
+                            className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-dark-900 border border-dark-700 text-xs font-mono font-bold text-brand-gold focus:outline-none focus:border-brand-gold"
+                          />
+                        </div>
+                        <span className="text-[10px] text-slate-500 mt-1 block">
+                          Valor somado automaticamente ao total do produto quando o cliente selecionar.
+                        </span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1">
+                        Descrição / Detalhes do Molho (Opcional):
+                      </label>
+                      <input
+                        type="text"
+                        value={tempSauceDescription}
+                        onChange={(e) => setTempSauceDescription(e.target.value)}
+                        placeholder="Ex: Potinho de molho artesanal extra para acompanhar suas esfirras, pizzas e combos."
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-dark-900 border border-dark-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand-gold"
+                      />
+                    </div>
+
+                    {/* Preview interativo de como o cliente vê */}
+                    <div className="pt-2">
+                      <span className="text-[11px] text-slate-400 font-bold block mb-2">
+                        👁️ Prévia da opção na escolha do cliente (Pizzas, Caixas e Combos):
+                      </span>
+                      <div className="p-3.5 rounded-2xl bg-dark-900 border border-amber-500/30 flex items-center justify-between gap-3 flex-wrap sm:flex-nowrap">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-xl bg-amber-400/20 text-amber-300 flex items-center justify-center text-lg flex-shrink-0">
+                            🍯
+                          </div>
+                          <div>
+                            <div className="text-xs font-bold text-white flex items-center gap-2">
+                              <span>Quer {tempSauceName || 'Molho Especial da Casa'}?</span>
+                              <span className="text-[10px] font-black text-amber-300 bg-amber-950/80 px-2 py-0.5 rounded-full border border-amber-500/40">
+                                + R$ {Number(parseFloat(tempSaucePrice.toString().replace(',', '.')) || 0).toFixed(2).replace('.', ',')}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-slate-400">
+                              {tempSauceDescription || 'Potinho de molho artesanal extra para acompanhar o seu pedido.'}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            className="px-3 py-1.5 rounded-xl bg-brand-gold text-dark-950 font-black text-[11px] shadow-sm pointer-events-none"
+                          >
+                            ✓ Sim, Adicionar
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-slate-300 flex items-start gap-2">
+                      <Sparkles className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <strong>Como funciona:</strong> Ao marcar o molho extra, o valor será adicionado no item, enviado no WhatsApp do cliente e impresso na comanda da cozinha/balcão para que a equipe envie o potinho extra.
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end pt-2">
+                      <button
+                        type="submit"
+                        className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-brand-gold to-amber-400 text-dark-950 font-black text-xs hover:brightness-110 shadow-glow-gold cursor-pointer"
+                      >
+                        Salvar Configuração de Molho Extra
+                      </button>
+                    </div>
+                  </form>
                 </div>
               )}
 

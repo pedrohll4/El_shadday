@@ -82,6 +82,12 @@ export function OrderConfirmationView({ order, onBackToMenu }) {
           }
         }
       }
+      if (item.beverage) {
+        message += `   🥤 Bebida: ${item.beverage}\n`;
+      }
+      if (item.hasExtraSauce) {
+        message += `   🍯 Molho Extra: ${item.extraSauceName || 'Molho Especial'}${item.extraSaucePrice > 0 ? ` (+R$ ${Number(item.extraSaucePrice).toFixed(2).replace('.', ',')})` : ''}\n`;
+      }
       if (item.notes) {
         message += `   📝 Obs: ${item.notes}\n`;
       }
@@ -339,6 +345,23 @@ export function OrderConfirmationView({ order, onBackToMenu }) {
                           </div>
                         )}
                         {item.semSuinos && <div className="text-red-400 font-bold text-[10px]">🚫 Sem suínos</div>}
+                      </div>
+                    )}
+                    {item.beverage && (
+                      <div className="text-[11px] text-cyan-300 font-semibold flex items-center gap-1">
+                        <span>🥤</span>
+                        <span><strong>Bebida:</strong> {item.beverage}</span>
+                      </div>
+                    )}
+                    {item.hasExtraSauce && (
+                      <div className="text-[11px] text-amber-200 font-semibold flex items-center gap-1">
+                        <span>🍯</span>
+                        <span><strong>Molho Extra:</strong> {item.extraSauceName || 'Molho Especial'}</span>
+                        {item.extraSaucePrice > 0 && (
+                          <span className="text-[10px] text-amber-400 font-normal">
+                            (+R$ {Number(item.extraSaucePrice).toFixed(2).replace('.', ',')})
+                          </span>
+                        )}
                       </div>
                     )}
                     {item.notes && (

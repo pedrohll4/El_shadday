@@ -199,6 +199,13 @@ export function DeliveryCartDrawer({
           desc += `\n   ↳ 🚫 *SEM SUÍNOS:* Sim (Sem porco / bacon / calabresa)`;
         }
       }
+
+      if (item.beverage && !desc.includes(item.beverage)) {
+        desc += `\n   ↳ 🥤 *Bebida:* ${item.beverage}`;
+      }
+      if (item.hasExtraSauce && !desc.includes('Molho Extra')) {
+        desc += `\n   ↳ 🍯 *Molho Extra:* ${item.extraSauceName || 'Molho Especial'}${item.extraSaucePrice > 0 ? ` (+R$ ${Number(item.extraSaucePrice).toFixed(2).replace('.', ',')})` : ''}`;
+      }
       return `${idx + 1}. *${item.quantity}x ${item.name}* - R$ ${(item.price * item.quantity).toFixed(2).replace('.', ',')}${desc}`;
     }).join('\n');
 
@@ -572,6 +579,25 @@ Pedido gerado via Cardápio Digital El Shadday.`;
                           )}
                           {item.notes && (
                             <p className="text-[10px] text-slate-300 italic">Obs: {item.notes}</p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Beverage & Extra Sauce */}
+                      {item.beverage && (
+                        <div className="mt-1 text-[11px] text-cyan-300 font-semibold bg-cyan-950/40 px-2 py-1 rounded border border-cyan-500/40 flex items-center gap-1.5">
+                          <span>🥤</span>
+                          <span><strong>Bebida:</strong> {item.beverage}</span>
+                        </div>
+                      )}
+                      {item.hasExtraSauce && (
+                        <div className="mt-1 text-[11px] text-amber-200 font-semibold bg-amber-950/40 px-2 py-1 rounded border border-amber-600/40 flex items-center gap-1.5">
+                          <span>🍯</span>
+                          <span><strong>Molho Extra:</strong> {item.extraSauceName || 'Molho Especial'}</span>
+                          {item.extraSaucePrice > 0 && (
+                            <span className="text-[10px] text-amber-400 font-normal">
+                              (+R$ {Number(item.extraSaucePrice).toFixed(2).replace('.', ',')})
+                            </span>
                           )}
                         </div>
                       )}

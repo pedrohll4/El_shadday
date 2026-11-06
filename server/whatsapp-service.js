@@ -207,6 +207,11 @@ function formatOrderItems(items = []) {
       const salg = Object.entries(it.salgadasDetails).map(([f, q]) => `${q}x ${f}`).join(', ');
       if (salg) line += ` (${salg})`;
     }
+    const extras = [];
+    if (it.dydyoFlavor) extras.push(`Refri: ${it.dydyoFlavor}`);
+    if (it.beverage) extras.push(`Bebida: ${it.beverage}`);
+    if (it.hasExtraSauce) extras.push(`Molho Extra`);
+    if (extras.length > 0) line += ` [${extras.join(' | ')}]`;
     return line;
   }).join('\n');
 }

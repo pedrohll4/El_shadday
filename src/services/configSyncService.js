@@ -7,7 +7,7 @@
  */
 
 import { supabase, isSupabaseConfigured } from './supabaseClient';
-import { saveStoredProducts, saveStoredPromoSettings, saveStoredRestaurantInfo, saveStoredPizzaFlavors, saveStoredAcaiSettings, saveStoredDistricts, saveStoredCategories } from '../data/menuData';
+import { saveStoredProducts, saveStoredPromoSettings, saveStoredRestaurantInfo, saveStoredPizzaFlavors, saveStoredAcaiSettings, saveStoredDistricts, saveStoredCategories, saveStoredExtraSauceConfig } from '../data/menuData';
 import { saveStoredBuffetGallery, saveUnavailableBuffetItemIds, getUnavailableBuffetItemIds, saveStoredBuffetCategories } from '../buffet/buffetData';
 
 const CONFIG_TOPIC = 'el-shadday-config-sync-ariquemes-v2';
@@ -109,6 +109,18 @@ export async function dispatchConfigSync(type, data) {
           promo_settings: currentPromos,
           updated_at: new Date().toISOString()
         });
+      } else if (type === 'EXTRA_SAUCE_UPDATE') {
+        let currentPromos = {};
+        try {
+          const raw = localStorage.getItem('el_shadday_delivery_promos_v2');
+          if (raw) currentPromos = JSON.parse(raw);
+        } catch (e) {}
+        currentPromos.extra_sauce_config = data;
+        await supabase.from('company_settings').upsert({
+          id: 'el_shadday_config',
+          promo_settings: currentPromos,
+          updated_at: new Date().toISOString()
+        });
       } else if (type === 'GALLERY_UPDATE') {
         await supabase.from('company_settings').upsert({
           id: 'el_shadday_config',
@@ -197,6 +209,9 @@ export async function fetchCloudConfigHistory() {
         if (deliveryCategories) saveStoredCategories(deliveryCategories);
         if (promos) {
           saveStoredPromoSettings(promos);
+          if (promos.extra_sauce_config) {
+            saveStoredExtraSauceConfig(promos.extra_sauce_config);
+          }
           if (Array.isArray(promos.buffet_unavailable_items)) {
             saveUnavailableBuffetItemIds(promos.buffet_unavailable_items);
           }
@@ -281,6 +296,8 @@ export async function fetchCloudConfigHistory() {
               saveStoredBuffetCategories(parsed.data);
             } else if (parsed.type === 'DELIVERY_DISTRICTS_UPDATE' && Array.isArray(parsed.data)) {
               saveStoredDistricts(parsed.data);
+            } else if (parsed.type === 'EXTRA_SAUCE_UPDATE' && parsed.data) {
+              saveStoredExtraSauceConfig(parsed.data);
             }
           }
         }
@@ -401,6 +418,8 @@ export function subscribeToConfigEvents({ onProductsUpdate, onGalleryUpdate, onP
             } else if (data.type === 'DELIVERY_CATEGORIES_UPDATE' && Array.isArray(data.data)) {
               saveStoredCategories(data.data);
               if (onDeliveryCategoriesUpdate) onDeliveryCategoriesUpdate(data.data);
+            } else if (data.type === 'EXTRA_SAUCE_UPDATE' && data.data) {
+              saveStoredExtraSauceConfig(data.data);
             }
           }
         } catch (e) {}
@@ -441,6 +460,8 @@ export function subscribeToConfigEvents({ onProductsUpdate, onGalleryUpdate, onP
       if (onBuffetCategoriesUpdate) onBuffetCategoriesUpdate(data.data);
     } else if (data.type === 'DELIVERY_DISTRICTS_UPDATE' && Array.isArray(data.data)) {
       if (onDeliveryDistrictsUpdate) onDeliveryDistrictsUpdate(data.data);
+    } else if (data.type === 'EXTRA_SAUCE_UPDATE' && data.data) {
+      saveStoredExtraSauceConfig(data.data);
     } else if (data.type === 'DELIVERY_CATEGORIES_UPDATE' && Array.isArray(data.data)) {
       if (onDeliveryCategoriesUpdate) onDeliveryCategoriesUpdate(data.data);
     }

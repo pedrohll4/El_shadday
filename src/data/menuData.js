@@ -1976,3 +1976,126 @@ export const DYDYO_FLAVORS = [
     image: 'https://assets.olaclick.app/companies/products/images/800/a0597d6a-fee7-43a6-99be-e072f6beba77.png'
   }
 ];
+
+// OPÇÕES COMPLETAS DE BEBIDAS / REFRIGERANTES PARA PIZZAS, CAIXAS E COMBOS
+export const BEVERAGE_OPTIONS = [
+  {
+    id: 'dydyo-guarana-2l',
+    name: 'Dydyo Guaraná 2L',
+    price: 10.00,
+    flavor: 'Dydyo Guaraná 2L',
+    badge: 'Regional ⭐',
+    isDydyo: true,
+    image: 'https://assets.olaclick.app/companies/products/images/800/a0597d6a-fee7-43a6-99be-e072f6beba77.png'
+  },
+  {
+    id: 'dydyo-cola-2l',
+    name: 'Dydyo Cola 2L',
+    price: 10.00,
+    flavor: 'Dydyo Cola 2L',
+    badge: 'Regional 🥤',
+    isDydyo: true,
+    image: 'https://assets.olaclick.app/companies/products/images/800/5c0b2454-6874-4f56-850c-2126b597191f.png'
+  },
+  {
+    id: 'dydyo-laranja-2l',
+    name: 'Dydyo Laranja 2L',
+    price: 10.00,
+    flavor: 'Dydyo Laranja 2L',
+    badge: 'Regional 🍊',
+    isDydyo: true,
+    image: 'https://assets.olaclick.app/companies/products/images/800/7a8f04b2-2b44-4e12-bdc7-1c9173c97537.png'
+  },
+  {
+    id: 'dydyo-limao-2l',
+    name: 'Dydyo Limão 2L',
+    price: 10.00,
+    flavor: 'Dydyo Limão 2L',
+    badge: 'Regional 🍋',
+    isDydyo: true,
+    image: 'https://assets.olaclick.app/companies/products/images/800/a0597d6a-fee7-43a6-99be-e072f6beba77.png'
+  },
+  {
+    id: 'coca-cola-2l',
+    name: 'Coca-Cola Original 2L',
+    price: 16.00,
+    flavor: 'Coca-Cola 2L',
+    badge: 'Original ❤️',
+    isDydyo: false,
+    image: 'https://assets.olaclick.app/companies/products/images/800/5cf5a9e3-d887-4309-a531-94c6ba777299.png'
+  },
+  {
+    id: 'coca-cola-lata',
+    name: 'Coca-Cola Lata 350ml',
+    price: 6.00,
+    flavor: 'Coca Lata 350ml',
+    badge: 'Lata 🥤',
+    isDydyo: false,
+    image: 'https://assets.olaclick.app/companies/products/images/800/5cf5a9e3-d887-4309-a531-94c6ba777299.png'
+  },
+  {
+    id: 'fanta-laranja-2l',
+    name: 'Fanta Laranja 2L',
+    price: 16.00,
+    flavor: 'Fanta Laranja 2L',
+    badge: 'Gelada 🍊',
+    isDydyo: false,
+    image: 'https://assets.olaclick.app/companies/products/images/800/492710b2-5b16-497c-a43c-40b4fb7d6a0c.png'
+  },
+  {
+    id: 'fanta-uva-2l',
+    name: 'Fanta Uva 2L',
+    price: 16.00,
+    flavor: 'Fanta Uva 2L',
+    badge: 'Gelada 🍇',
+    isDydyo: false,
+    image: 'https://assets.olaclick.app/companies/products/images/800/dbb4b323-f5a2-47e0-ba15-35fcc41e22c9.png'
+  },
+  {
+    id: 'coca-cola-2-5l',
+    name: 'Coca-Cola 2,5L',
+    price: 18.00,
+    flavor: 'Coca-Cola 2,5L',
+    badge: 'Família 💥',
+    isDydyo: false,
+    image: 'https://assets.olaclick.app/companies/products/images/800/5cf5a9e3-d887-4309-a531-94c6ba777299.png'
+  }
+];
+
+// CONFIGURAÇÃO OFICIAL DE MOLHO EXTRA DA CASA
+export const DEFAULT_EXTRA_SAUCE_CONFIG = {
+  active: true,
+  name: "Molho Especial da Casa",
+  price: 3.00,
+  description: "Pote de molho artesanal especial da El Shadday (perfeito para bordas, pizzas e esfirras)"
+};
+
+export function getStoredExtraSauceConfig() {
+  try {
+    const saved = localStorage.getItem("el_shadday_extra_sauce_config_v1");
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed && typeof parsed === 'object') {
+        return { 
+          ...DEFAULT_EXTRA_SAUCE_CONFIG, 
+          ...parsed, 
+          price: Number(parsed.price !== undefined ? parsed.price : DEFAULT_EXTRA_SAUCE_CONFIG.price)
+        };
+      }
+    }
+  } catch (e) {
+    console.error("Error reading extra sauce config:", e);
+  }
+  return DEFAULT_EXTRA_SAUCE_CONFIG;
+}
+
+export function saveStoredExtraSauceConfig(config) {
+  try {
+    localStorage.setItem("el_shadday_extra_sauce_config_v1", JSON.stringify(config));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent("extra_sauce_config_updated", { detail: config }));
+    }
+  } catch (e) {
+    console.error("Error saving extra sauce config:", e);
+  }
+}

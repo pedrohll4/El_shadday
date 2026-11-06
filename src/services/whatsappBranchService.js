@@ -58,8 +58,17 @@ export async function syncCloudEngineUrlFromDatabase() {
       const current = getCloudEngineUrl();
       if (!current || current === DEFAULT_CLOUD_URL) {
         localStorage.setItem(CLOUD_URL_KEY, cloudUrl);
-        return cloudUrl;
       }
+    }
+
+    const cloudStatus = data?.card_machine_settings?.baileys_cloud_status;
+    const cloudPhone = data?.card_machine_settings?.baileys_cloud_phone;
+    if (cloudStatus === 'CONNECTED' || cloudStatus === 'connected') {
+      updateBranchWhatsApp('ariquemes', {
+        status: 'connected',
+        phone: cloudPhone || '5569992228682',
+        phoneFormatted: formatPhoneDisplay(cloudPhone || '5569992228682')
+      });
     }
   } catch (e) {}
   return getCloudEngineUrl();
