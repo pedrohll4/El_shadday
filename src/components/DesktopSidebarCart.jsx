@@ -1,8 +1,10 @@
-import React from 'react';
-import { ShoppingBag, Trash2, Plus, Minus, ArrowRight, MessageCircle, Bike, Store, Sparkles } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ShoppingBag, Trash2, Plus, Minus, ArrowRight, MessageCircle, Bike, Store, Sparkles, Check, X } from 'lucide-react';
+import { getStoredExtraSauceConfig } from '../data/menuData';
 
 export function DesktopSidebarCart({
   cartItems = [],
+  onAddToCart,
   onUpdateQuantity,
   onRemoveItem,
   onClearCart,
@@ -13,6 +15,65 @@ export function DesktopSidebarCart({
   isStoreOpen = true,
   openingHours
 }) {
+  const [extraSauceConfig, setExtraSauceConfig] = useState(() => getStoredExtraSauceConfig());
+
+  useEffect(() => {
+    const handleSauceUpdate = (e) => {
+      if (e?.detail) setExtraSauceConfig(e.detail);
+      else setExtraSauceConfig(getStoredExtraSauceConfig());
+    };
+    window.addEventListener('extra_sauce_config_updated', handleSauceUpdate);
+    return () => {
+      window.removeEventListener('extra_sauce_config_updated', handleSauceUpdate);
+    };
+  }, []);
+
+  const standaloneSauceItem = (cartItems || []).find(i => i.id === 'extra-sauce-standalone' || i.isStandaloneSauce);
+  const sauceCount = standaloneSauceItem ? standaloneSauceItem.quantity : 0;
+
+  const handleToggleSauceYes = () => {
+    if (standaloneSauceItem) {
+      if (onUpdateQuantity) onUpdateQuantity(standaloneSauceItem.id, 1);
+    } else if (onAddToCart) {
+      onAddToCart({
+        id: 'extra-sauce-standalone',
+        name: `Potinho de ${extraSauceConfig.name || 'Molho Especial da Casa'}`,
+        price: Number(extraSauceConfig.price !== undefined ? extraSauceConfig.price : 3.00),
+        quantity: 1,
+        isStandaloneSauce: true,
+        hasExtraSauce: true,
+        extraSauceName: extraSauceConfig.name || 'Molho Especial da Casa',
+        extraSaucePrice: Number(extraSauceConfig.price !== undefined ? extraSauceConfig.price : 3.00),
+        image: 'https://images.unsplash.com/photo-1574894709920-11b28e7367e3?auto=format&fit=crop&w=400&q=80',
+        description: 'Potinho artesanal de molho extra da casa'
+      });
+    }
+  };
+
+  const handleToggleSauceNo = () => {
+    if (standaloneSauceItem && onRemoveItem) {
+      onRemoveItem(standaloneSauceItem.id);
+    }
+  };
+
+  const handleIncreaseSauce = () => {
+    if (standaloneSauceItem && onUpdateQuantity) {
+      onUpdateQuantity(standaloneSauceItem.id, 1);
+    } else {
+      handleToggleSauceYes();
+    }
+  };
+
+  const handleDecreaseSauce = () => {
+    if (standaloneSauceItem) {
+      if (standaloneSauceItem.quantity > 1 && onUpdateQuantity) {
+        onUpdateQuantity(standaloneSauceItem.id, -1);
+      } else if (onRemoveItem) {
+        onRemoveItem(standaloneSauceItem.id);
+      }
+    }
+  };
+
   const subtotal = cartItems.reduce((acc, item) => acc + (item.price * item.quantity), 0);
   const currentFee = deliveryMode === 'delivery' ? deliveryFee : 0;
   const total = subtotal + currentFee;
@@ -217,6 +278,49 @@ export function DesktopSidebarCart({
             ))
           )}
         </div>
+
+        {/* Molho Extra Upsell na Sidebar */}
+        {cartItems.length > 0 && extraSauceConfig.active !== false && (
+          <div className="p-3 my-2 rounded-2xl bg-amber-500/10 border border-amber-500/30 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className="text-base">🍯</span>
+                <span className="text-xs font-bold text-white truncate">Quer Molho Extra?</span>
+              </div>
+              <span className="text-[10px] font-black text-amber-300 bg-amber-950/80 px-1.5 py-0.5 rounded-full border border-amber-500/30 shrink-0">
+                + R$ {Number(extraSauceConfig.price || 3.00).toFixed(2).replace('.', ',')}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-1.5">
+              <button
+                type="button"
+                onClick={handleToggleSauceYes}
+                className={`py-1.5 px-2 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer ${
+                  sauceCount > 0
+                    ? 'bg-amber-400 text-dark-950 font-black shadow-sm'
+                    : 'bg-dark-950 text-slate-300 hover:text-white border border-dark-750'
+                }`}
+              >
+                <Check className="w-3 h-3 stroke-[3]" />
+                <span>Sim ({sauceCount > 0 ? `${sauceCount}x` : '+R$' + Number(extraSauceConfig.price || 3).toFixed(0)})</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleToggleSauceNo}
+                className={`py-1.5 px-2 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer ${
+                  sauceCount === 0
+                    ? 'bg-dark-850 text-slate-300 border border-dark-700 font-bold'
+                    : 'bg-dark-950 text-slate-400 hover:text-white border border-dark-750'
+                }`}
+              >
+                <X className="w-3 h-3" />
+                <span>Não</span>
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Cart Financial Summary & Checkout Trigger */}
         {cartItems.length > 0 && (

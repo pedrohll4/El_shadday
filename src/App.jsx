@@ -1424,6 +1424,7 @@ export default function App() {
           {/* Right Column: Desktop Sidebar Cart (4 columns on desktop, hidden on mobile) */}
           <DesktopSidebarCart
             cartItems={cartItems}
+            onAddToCart={handleAddToCart}
             onUpdateQuantity={handleUpdateQuantity}
             onRemoveItem={handleRemoveItem}
             onClearCart={handleClearCart}
@@ -1527,6 +1528,7 @@ export default function App() {
         isOpen={isCartOpen}
         onClose={() => setIsCartOpen(false)}
         cartItems={cartItems}
+        onAddToCart={handleAddToCart}
         onUpdateQuantity={handleUpdateQuantity}
         onRemoveItem={handleRemoveItem}
         onClearCart={handleClearCart}

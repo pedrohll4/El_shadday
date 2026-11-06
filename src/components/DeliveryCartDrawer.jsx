@@ -5,7 +5,15 @@ import {
   CreditCard, Banknote, QrCode, MessageCircle, Sparkles, Building2,
   Shuffle
 } from 'lucide-react';
-import { ARIQUEMES_DISTRICTS, RESTAURANT_INFO, getStoredRestaurantInfo, getStoredDistricts, calculateCardMachineFee, getCardMachineNoticeText } from '../data/menuData';
+import { 
+  ARIQUEMES_DISTRICTS, 
+  RESTAURANT_INFO, 
+  getStoredRestaurantInfo, 
+  getStoredDistricts, 
+  calculateCardMachineFee, 
+  getCardMachineNoticeText,
+  getStoredExtraSauceConfig
+} from '../data/menuData';
 import { dispatchOrderToKitchen, getNextOrderNumber } from '../services/ordersSyncService';
 import { cleanPhoneNumber } from '../services/whatsappNotificationService';
 import { recordCustomerFromOrder } from '../services/customerService';
@@ -14,6 +22,7 @@ export function DeliveryCartDrawer({
   isOpen, 
   onClose, 
   cartItems, 
+  onAddToCart,
   onUpdateQuantity, 
   onRemoveItem, 
   onClearCart,
@@ -27,6 +36,7 @@ export function DeliveryCartDrawer({
   const [deliveryType, setDeliveryType] = useState(initialDeliveryType); // 'delivery' | 'retirada'
   const [storeInfo, setStoreInfo] = useState(() => getStoredRestaurantInfo());
   const [districtsList, setDistrictsList] = useState(() => getStoredDistricts());
+  const [extraSauceConfig, setExtraSauceConfig] = useState(() => getStoredExtraSauceConfig());
 
   React.useEffect(() => {
     const handleStoreUpdate = (e) => {
@@ -37,13 +47,65 @@ export function DeliveryCartDrawer({
       if (e?.detail && Array.isArray(e.detail)) setDistrictsList(e.detail);
       else setDistrictsList(getStoredDistricts());
     };
+    const handleSauceUpdate = (e) => {
+      if (e?.detail) setExtraSauceConfig(e.detail);
+      else setExtraSauceConfig(getStoredExtraSauceConfig());
+    };
     window.addEventListener('delivery_restaurant_info_updated', handleStoreUpdate);
     window.addEventListener('delivery_districts_updated', handleDistrictsUpdate);
+    window.addEventListener('extra_sauce_config_updated', handleSauceUpdate);
     return () => {
       window.removeEventListener('delivery_restaurant_info_updated', handleStoreUpdate);
       window.removeEventListener('delivery_districts_updated', handleDistrictsUpdate);
+      window.removeEventListener('extra_sauce_config_updated', handleSauceUpdate);
     };
   }, []);
+
+  const standaloneSauceItem = (cartItems || []).find(i => i.id === 'extra-sauce-standalone' || i.isStandaloneSauce);
+  const sauceCount = standaloneSauceItem ? standaloneSauceItem.quantity : 0;
+
+  const handleToggleSauceYes = () => {
+    if (standaloneSauceItem) {
+      if (onUpdateQuantity) onUpdateQuantity(standaloneSauceItem.id, 1);
+    } else if (onAddToCart) {
+      onAddToCart({
+        id: 'extra-sauce-standalone',
+        name: `Potinho de ${extraSauceConfig.name || 'Molho Especial da Casa'}`,
+        price: Number(extraSauceConfig.price !== undefined ? extraSauceConfig.price : 3.00),
+        quantity: 1,
+        isStandaloneSauce: true,
+        hasExtraSauce: true,
+        extraSauceName: extraSauceConfig.name || 'Molho Especial da Casa',
+        extraSaucePrice: Number(extraSauceConfig.price !== undefined ? extraSauceConfig.price : 3.00),
+        image: 'https://images.unsplash.com/photo-1574894709920-11b28e7367e3?auto=format&fit=crop&w=400&q=80',
+        description: 'Potinho artesanal de molho extra da casa'
+      });
+    }
+  };
+
+  const handleToggleSauceNo = () => {
+    if (standaloneSauceItem && onRemoveItem) {
+      onRemoveItem(standaloneSauceItem.id);
+    }
+  };
+
+  const handleIncreaseSauce = () => {
+    if (standaloneSauceItem && onUpdateQuantity) {
+      onUpdateQuantity(standaloneSauceItem.id, 1);
+    } else {
+      handleToggleSauceYes();
+    }
+  };
+
+  const handleDecreaseSauce = () => {
+    if (standaloneSauceItem) {
+      if (standaloneSauceItem.quantity > 1 && onUpdateQuantity) {
+        onUpdateQuantity(standaloneSauceItem.id, -1);
+      } else if (onRemoveItem) {
+        onRemoveItem(standaloneSauceItem.id);
+      }
+    }
+  };
 
   React.useEffect(() => {
     if (initialDeliveryType) {
@@ -639,6 +701,90 @@ Pedido gerado via Cardápio Digital El Shadday.`;
           {cartItems.length > 0 && (
             <div className="space-y-5 pt-4 border-t border-dark-800">
               
+              {/* PERGUNTA DE MOLHO EXTRA NA SACOLA */}
+              {extraSauceConfig.active !== false && (
+                <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-dark-900 via-amber-950/20 to-dark-900 border border-amber-500/40 space-y-3 shadow-lg">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-2xl bg-amber-400/20 text-amber-300 flex items-center justify-center text-xl border border-amber-400/30 flex-shrink-0">
+                        🍯
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="text-xs sm:text-sm font-black text-white">
+                            Deseja Molho Extra para o seu pedido?
+                          </h4>
+                          <span className="text-[11px] font-black text-amber-300 bg-amber-950/80 px-2 py-0.5 rounded-full border border-amber-500/40 font-mono">
+                            + R$ {Number(extraSauceConfig.price !== undefined ? extraSauceConfig.price : 3.00).toFixed(2).replace('.', ',')}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-300 mt-0.5">
+                          {extraSauceConfig.name || 'Molho Especial da Casa'} • Artesanal, perfeito para pizzas, bordas e esfirras!
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Botões de Escolha: Sim ou Não */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={handleToggleSauceYes}
+                      className={`py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                        sauceCount > 0
+                          ? 'bg-gradient-to-r from-brand-gold to-amber-400 text-dark-950 font-black shadow-glow-gold'
+                          : 'bg-dark-950 hover:bg-dark-850 text-slate-300 border border-dark-750 hover:border-brand-gold/50'
+                      }`}
+                    >
+                      <Check className="w-3.5 h-3.5 stroke-[3]" />
+                      <span>Sim, quero molho (+R$ {Number(extraSauceConfig.price !== undefined ? extraSauceConfig.price : 3.00).toFixed(2).replace('.', ',')})</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleToggleSauceNo}
+                      className={`py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                        sauceCount === 0
+                          ? 'bg-dark-850 text-slate-300 border border-dark-700 font-bold'
+                          : 'bg-dark-950 hover:bg-dark-850 text-slate-400 border border-dark-750'
+                      }`}
+                    >
+                      <X className="w-3.5 h-3.5" />
+                      <span>Não, sem molho</span>
+                    </button>
+                  </div>
+
+                  {/* Se selecionou 'Sim', mostra controle de quantidade do potinho */}
+                  {sauceCount > 0 && (
+                    <div className="flex items-center justify-between pt-2 border-t border-dark-800 text-xs">
+                      <span className="text-amber-300 font-bold flex items-center gap-1.5">
+                        <span>✨</span>
+                        <span>{sauceCount}x {extraSauceConfig.name || 'Molho Especial da Casa'} incluído na sacola</span>
+                      </span>
+                      <div className="flex items-center gap-2 bg-dark-950 px-2 py-1 rounded-xl border border-dark-750">
+                        <button
+                          type="button"
+                          onClick={handleDecreaseSauce}
+                          className="w-5 h-5 rounded flex items-center justify-center text-slate-400 hover:text-white cursor-pointer"
+                          title="Diminuir quantidade"
+                        >
+                          <Minus className="w-3 h-3" />
+                        </button>
+                        <span className="font-black text-white w-5 text-center font-mono">{sauceCount}</span>
+                        <button
+                          type="button"
+                          onClick={handleIncreaseSauce}
+                          className="w-5 h-5 rounded flex items-center justify-center text-slate-400 hover:text-white cursor-pointer"
+                          title="Aumentar quantidade"
+                        >
+                          <Plus className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* 1. Tipo de Entrega */}
               <div>
                 <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">
