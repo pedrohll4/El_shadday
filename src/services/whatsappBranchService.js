@@ -263,9 +263,13 @@ export async function fetchEngineStatus(branchId = 'ariquemes') {
       updateBranchWhatsApp(branchId, updates);
       return data;
     }
+    // Motor respondeu com erro (ex: 503 serviço suspenso/fora do ar no Render):
+    // não manter "Conectado" com base em status antigo salvo no banco.
+    updateBranchWhatsApp(branchId, { status: 'disconnected', qrCodeDataUrl: null });
   } catch (err) {
-    // Fallback: se der erro de conexão direta (ex: HTTPS Vercel sem CORS ou inicializando),
-    // requisita via Supabase Bridge
+    // Sem resposta do motor (fora do ar, suspenso ou sem CORS): marca como desconectado.
+    // Se o motor estiver vivo, ele responde pelo Supabase Bridge e volta a "connected".
+    updateBranchWhatsApp(branchId, { status: 'disconnected', qrCodeDataUrl: null });
     if (supabaseBridgeChannel) {
       supabaseBridgeChannel.send({
         type: 'broadcast',
