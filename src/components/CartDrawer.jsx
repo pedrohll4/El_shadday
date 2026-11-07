@@ -87,9 +87,6 @@ export function CartDrawer({
       }
     }
   };
-    window.addEventListener('delivery_districts_updated', handleSync);
-    return () => window.removeEventListener('delivery_districts_updated', handleSync);
-  }, []);
 
   if (!isOpen) return null;
 

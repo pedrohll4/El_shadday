@@ -223,13 +223,10 @@ export function BoxBuilderModal({ isOpen, onClose, onAddBoxToCart, initialBox = 
   const isDydyoCombo = (name.toLowerCase().includes('dydyo') || (initialBox?.id || '').toLowerCase().includes('dydyo'));
   const boxImage = initialBox?.image || knownConfig?.image || "https://assets.olaclick.app/companies/products/images/800/4cfa4549-ad5f-4b4e-b539-468584a0eeba.png";
 
-  const selectedBeverage = useMemo(() => {
-    if (isDydyoCombo) {
-      return BEVERAGE_OPTIONS.find(b => b.name === selectedDydyo) || BEVERAGE_OPTIONS[0];
-    }
-    if (selectedBeverageId === 'none') return null;
-    return BEVERAGE_OPTIONS.find(b => b.id === selectedBeverageId) || null;
-  }, [isDydyoCombo, selectedDydyo, selectedBeverageId]);
+  // Sem hook aqui: este trecho roda depois do "if (!isOpen) return null" (hooks após return causam React error #310)
+  const selectedBeverage = isDydyoCombo
+    ? (BEVERAGE_OPTIONS.find(b => b.name === selectedDydyo) || BEVERAGE_OPTIONS[0])
+    : (selectedBeverageId === 'none' ? null : (BEVERAGE_OPTIONS.find(b => b.id === selectedBeverageId) || null));
 
   const beveragePrice = isDydyoCombo ? 0 : (selectedBeverage ? Number(selectedBeverage.price || 0) : 0);
   const extraSaucePrice = (wantsExtraSauce && extraSauceConfig?.active !== false) ? Number(extraSauceConfig.price || 0) : 0;
