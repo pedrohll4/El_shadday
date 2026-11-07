@@ -202,6 +202,189 @@ async function restoreAuthFromSupabase() {
 
 let reconnectAttempts = 0;
 
+// Broadcast de status para o canal do Supabase
+let supabaseBridgeChannel = null;
+
+function broadcastStateToSupabase() {
+  if (!supabaseBridgeChannel) return;
+  try {
+    supabaseBridgeChannel.send({
+      type: 'broadcast',
+      event: 'STATUS_UPDATE',
+      payload: {
+        status: state.status,
+        qrCodeDataUrl: state.qrCodeDataUrl,
+        userInfo: state.userInfo,
+        lastError: state.lastError,
+        batteryLevel: state.batteryLevel,
+        autoNotify: state.autoNotify,
+        timestamp: Date.now()
+      }
+    }).catch(() => {});
+  } catch (err) {}
+}
+
+// Normaliza números de telefone do Brasil
+export function formatToWhatsAppQueries(phone) {
+  const digits = String(phone || '').replace(/\D/g, '');
+  if (!digits) return [];
+
+  const candidates = [];
+  if (digits.length === 10 || digits.length === 11) {
+    candidates.push(`55${digits}`);
+    if (digits.length === 11 && digits[2] === '9') {
+      const ddd = digits.slice(0, 2);
+      const rest = digits.slice(3);
+      candidates.push(`55${ddd}${rest}`);
+    }
+  } else if (digits.length === 12 || digits.length === 13) {
+    candidates.push(digits);
+    if (digits.startsWith('55') && digits.length === 13 && digits[4] === '9') {
+      const ddd = digits.slice(2, 4);
+      const rest = digits.slice(5);
+      candidates.push(`55${ddd}${rest}`);
+    }
+  } else {
+    candidates.push(digits);
+  }
+
+  return Array.from(new Set(candidates));
+}
+
+// Formata itens do pedido para o cliente (oculta detalhes internos de sabores caso seja sortido)
+function formatOrderItems(items = []) {
+  if (!Array.isArray(items) || items.length === 0) return '• Itens do pedido';
+  return items.map(it => {
+    let line = `• ${it.quantity || 1}x *${it.name || 'Item'}*`;
+    if (it.pizzaSelections && it.pizzaSelections.length > 0) {
+      const sab = it.pizzaSelections.map(p => p.flavors?.join('/')).filter(Boolean).join(' + ');
+      if (sab) line += ` (${sab})`;
+    } else if (it.flavors && it.flavors.length > 0) {
+      line += ` (${it.flavors.join('/')})`;
+    } else if (it.isSortido || (it.name && it.name.toLowerCase().includes('sortid')) || (it.isBox && !it.salgadasDetails)) {
+      line += ` (Sortido da Casa${it.semSuinos ? ' - Sem Suínos' : ''})`;
+    } else if (it.isCustomBox && !it.isSortido && it.salgadasDetails) {
+      const salg = Object.entries(it.salgadasDetails).map(([f, q]) => `${q}x ${f}`).join(', ');
+      if (salg) line += ` (${salg})`;
+    }
+    const extras = [];
+    if (it.dydyoFlavor) extras.push(`Refri: ${it.dydyoFlavor}`);
+    if (it.beverage) extras.push(`Bebida: ${it.beverage}`);
+    if (it.hasExtraSauce) extras.push(`Molho Extra`);
+    if (extras.length > 0) line += ` [${extras.join(' | ')}]`;
+    return line;
+  }).join('\n');
+}
+
+// Construtor das mensagens padrão
+export function buildOrderWhatsAppText({ order, statusType, reason = '' }) {
+  const customerName = order.customer_name || order.customerName || 'Cliente';
+  const orderId = order.id || order.orderId || 'S/N';
+  const branchName = order.branch_name || order.branchName || 'El Shadday Ariquemes';
+  const isBalcao = (order.delivery_type === 'balcao' || order.deliveryType === 'balcao' || order.district === 'Balcão');
+  const deliveryAddress = order.delivery_address?.address 
+    ? `${order.delivery_address.address}${order.delivery_address.number ? `, Nº ${order.delivery_address.number}` : ''}`
+    : (order.address ? `${order.address}${order.number ? `, Nº ${order.number}` : ''}` : '');
+
+  const norm = String(statusType).toUpperCase().trim();
+
+  switch (norm) {
+    case 'RECEBIDO':
+    case 'RECEBIDO_COZINHA':
+      return (
+`🍕 *EL SHADDAY DELIVERY - PEDIDO CONFIRMADO!*
+📍 *${branchName}*
+----------------------------------------
+Olá, *${customerName}*! Seu pedido *#${orderId}* foi recebido com sucesso pela nossa equipe e já está na fila de produção! ✅
+
+📋 *ITENS:*
+${formatOrderItems(order.items)}
+
+🛵 *Modalidade:* ${isBalcao ? 'Retirada no Balcão' : 'Delivery (Entrega em Domicílio)'}
+${!isBalcao && deliveryAddress ? `🏠 *Endereço:* ${deliveryAddress}\n` : ''}💰 *Total:* R$ ${Number(order.total || 0).toFixed(2).replace('.', ',')}
+⏳ *Tempo Estimado:* 45 - 75 min
+
+Passaremos todas as atualizações do seu pedido por aqui. Muito obrigado pela preferência! 💛`
+      );
+
+    case 'EM_PREPARO':
+    case 'NO_FORNO':
+      return (
+`👨‍🍳🔥 *PEDIDO NO FORNO! - EL SHADDAY*
+📍 *${branchName}*
+----------------------------------------
+Olá, *${customerName}*! Passando para avisar que o seu pedido *#${orderId}* acabou de entrar no forno! 🔥
+
+Nossa equipe está preparando tudo com ingredientes frescos, massa artesanal e muito carinho.
+
+⏳ Logo seu pedido estará no ponto ideal! Avisaremos assim que ${isBalcao ? 'estiver pronto para retirada no balcão' : 'o motoboy sair para entrega'}. ✨`
+      );
+
+    case 'SAIU_ENTREGA':
+      return (
+`🛵💨 *PEDIDO A CAMINHO! - EL SHADDAY*
+📍 *${branchName}*
+----------------------------------------
+Boas notícias, *${customerName}*! O seu pedido *#${orderId}* acabou de sair da nossa cozinha e já está a caminho! 🛵💨
+
+${deliveryAddress ? `📍 *Destino:* ${deliveryAddress}\n` : ''}⚠️ *Dica:* Por favor, mantenha alguém atento ao portão/campainha para receber o entregador.
+
+Seu pedido está quentinho. Bom apetite! 🍕😋`
+      );
+
+    case 'PRONTO_BALCAO':
+      return (
+`🛍️✨ *SEU PEDIDO ESTÁ PRONTO! - EL SHADDAY*
+📍 *${branchName}*
+----------------------------------------
+Olá, *${customerName}*! O seu pedido *#${orderId}* já ficou pronto, quentinho e embalado esperando por você no balcão! 🍕✨
+
+🏢 *Local de Retirada:* Av Canaã, 4065 - Ariquemes - RO
+⏰ Pode passar para retirar a qualquer momento.
+
+Estamos te esperando! 💛`
+      );
+
+    case 'CONCLUIDO':
+      return (
+`🎉🍕 *PEDIDO ENTREGUE COM SUCESSO!*
+📍 *${branchName}*
+----------------------------------------
+Olá, *${customerName}*! Seu pedido *#${orderId}* foi finalizado! ✅
+
+Esperamos que sua refeição esteja deliciosa e que tenha uma experiência incrível com a El Shadday.
+
+⭐ Se gostou, compartilhe nos stories e marque a gente! (@elshadday_buffet)
+Qualquer feedback ou dúvida, estamos sempre à disposição por este WhatsApp.
+
+Muito obrigado e até a próxima! 💛`
+      );
+
+    case 'CANCELADO':
+      return (
+`⚠️ *AVISO: PEDIDO CANCELADO - EL SHADDAY*
+📍 *${branchName}*
+----------------------------------------
+Olá, *${customerName}*, informamos que o seu pedido *#${orderId}* precisou ser cancelado no sistema.
+
+${reason ? `📝 *Motivo informado:* ${reason}\n` : ''}Se você já efetuou o pagamento via Pix ou precisa de qualquer esclarecimento, por favor responda esta mensagem para falar diretamente com nosso atendimento da unidade.
+
+WhatsApp da Filial: *(69) 99222-8682*
+Pedimos sinceras desculpas pelo inconveniente!`
+      );
+
+    default:
+      return (
+`🍕 *ATUALIZAÇÃO DO PEDIDO - EL SHADDAY*
+📍 *${branchName}*
+----------------------------------------
+Olá, *${customerName}*! O status do seu pedido *#${orderId}* foi atualizado para: *${norm}*.
+
+Qualquer dúvida, estamos à disposição! 💛`
+      );
+  }
+}
+
 // Inicializa o Baileys WhatsApp Socket
 async function initWhatsApp(forceReconnect = false) {
   if (isConnecting) return;
