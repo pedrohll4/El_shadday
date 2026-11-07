@@ -327,6 +327,10 @@ export async function dispatchOrderUpdateToKitchen(orderId, updates) {
       if (updates.paymentStatus) updateData.payment_status = updates.paymentStatus;
       if (updates.paymentMethod !== undefined) updateData.payment_method = updates.paymentMethod;
       if (updates.changeFor !== undefined) updateData.change_for = updates.changeFor ? Number(String(updates.changeFor).replace(',', '.')) : null;
+      if (Array.isArray(updates.items)) updateData.items = updates.items;
+      if (updates.subtotal !== undefined) updateData.subtotal = Number(updates.subtotal) || 0;
+      if (updates.deliveryFee !== undefined) updateData.delivery_fee = Number(updates.deliveryFee) || 0;
+      if (updates.total !== undefined) updateData.total = Number(updates.total) || 0;
       if (updates.cashChange !== undefined) updateData.change_for = updates.cashChange ? Number(String(updates.cashChange).replace(',', '.')) : null;
 
       await supabase.from('orders').update(updateData).eq('id', orderId);

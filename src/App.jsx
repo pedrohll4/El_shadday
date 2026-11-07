@@ -886,6 +886,23 @@ export default function App() {
     }
   };
 
+  // Edição de itens/valores do pedido pela Cozinha (admin/balconista)
+  const handleUpdateOrderDetails = async (orderId, updates) => {
+    setAllOrders(prev => {
+      const updated = prev.map(o => (o.orderId === orderId ? { ...o, ...updates } : o));
+      try {
+        localStorage.setItem('el_shadday_all_orders', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+
+    try {
+      await dispatchOrderUpdateToKitchen(orderId, updates);
+    } catch (err) {
+      console.error('Error updating order details:', err);
+    }
+  };
+
   const handleCancelOrder = async (orderId, reason = '') => {
     setAllOrders(prev => {
       const updated = prev.map(o => o.orderId === orderId ? { 
@@ -1060,6 +1077,7 @@ export default function App() {
           onUpdateOrderStatus={handleUpdateOrderStatus}
           onUpdatePaymentStatus={handleUpdatePaymentStatus}
           onUpdatePaymentMethod={handleUpdatePaymentMethod}
+          onUpdateOrderDetails={handleUpdateOrderDetails}
           onCancelOrder={handleCancelOrder}
           onDeleteOrder={handleDeleteOrder}
           onClearAllOrders={handleClearAllOrders}

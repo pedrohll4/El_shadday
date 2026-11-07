@@ -53,6 +53,7 @@ import { PizzaCustomizerModal } from './PizzaCustomizerModal';
 import { BoxBuilderModal } from './BoxBuilderModal';
 import { ComboCustomizerModal } from './ComboCustomizerModal';
 import { AcaiCustomizerModal } from './AcaiCustomizerModal';
+import { EditOrderItemsModal } from './EditOrderItemsModal';
 import { 
   GALLERY_CATEGORIES, 
   INITIAL_BUFFET_GALLERY, 
@@ -120,6 +121,7 @@ export function AdminDashboard({
   onUpdateOrderStatus, 
   onUpdatePaymentStatus, 
   onUpdatePaymentMethod,
+  onUpdateOrderDetails,
   onCancelOrder,
   onDeleteOrder,
   onClearAllOrders,
@@ -339,6 +341,7 @@ export function AdminDashboard({
 
   // Change Payment / Cash Change Modal State (KDS / Cozinha)
   const [changePaymentModalOrder, setChangePaymentModalOrder] = useState(null);
+  const [editItemsModalOrder, setEditItemsModalOrder] = useState(null);
   const [editPaymentType, setEditPaymentType] = useState('pix'); // 'pix' | 'dinheiro' | 'credito' | 'debito' | 'misto'
   const [editCashChange, setEditCashChange] = useState('');
   const [editPaymentStatus, setEditPaymentStatus] = useState('PENDENTE_COBRANCA'); // 'PENDENTE_COBRANCA' | 'PAGO_APROVADO'
@@ -4988,8 +4991,21 @@ export function AdminDashboard({
 
                           {/* Items List (Kitchen preparation list) */}
                           <div className="bg-dark-950 p-3 rounded-xl border border-dark-850 space-y-2 mt-1">
-                            <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                              O que precisa ser feito:
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                                O que precisa ser feito:
+                              </div>
+                              {!isCancelled && (
+                                <button
+                                  type="button"
+                                  onClick={() => setEditItemsModalOrder(order)}
+                                  className="px-2 py-0.5 rounded bg-brand-gold/15 hover:bg-brand-gold/25 border border-brand-gold/40 text-[10px] font-black text-brand-gold flex items-center gap-1 transition-all cursor-pointer flex-shrink-0"
+                                  title="Adicionar, remover ou alterar itens deste pedido"
+                                >
+                                  <Edit2 className="w-2.5 h-2.5" />
+                                  <span>Editar Itens</span>
+                                </button>
+                              )}
                             </div>
                             <div className="space-y-1.5 text-xs">
                               {(order.items || []).map((it, idx) => (
@@ -10953,6 +10969,20 @@ export function AdminDashboard({
       {/* ============================================================== */}
       {/* MODAL: CHANGE PAYMENT & CASH CHANGE MODAL (KDS / COZINHA)      */}
       {/* ============================================================== */}
+      {editItemsModalOrder && (
+        <EditOrderItemsModal
+          order={editItemsModalOrder}
+          products={productsList}
+          formatOrderNumber={formatOrderNumber}
+          onClose={() => setEditItemsModalOrder(null)}
+          onSave={(updates) => {
+            const handler = onUpdateOrderDetails || onUpdatePaymentMethod;
+            if (handler) handler(editItemsModalOrder.orderId, updates);
+            setEditItemsModalOrder(null);
+          }}
+        />
+      )}
+
       {changePaymentModalOrder && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-dark-950/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 animate-fade-in">
           <div className="relative w-full max-w-lg bg-dark-900 border border-brand-gold/40 rounded-3xl shadow-2xl p-5 sm:p-6 space-y-4">
