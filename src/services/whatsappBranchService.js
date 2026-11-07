@@ -100,7 +100,7 @@ if (typeof window !== 'undefined' && isSupabaseConfigured && supabase) {
     const prevBridge = existingChannels.find(ch => ch?.topic?.includes('el_shadday_whatsapp_bridge'));
     if (prevBridge) supabase.removeChannel(prevBridge);
 
-    supabaseBridgeChannel = supabase.channel(`el_shadday_whatsapp_bridge_${Date.now()}`);
+    supabaseBridgeChannel = supabase.channel('el_shadday_whatsapp_bridge');
 
     supabaseBridgeChannel
       .on('broadcast', { event: 'STATUS_UPDATE' }, ({ payload }) => {
