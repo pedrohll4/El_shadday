@@ -11,6 +11,13 @@ import pino from 'pino';
 import QRCode from 'qrcode';
 import { createClient } from '@supabase/supabase-js';
 
+// TRAVA ANTI-RENDER: o motor agora roda no PC da pizzaria. Se o serviço do Render
+// voltar sozinho (ex: virada do mês), ele sobe DESLIGADO para não disputar a sessão
+// do WhatsApp nem mandar mensagens repetidas. Para liberar de propósito no Render,
+// crie a variável de ambiente ALLOW_RENDER_ENGINE=true lá.
+const IS_RENDER = !!(process.env.RENDER || process.env.RENDER_EXTERNAL_URL || process.env.RENDER_SERVICE_ID);
+const ENGINE_DISABLED = IS_RENDER && process.env.ALLOW_RENDER_ENGINE !== 'true';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -513,6 +520,12 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (ENGINE_DISABLED) {
+    res.writeHead(503, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: false, disabled: true, status: 'DISABLED', error: 'Motor desativado no Render (roda no PC da pizzaria)' }));
+    return;
+  }
+
   const url = new URL(req.url || '/', `http://${req.headers.host}`);
 
   const sendJson = (statusCode, data) => {
@@ -599,7 +612,7 @@ const server = http.createServer(async (req, res) => {
 });
 
 // Auto-ping para manter ativo se estiver no Render
-if (process.env.RENDER_EXTERNAL_URL) {
+if (process.env.RENDER_EXTERNAL_URL && !ENGINE_DISABLED) {
   const pingUrl = `${process.env.RENDER_EXTERNAL_URL}/health`;
   setInterval(() => {
     fetch(pingUrl).catch(() => {});
@@ -612,6 +625,12 @@ server.listen(PORT, '0.0.0.0', async () => {
   console.log(`🚀 [WhatsApp Service] Motor El Shadday rodando na porta ${PORT}`);
   console.log(`⚡ 100% Gratuito | Sem Limite de Mensagens | Nuvem Render / Local`);
   console.log(`============================================================\n`);
+
+  if (ENGINE_DISABLED) {
+    console.log('⛔ [WhatsApp Service] Rodando no Render SEM ALLOW_RENDER_ENGINE=true: motor DESATIVADO.');
+    console.log('   O WhatsApp roda no PC da pizzaria. Nada será conectado ou enviado daqui.');
+    return;
+  }
 
   initSupabaseOrderWatcher();
 

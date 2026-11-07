@@ -32,3 +32,6 @@ generate_banner_*.py
 # WhatsApp session credentials
 /data/
 
+
+# Pacote do motor WhatsApp para pendrive (gerado)
+/pendrive/
