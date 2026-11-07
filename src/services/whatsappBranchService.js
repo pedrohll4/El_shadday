@@ -93,6 +93,15 @@ export const DEFAULT_WHATSAPP_SESSIONS = {
 
 // Canal Supabase Realtime para ponte Vercel <-> Render
 let supabaseBridgeChannel = null;
+// Última vez que o motor (Render OU PC da pizzaria) respondeu pela ponte Supabase.
+// Se respondeu há pouco, o motor está vivo mesmo que a URL direta (Render) falhe.
+let lastBridgeStatusAt = 0;
+const BRIDGE_ALIVE_MS = 90 * 1000;
+
+function markDirectEngineUnreachable(branchId) {
+  if (Date.now() - lastBridgeStatusAt < BRIDGE_ALIVE_MS) return; // motor vivo via ponte: não apaga QR/status
+  updateBranchWhatsApp(branchId, { status: 'disconnected', qrCodeDataUrl: null });
+}
 
 if (typeof window !== 'undefined' && isSupabaseConfigured && supabase) {
   try {
@@ -120,6 +129,7 @@ if (typeof window !== 'undefined' && isSupabaseConfigured && supabase) {
           updates.phoneFormatted = formatPhoneDisplay(payload.userInfo.phone);
         }
 
+        lastBridgeStatusAt = Date.now();
         updateBranchWhatsApp('ariquemes', updates);
 
         window.dispatchEvent(new CustomEvent('el_shadday_whatsapp_engine_update', {
@@ -263,20 +273,19 @@ export async function fetchEngineStatus(branchId = 'ariquemes') {
       updateBranchWhatsApp(branchId, updates);
       return data;
     }
-    // Motor respondeu com erro (ex: 503 serviço suspenso/fora do ar no Render):
-    // não manter "Conectado" com base em status antigo salvo no banco.
-    updateBranchWhatsApp(branchId, { status: 'disconnected', qrCodeDataUrl: null });
   } catch (err) {
-    // Sem resposta do motor (fora do ar, suspenso ou sem CORS): marca como desconectado.
-    // Se o motor estiver vivo, ele responde pelo Supabase Bridge e volta a "connected".
-    updateBranchWhatsApp(branchId, { status: 'disconnected', qrCodeDataUrl: null });
-    if (supabaseBridgeChannel) {
-      supabaseBridgeChannel.send({
-        type: 'broadcast',
-        event: 'REQUEST_STATUS',
-        payload: { branchId }
-      }).catch(() => {});
-    }
+    // sem resposta direta (fora do ar, suspenso ou sem CORS): segue para a ponte abaixo
+  }
+
+  // Motor direto indisponível (ex: Render suspenso/travado com 503). Não mantém "Conectado"
+  // com base em status antigo, e pede o status pela ponte Supabase (motor no PC da pizzaria).
+  markDirectEngineUnreachable(branchId);
+  if (supabaseBridgeChannel) {
+    supabaseBridgeChannel.send({
+      type: 'broadcast',
+      event: 'REQUEST_STATUS',
+      payload: { branchId }
+    }).catch(() => {});
   }
 
   return getBranchWhatsApp(branchId);
@@ -299,13 +308,21 @@ export async function requestEngineConnect(branchId = 'ariquemes') {
       return data;
     }
   } catch (e) {
-    if (supabaseBridgeChannel) {
-      supabaseBridgeChannel.send({
-        type: 'broadcast',
-        event: 'CONNECT',
-        payload: { branchId }
-      }).catch(() => {});
-    }
+    // sem resposta direta: segue para a ponte abaixo
+  }
+
+  // Motor direto indisponível: pede a conexão/QR pela ponte Supabase (motor no PC da pizzaria)
+  if (supabaseBridgeChannel) {
+    supabaseBridgeChannel.send({
+      type: 'broadcast',
+      event: 'CONNECT',
+      payload: { branchId }
+    }).catch(() => {});
+    supabaseBridgeChannel.send({
+      type: 'broadcast',
+      event: 'REQUEST_STATUS',
+      payload: { branchId }
+    }).catch(() => {});
   }
 
   return { status: 'CONNECTING' };

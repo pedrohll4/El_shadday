@@ -77,6 +77,11 @@ export default function WhatsAppManagerView({
         setSessions(getAllBranchWhatsApp());
         if (e.detail.status === 'CONNECTED' || e.detail.status === 'connected') {
           setActiveQrModal(false);
+          setQrCodeDataUrl(null);
+        } else if (e.detail.qrCodeDataUrl) {
+          // QR Code chegando pela ponte Supabase (motor no PC da pizzaria)
+          setQrCodeDataUrl(e.detail.qrCodeDataUrl);
+          setIsConnecting(false);
         }
       }
     };
