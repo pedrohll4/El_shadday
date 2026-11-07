@@ -19,7 +19,8 @@ import {
   getStoredCategories,
   saveStoredCategories,
   normalizeCategoriesList,
-  isStoreOpen
+  isStoreOpen,
+  stripPrivateCardMachineSettings
 } from './data/menuData';
 import { saveStoredBuffetGallery, isFakeGalleryItem, saveUnavailableBuffetItemIds } from './buffet/buffetData';
 import { supabase, isSupabaseConfigured } from './services/supabaseClient';
@@ -359,7 +360,7 @@ export default function App() {
                 ...(data.delivery_active !== undefined ? { isOpen: data.delivery_active } : {}),
                 ...(data.card_machine_notice !== undefined ? { cardMachineNotice: data.card_machine_notice } : {}),
                 ...(data.card_machine_notice_active !== undefined ? { cardMachineNoticeActive: data.card_machine_notice_active } : {}),
-                ...(data.card_machine_settings ? { cardMachineSettings: data.card_machine_settings } : {})
+                ...(data.card_machine_settings ? { cardMachineSettings: stripPrivateCardMachineSettings(data.card_machine_settings) } : {})
               };
               setRestaurantInfo(updatedStore);
               saveStoredRestaurantInfo(updatedStore);

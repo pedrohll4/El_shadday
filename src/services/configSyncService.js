@@ -7,7 +7,7 @@
  */
 
 import { supabase, isSupabaseConfigured } from './supabaseClient';
-import { saveStoredProducts, saveStoredPromoSettings, saveStoredRestaurantInfo, saveStoredPizzaFlavors, saveStoredAcaiSettings, saveStoredDistricts, saveStoredCategories, saveStoredExtraSauceConfig } from '../data/menuData';
+import { saveStoredProducts, saveStoredPromoSettings, saveStoredRestaurantInfo, saveStoredPizzaFlavors, saveStoredAcaiSettings, saveStoredDistricts, saveStoredCategories, saveStoredExtraSauceConfig, stripPrivateCardMachineSettings } from '../data/menuData';
 import { saveStoredBuffetGallery, saveUnavailableBuffetItemIds, getUnavailableBuffetItemIds, saveStoredBuffetCategories } from '../buffet/buffetData';
 
 const CONFIG_TOPIC = 'el-shadday-config-sync-ariquemes-v2';
@@ -63,7 +63,7 @@ export async function dispatchConfigSync(type, data) {
           pix_name: data.pixName,
           card_machine_notice: data.cardMachineNotice,
           card_machine_notice_active: data.cardMachineNoticeActive,
-          card_machine_settings: data.cardMachineSettings,
+          card_machine_settings: data.cardMachineSettings ? stripPrivateCardMachineSettings(data.cardMachineSettings) : data.cardMachineSettings,
           delivery_active: data.isOpen !== false,
           updated_at: new Date().toISOString()
         });

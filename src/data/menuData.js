@@ -1364,16 +1364,24 @@ export function saveStoredPromoSettings(settings) {
   }
 }
 
+// Remove dados que NUNCA devem ficar no navegador nem ser reenviados ao salvar
+// configurações (ex: sessão do WhatsApp do motor Baileys).
+export function stripPrivateCardMachineSettings(settings) {
+  if (!settings || typeof settings !== 'object') return settings;
+  const { baileys_cloud_auth, ...rest } = settings;
+  return rest;
+}
+
 export function getStoredRestaurantInfo() {
   try {
     const saved = localStorage.getItem("el_shadday_delivery_restaurant_info_v2");
     if (saved) {
       const parsed = JSON.parse(saved);
       if (parsed && typeof parsed === 'object') {
-        const mergedSettings = {
+        const mergedSettings = stripPrivateCardMachineSettings({
           ...RESTAURANT_INFO.cardMachineSettings,
           ...(parsed.cardMachineSettings || {})
-        };
+        });
         return { 
           ...RESTAURANT_INFO, 
           ...parsed,
@@ -1403,6 +1411,9 @@ export function isStoreOpen(restaurantInfo, branch) {
 
 export function saveStoredRestaurantInfo(info) {
   try {
+    if (info && info.cardMachineSettings) {
+      info = { ...info, cardMachineSettings: stripPrivateCardMachineSettings(info.cardMachineSettings) };
+    }
     localStorage.setItem("el_shadday_delivery_restaurant_info_v2", JSON.stringify(info));
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent("delivery_restaurant_info_updated", { detail: info }));

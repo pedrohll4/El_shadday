@@ -97,43 +97,94 @@ function recordSentMessage(orderId, status) {
 }
 
 // Persistência de Sessão no Supabase (Garante permanência mesmo em servidores com disco efêmero como Render Free)
+// IMPORTANTE (banda/segurança): salvamos SOMENTE o creds.json, numa linha separada
+// (AUTH_ROW_ID), apenas quando muda e no máximo 1x por minuto. Antes, a pasta inteira
+// de sessão (centenas de arquivos) era reenviada a cada 'creds.update' dentro da linha
+// principal de configurações, que é lida por todo visitante e retransmitida via Realtime.
+const AUTH_ROW_ID = 'el_shadday_whatsapp_session';
+const AUTH_BACKUP_MIN_INTERVAL_MS = 60 * 1000;
+let lastAuthBackupContent = '';
+let lastAuthBackupAt = 0;
+let authBackupTimer = null;
+let lastPublishedCloudStatus = null;
+
 async function backupAuthToSupabase() {
   try {
-    if (!fs.existsSync(AUTH_DIR)) return;
-    const files = fs.readdirSync(AUTH_DIR);
-    const authData = {};
-    for (const file of files) {
-      if (file.endsWith('.json')) {
-        authData[file] = fs.readFileSync(path.join(AUTH_DIR, file), 'utf-8');
+    const credsPath = path.join(AUTH_DIR, 'creds.json');
+    if (!fs.existsSync(credsPath)) return;
+    const content = fs.readFileSync(credsPath, 'utf-8');
+    if (!content || content === lastAuthBackupContent) return;
+
+    const { error } = await supabase.from('company_settings').upsert({
+      id: AUTH_ROW_ID,
+      card_machine_settings: {
+        baileys_cloud_auth: { 'creds.json': content },
+        updated_at: new Date().toISOString()
       }
-    }
-    if (Object.keys(authData).length > 0) {
-      const { data } = await supabase.from('company_settings').select('card_machine_settings').eq('id', 'el_shadday_config').single();
-      const existing = data?.card_machine_settings || {};
-      await supabase.from('company_settings').update({
-        card_machine_settings: {
-          ...existing,
-          baileys_cloud_auth: authData,
-          baileys_cloud_status: state.status,
-          baileys_cloud_phone: state.userInfo?.phone || ''
-        }
-      }).eq('id', 'el_shadday_config');
-    }
+    });
+    if (error) throw new Error(error.message);
+    lastAuthBackupContent = content;
+    lastAuthBackupAt = Date.now();
   } catch (e) {
     console.warn('[WhatsApp Service] Falha ao fazer backup de sessão no Supabase:', e.message);
   }
 }
 
+function scheduleAuthBackup(immediate = false) {
+  if (authBackupTimer) return;
+  const wait = immediate ? 0 : Math.max(0, AUTH_BACKUP_MIN_INTERVAL_MS - (Date.now() - lastAuthBackupAt));
+  authBackupTimer = setTimeout(async () => {
+    authBackupTimer = null;
+    await backupAuthToSupabase();
+  }, wait);
+}
+
+// Publica apenas status/telefone na linha principal (pequeno) e remove o backup antigo gigante
+async function publishCloudStatusToSettings(force = false) {
+  const phone = state.userInfo?.phone || '';
+  const key = `${state.status}|${phone}`;
+  if (!force && key === lastPublishedCloudStatus) return;
+  try {
+    const { data } = await supabase.from('company_settings').select('card_machine_settings').eq('id', 'el_shadday_config').single();
+    const existing = { ...(data?.card_machine_settings || {}) };
+    delete existing.baileys_cloud_auth;
+    existing.baileys_cloud_status = state.status;
+    existing.baileys_cloud_phone = phone;
+    await supabase.from('company_settings').update({ card_machine_settings: existing }).eq('id', 'el_shadday_config');
+    lastPublishedCloudStatus = key;
+  } catch (e) {
+    console.warn('[WhatsApp Service] Falha ao publicar status no Supabase:', e.message);
+  }
+}
+
+function writeAuthFiles(authData) {
+  if (!fs.existsSync(AUTH_DIR)) fs.mkdirSync(AUTH_DIR, { recursive: true });
+  for (const [file, content] of Object.entries(authData)) {
+    if (!/^[\w.-]+\.json$/.test(file)) continue;
+    fs.writeFileSync(path.join(AUTH_DIR, file), String(content), 'utf-8');
+  }
+}
+
 async function restoreAuthFromSupabase() {
   try {
+    // 1. Novo local (linha separada, só creds.json)
+    const { data: authRow } = await supabase.from('company_settings').select('card_machine_settings').eq('id', AUTH_ROW_ID).maybeSingle();
+    const newAuth = authRow?.card_machine_settings?.baileys_cloud_auth;
+    if (newAuth && typeof newAuth === 'object' && newAuth['creds.json']) {
+      writeAuthFiles(newAuth);
+      lastAuthBackupContent = String(newAuth['creds.json']);
+      console.log('✅ [WhatsApp Service] Sessão permanente restaurada do Supabase com sucesso!');
+      return true;
+    }
+
+    // 2. Local antigo (compatibilidade): restaura e migra para o novo formato
     const { data } = await supabase.from('company_settings').select('card_machine_settings').eq('id', 'el_shadday_config').single();
     const authData = data?.card_machine_settings?.baileys_cloud_auth;
     if (authData && typeof authData === 'object' && Object.keys(authData).length > 0) {
-      if (!fs.existsSync(AUTH_DIR)) fs.mkdirSync(AUTH_DIR, { recursive: true });
-      for (const [file, content] of Object.entries(authData)) {
-        fs.writeFileSync(path.join(AUTH_DIR, file), String(content), 'utf-8');
-      }
-      console.log('✅ [WhatsApp Service] Sessão permanente restaurada do Supabase com sucesso!');
+      writeAuthFiles(authData);
+      console.log('✅ [WhatsApp Service] Sessão restaurada do formato antigo. Migrando backup...');
+      await backupAuthToSupabase();
+      await publishCloudStatusToSettings(true);
       return true;
     }
   } catch (e) {
@@ -142,188 +193,7 @@ async function restoreAuthFromSupabase() {
   return false;
 }
 
-// Broadcast de status para o canal do Supabase
-let supabaseBridgeChannel = null;
-
-function broadcastStateToSupabase() {
-  if (!supabaseBridgeChannel) return;
-  try {
-    supabaseBridgeChannel.send({
-      type: 'broadcast',
-      event: 'STATUS_UPDATE',
-      payload: {
-        status: state.status,
-        qrCodeDataUrl: state.qrCodeDataUrl,
-        userInfo: state.userInfo,
-        lastError: state.lastError,
-        batteryLevel: state.batteryLevel,
-        autoNotify: state.autoNotify,
-        timestamp: Date.now()
-      }
-    }).catch(() => {});
-  } catch (err) {}
-}
-
-// Normaliza números de telefone do Brasil
-export function formatToWhatsAppQueries(phone) {
-  const digits = String(phone || '').replace(/\D/g, '');
-  if (!digits) return [];
-
-  const candidates = [];
-  if (digits.length === 10 || digits.length === 11) {
-    candidates.push(`55${digits}`);
-    if (digits.length === 11 && digits[2] === '9') {
-      const ddd = digits.slice(0, 2);
-      const rest = digits.slice(3);
-      candidates.push(`55${ddd}${rest}`);
-    }
-  } else if (digits.length === 12 || digits.length === 13) {
-    candidates.push(digits);
-    if (digits.startsWith('55') && digits.length === 13 && digits[4] === '9') {
-      const ddd = digits.slice(2, 4);
-      const rest = digits.slice(5);
-      candidates.push(`55${ddd}${rest}`);
-    }
-  } else {
-    candidates.push(digits);
-  }
-
-  return Array.from(new Set(candidates));
-}
-
-// Formata itens do pedido para o cliente (oculta detalhes internos de sabores caso seja sortido)
-function formatOrderItems(items = []) {
-  if (!Array.isArray(items) || items.length === 0) return '• Itens do pedido';
-  return items.map(it => {
-    let line = `• ${it.quantity || 1}x *${it.name || 'Item'}*`;
-    if (it.pizzaSelections && it.pizzaSelections.length > 0) {
-      const sab = it.pizzaSelections.map(p => p.flavors?.join('/')).filter(Boolean).join(' + ');
-      if (sab) line += ` (${sab})`;
-    } else if (it.flavors && it.flavors.length > 0) {
-      line += ` (${it.flavors.join('/')})`;
-    } else if (it.isSortido || (it.name && it.name.toLowerCase().includes('sortid')) || (it.isBox && !it.salgadasDetails)) {
-      line += ` (Sortido da Casa${it.semSuinos ? ' - Sem Suínos' : ''})`;
-    } else if (it.isCustomBox && !it.isSortido && it.salgadasDetails) {
-      const salg = Object.entries(it.salgadasDetails).map(([f, q]) => `${q}x ${f}`).join(', ');
-      if (salg) line += ` (${salg})`;
-    }
-    const extras = [];
-    if (it.dydyoFlavor) extras.push(`Refri: ${it.dydyoFlavor}`);
-    if (it.beverage) extras.push(`Bebida: ${it.beverage}`);
-    if (it.hasExtraSauce) extras.push(`Molho Extra`);
-    if (extras.length > 0) line += ` [${extras.join(' | ')}]`;
-    return line;
-  }).join('\n');
-}
-
-// Construtor das mensagens padrão
-export function buildOrderWhatsAppText({ order, statusType, reason = '' }) {
-  const customerName = order.customer_name || order.customerName || 'Cliente';
-  const orderId = order.id || order.orderId || 'S/N';
-  const branchName = order.branch_name || order.branchName || 'El Shadday Ariquemes';
-  const isBalcao = (order.delivery_type === 'balcao' || order.deliveryType === 'balcao' || order.district === 'Balcão');
-  const deliveryAddress = order.delivery_address?.address 
-    ? `${order.delivery_address.address}${order.delivery_address.number ? `, Nº ${order.delivery_address.number}` : ''}`
-    : (order.address ? `${order.address}${order.number ? `, Nº ${order.number}` : ''}` : '');
-
-  const norm = String(statusType).toUpperCase().trim();
-
-  switch (norm) {
-    case 'RECEBIDO':
-    case 'RECEBIDO_COZINHA':
-      return (
-`🍕 *EL SHADDAY DELIVERY - PEDIDO CONFIRMADO!*
-📍 *${branchName}*
-----------------------------------------
-Olá, *${customerName}*! Seu pedido *#${orderId}* foi recebido com sucesso pela nossa equipe e já está na fila de produção! ✅
-
-📋 *ITENS:*
-${formatOrderItems(order.items)}
-
-🛵 *Modalidade:* ${isBalcao ? 'Retirada no Balcão' : 'Delivery (Entrega em Domicílio)'}
-${!isBalcao && deliveryAddress ? `🏠 *Endereço:* ${deliveryAddress}\n` : ''}💰 *Total:* R$ ${Number(order.total || 0).toFixed(2).replace('.', ',')}
-⏳ *Tempo Estimado:* 45 - 75 min
-
-Passaremos todas as atualizações do seu pedido por aqui. Muito obrigado pela preferência! 💛`
-      );
-
-    case 'EM_PREPARO':
-    case 'NO_FORNO':
-      return (
-`👨‍🍳🔥 *PEDIDO NO FORNO! - EL SHADDAY*
-📍 *${branchName}*
-----------------------------------------
-Olá, *${customerName}*! Passando para avisar que o seu pedido *#${orderId}* acabou de entrar no forno! 🔥
-
-Nossa equipe está preparando tudo com ingredientes frescos, massa artesanal e muito carinho.
-
-⏳ Logo seu pedido estará no ponto ideal! Avisaremos assim que ${isBalcao ? 'estiver pronto para retirada no balcão' : 'o motoboy sair para entrega'}. ✨`
-      );
-
-    case 'SAIU_ENTREGA':
-      return (
-`🛵💨 *PEDIDO A CAMINHO! - EL SHADDAY*
-📍 *${branchName}*
-----------------------------------------
-Boas notícias, *${customerName}*! O seu pedido *#${orderId}* acabou de sair da nossa cozinha e já está a caminho! 🛵💨
-
-${deliveryAddress ? `📍 *Destino:* ${deliveryAddress}\n` : ''}⚠️ *Dica:* Por favor, mantenha alguém atento ao portão/campainha para receber o entregador.
-
-Seu pedido está quentinho. Bom apetite! 🍕😋`
-      );
-
-    case 'PRONTO_BALCAO':
-      return (
-`🛍️✨ *SEU PEDIDO ESTÁ PRONTO! - EL SHADDAY*
-📍 *${branchName}*
-----------------------------------------
-Olá, *${customerName}*! O seu pedido *#${orderId}* já ficou pronto, quentinho e embalado esperando por você no balcão! 🍕✨
-
-🏢 *Local de Retirada:* Av Canaã, 4065 - Ariquemes - RO
-⏰ Pode passar para retirar a qualquer momento.
-
-Estamos te esperando! 💛`
-      );
-
-    case 'CONCLUIDO':
-      return (
-`🎉🍕 *PEDIDO ENTREGUE COM SUCESSO!*
-📍 *${branchName}*
-----------------------------------------
-Olá, *${customerName}*! Seu pedido *#${orderId}* foi finalizado! ✅
-
-Esperamos que sua refeição esteja deliciosa e que tenha uma experiência incrível com a El Shadday.
-
-⭐ Se gostou, compartilhe nos stories e marque a gente! (@elshadday_buffet)
-Qualquer feedback ou dúvida, estamos sempre à disposição por este WhatsApp.
-
-Muito obrigado e até a próxima! 💛`
-      );
-
-    case 'CANCELADO':
-      return (
-`⚠️ *AVISO: PEDIDO CANCELADO - EL SHADDAY*
-📍 *${branchName}*
-----------------------------------------
-Olá, *${customerName}*, informamos que o seu pedido *#${orderId}* precisou ser cancelado no sistema.
-
-${reason ? `📝 *Motivo informado:* ${reason}\n` : ''}Se você já efetuou o pagamento via Pix ou precisa de qualquer esclarecimento, por favor responda esta mensagem para falar diretamente com nosso atendimento da unidade.
-
-WhatsApp da Filial: *(69) 99222-8682*
-Pedimos sinceras desculpas pelo inconveniente!`
-      );
-
-    default:
-      return (
-`🍕 *ATUALIZAÇÃO DO PEDIDO - EL SHADDAY*
-📍 *${branchName}*
-----------------------------------------
-Olá, *${customerName}*! O status do seu pedido *#${orderId}* foi atualizado para: *${norm}*.
-
-Qualquer dúvida, estamos à disposição! 💛`
-      );
-  }
-}
+let reconnectAttempts = 0;
 
 // Inicializa o Baileys WhatsApp Socket
 async function initWhatsApp(forceReconnect = false) {
@@ -353,7 +223,7 @@ async function initWhatsApp(forceReconnect = false) {
 
     sock.ev.on('creds.update', async () => {
       await saveCreds();
-      await backupAuthToSupabase();
+      scheduleAuthBackup();
     });
 
     sock.ev.on('connection.update', async (update) => {
@@ -392,8 +262,10 @@ async function initWhatsApp(forceReconnect = false) {
         };
 
         console.log(`\n[WhatsApp Service] ✅ CONECTADO COM SUCESSO! Telefone: +${cleanPhone}`);
+        reconnectAttempts = 0;
         broadcastStateToSupabase();
-        await backupAuthToSupabase();
+        scheduleAuthBackup(true);
+        publishCloudStatusToSettings();
       }
 
       if (connection === 'close') {
@@ -406,7 +278,11 @@ async function initWhatsApp(forceReconnect = false) {
         if (shouldReconnect) {
           state.status = 'CONNECTING';
           broadcastStateToSupabase();
-          setTimeout(() => initWhatsApp(true), 3000);
+          // Backoff exponencial: 3s, 6s, 12s... ate 5 min (evita loop de reconexao gastando banda)
+          reconnectAttempts += 1;
+          const delay = Math.min(3000 * Math.pow(2, reconnectAttempts - 1), 5 * 60 * 1000);
+          console.log(`[WhatsApp Service] Nova tentativa em ${Math.round(delay / 1000)}s (tentativa ${reconnectAttempts})`);
+          setTimeout(() => initWhatsApp(true), delay);
         } else {
           state.status = 'DISCONNECTED';
           state.userInfo = null;
@@ -417,6 +293,7 @@ async function initWhatsApp(forceReconnect = false) {
             fs.mkdirSync(AUTH_DIR, { recursive: true });
           } catch (e) {}
           broadcastStateToSupabase();
+          publishCloudStatusToSettings();
         }
       }
     });
@@ -510,6 +387,9 @@ async function logoutWhatsApp() {
     delete existing.baileys_cloud_status;
     delete existing.baileys_cloud_phone;
     await supabase.from('company_settings').update({ card_machine_settings: existing }).eq('id', 'el_shadday_config');
+    await supabase.from('company_settings').delete().eq('id', AUTH_ROW_ID);
+    lastAuthBackupContent = '';
+    lastPublishedCloudStatus = null;
   } catch (e) {}
 
   return { success: true };

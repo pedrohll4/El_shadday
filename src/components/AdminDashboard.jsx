@@ -47,7 +47,8 @@ import {
   getPizzaSizeKey,
   getPizzaFlavorPrice,
   getStoredExtraSauceConfig,
-  saveStoredExtraSauceConfig
+  saveStoredExtraSauceConfig,
+  stripPrivateCardMachineSettings
 } from '../data/menuData';
 import { PizzaCustomizerModal } from './PizzaCustomizerModal';
 import { BoxBuilderModal } from './BoxBuilderModal';
@@ -983,7 +984,7 @@ export function AdminDashboard({
                 ...(data.pix_name ? { pixName: data.pix_name } : {}),
                 ...(data.card_machine_notice !== undefined ? { cardMachineNotice: data.card_machine_notice } : {}),
                 ...(data.card_machine_notice_active !== undefined ? { cardMachineNoticeActive: data.card_machine_notice_active } : {}),
-                ...(data.card_machine_settings ? { cardMachineSettings: data.card_machine_settings } : {})
+                ...(data.card_machine_settings ? { cardMachineSettings: stripPrivateCardMachineSettings(data.card_machine_settings) } : {})
               };
               setRestaurantSettings(updatedStore);
               saveStoredRestaurantInfo(updatedStore);
