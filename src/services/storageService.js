@@ -1,5 +1,6 @@
 import { supabase, isSupabaseConfigured } from './supabaseClient';
 import { compressImageFile } from '../utils/imageCompressor';
+import { showSaveError } from './saveGuard';
 
 // Fotos de celular chegam com 5-10 MB. Antes subíamos o ORIGINAL para o Storage
 // (a versão comprimida era descartada). Agora toda imagem é reduzida para no
@@ -65,6 +66,10 @@ export async function uploadMediaToSupabaseStorage(file, folder = 'gallery') {
 
     if (uploadRes.error) {
       console.warn('⚠️ Supabase Storage upload avisou:', uploadRes.error.message);
+      const m = uploadRes.error.message || '';
+      showSaveError(/security|permission|JWT|Unauthorized|403|401/i.test(m)
+        ? 'a foto não foi enviada porque seu login expirou. Saia do painel, entre de novo e envie a foto outra vez.'
+        : 'a foto não foi enviada (' + m.slice(0, 100) + '). Tente de novo.');
       return null;
     }
 
@@ -78,6 +83,7 @@ export async function uploadMediaToSupabaseStorage(file, folder = 'gallery') {
     }
   } catch (err) {
     console.warn('⚠️ Erro ao tentar upload no Supabase Storage:', err);
+    showSaveError('a foto não foi enviada (sem internet ou erro no servidor). Tente de novo.');
   }
 
   return null;
