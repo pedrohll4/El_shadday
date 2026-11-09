@@ -20,9 +20,10 @@ import {
   saveStoredCategories,
   normalizeCategoriesList,
   isStoreOpen,
-  stripPrivateCardMachineSettings
+  stripPrivateCardMachineSettings,
+  saveStoredDistricts
 } from './data/menuData';
-import { saveStoredBuffetGallery, isFakeGalleryItem, saveUnavailableBuffetItemIds } from './buffet/buffetData';
+import { saveStoredBuffetGallery, isFakeGalleryItem, saveUnavailableBuffetItemIds, saveStoredBuffetCategories } from './buffet/buffetData';
 import { supabase, isSupabaseConfigured } from './services/supabaseClient';
 import { Header } from './components/Header';
 import { RestaurantStoreHeader } from './components/RestaurantStoreHeader';
@@ -56,7 +57,8 @@ import {
 } from './services/ordersSyncService';
 import { 
   fetchCloudConfigHistory, 
-  subscribeToConfigEvents 
+  subscribeToConfigEvents,
+  mapCompanySettingsToStore
 } from './services/configSyncService';
 import { 
   recordCustomerFromOrder, 
@@ -416,12 +418,15 @@ export default function App() {
                   saveUnavailableBuffetItemIds(freshData.promo_settings.buffet_unavailable_items);
                 }
               }
-              if (freshData.delivery_active !== undefined) {
-                const currentStore = getStoredRestaurantInfo();
-                const updatedStore = {
-                  ...currentStore,
-                  isOpen: freshData.delivery_active
-                };
+              if (Array.isArray(freshData.delivery_districts) && freshData.delivery_districts.length > 0) {
+                saveStoredDistricts(freshData.delivery_districts);
+              }
+              if (Array.isArray(freshData.buffet_categories) && freshData.buffet_categories.length > 0) {
+                saveStoredBuffetCategories(freshData.buffet_categories);
+              }
+              if (freshData.delivery_active !== undefined || freshData.name) {
+                // Atualiza status, PIX, telefone e aviso da maquininha ao vivo
+                const updatedStore = mapCompanySettingsToStore(freshData, getStoredRestaurantInfo());
                 setRestaurantInfo(updatedStore);
                 saveStoredRestaurantInfo(updatedStore);
               }

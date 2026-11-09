@@ -156,6 +156,10 @@ export function BuffetApp({ currentAppMode, onToggleAppMode, onNavigateToBuilder
     window.addEventListener('storage', handleGallerySync);
     window.addEventListener('buffet_gallery_updated', handleGallerySync);
 
+    // Declarados fora do if para o cleanup conseguir remover os canais
+    let ch1 = null;
+    let ch2 = null;
+
     if (isSupabaseConfigured && supabase) {
       const loadFromCompanySettings = () => {
         return supabase
@@ -188,9 +192,6 @@ export function BuffetApp({ currentAppMode, onToggleAppMode, onNavigateToBuilder
             loadFromCompanySettings();
           }
         });
-
-      let ch1 = null;
-      let ch2 = null;
 
       try {
         const existingChannels = typeof supabase.getChannels === 'function' ? supabase.getChannels() : [];

@@ -10,6 +10,21 @@ import { recordCustomerFromOrder } from './customerService';
 const SYNC_TOPIC = 'el-shadday-kds-ariquemes-v2';
 const NTFY_BASE_URL = `https://ntfy.sh/${SYNC_TOPIC}`;
 
+// SEGURANÇA/LGPD: o tópico ntfy.sh é PÚBLICO (qualquer pessoa lê e publica nele).
+// Com o Supabase ativo, ele não é usado: nem para enviar dados de clientes,
+// nem para receber comandos (ex.: "limpar todos os pedidos" forjado por terceiros).
+const shouldUseNtfyFallback = () => !(isSupabaseConfigured && supabase);
+
+// Converte "50,00", "R$ 50" etc. em número (coluna NUMERIC no banco); inválido vira null
+const toNumberOrNull = (val) => {
+  if (val === null || val === undefined || val === '') return null;
+  if (typeof val === 'number') return Number.isFinite(val) ? val : null;
+  const cleaned = String(val).replace(/[^0-9,.-]/g, '').replace(/\.(?=.*[.,])/g, '').replace(',', '.');
+  if (!cleaned) return null;
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? n : null;
+};
+
 // BroadcastChannel for cross-tab local sync on same device
 const localChannel = typeof window !== 'undefined' && window.BroadcastChannel 
   ? new window.BroadcastChannel('el_shadday_orders_channel') 
@@ -254,6 +269,7 @@ export async function dispatchOrderToKitchen(orderData) {
   } catch (e) {}
 
   // 2. Dispatch to Supabase PostgreSQL Database (if connected)
+  let savedInSupabase = false;
   if (isSupabaseConfigured && supabase) {
     try {
       const addr = orderData.deliveryAddress || {
@@ -265,7 +281,7 @@ export async function dispatchOrderToKitchen(orderData) {
         reference: orderData.reference || '',
         isPickup: orderData.deliveryType === 'balcao' || orderData.deliveryType === 'retirada'
       };
-      const changeVal = orderData.changeFor || orderData.cashChange || orderData.change_for || null;
+      const changeVal = toNumberOrNull(orderData.changeFor || orderData.cashChange || orderData.change_for || null);
 
       const { error } = await supabase.from('orders').upsert({
         id: orderData.orderId,
@@ -288,6 +304,7 @@ export async function dispatchOrderToKitchen(orderData) {
       if (error) {
         console.warn('⚠️ Supabase order insert error:', error.message);
       } else {
+        savedInSupabase = true;
         console.log('✅ Pedido gravado no Supabase com sucesso:', orderData.orderId);
       }
     } catch (err) {
@@ -295,8 +312,8 @@ export async function dispatchOrderToKitchen(orderData) {
     }
   }
 
-  // 3. Publish to Cloud Pub/Sub (Cross-device Internet Sync fallback)
-  try {
+  // 3. Publish to Cloud Pub/Sub (só se o Supabase não estiver disponível)
+  if (!savedInSupabase && shouldUseNtfyFallback()) try {
     const payload = JSON.stringify({
       ...orderData,
       status: normalizeOrderStatus(orderData.orderStatus || orderData.status),
@@ -379,15 +396,24 @@ export async function dispatchOrderUpdateToKitchen(orderId, updates) {
       if (updates.total !== undefined) updateData.total = Number(updates.total) || 0;
       if (updates.cashChange !== undefined) updateData.change_for = updates.cashChange ? Number(String(updates.cashChange).replace(',', '.')) : null;
 
-      await supabase.from('orders').update(updateData).eq('id', orderId);
-      console.log('✅ Status atualizado no Supabase:', orderId, enrichedUpdates);
+      let { error } = await supabase.from('orders').update(updateData).eq('id', orderId);
+      // Coluna opcional ausente no banco (ex.: payment_status) não pode derrubar a atualização inteira
+      if (error && updateData.payment_status !== undefined && /payment_status/.test(error.message || '')) {
+        delete updateData.payment_status;
+        ({ error } = await supabase.from('orders').update(updateData).eq('id', orderId));
+      }
+      if (error) {
+        console.warn('⚠️ Supabase recusou a atualização do pedido:', orderId, error.message);
+      } else {
+        console.log('✅ Status atualizado no Supabase:', orderId, enrichedUpdates);
+      }
     } catch (err) {
       console.warn('⚠️ Erro ao atualizar status no Supabase:', err);
     }
   }
 
   // 3. Fallback Cloud Pub/Sub
-  try {
+  if (shouldUseNtfyFallback()) try {
     await fetch(NTFY_BASE_URL, {
       method: 'POST',
       headers: {
@@ -435,7 +461,7 @@ export async function dispatchOrderDelete(orderId) {
   } catch (e) {}
 
   // 3. Fallback Cloud Pub/Sub
-  try {
+  if (shouldUseNtfyFallback()) try {
     await fetch(NTFY_BASE_URL, {
       method: 'POST',
       headers: {
@@ -475,7 +501,7 @@ export async function dispatchClearAllOrders() {
     }
   } catch (e) {}
 
-  try {
+  if (shouldUseNtfyFallback()) try {
     await fetch(NTFY_BASE_URL, {
       method: 'POST',
       headers: {
@@ -616,7 +642,7 @@ export function subscribeToKitchenEvents({ onNewOrder, onOrderUpdate, onOrderDel
 
   // 2. Server-Sent Events (SSE) Fallback via ntfy.sh
   const connectSSE = () => {
-    if (isCleanedUp) return;
+    if (isCleanedUp || !shouldUseNtfyFallback()) return;
 
     try {
       eventSource = new EventSource(`${NTFY_BASE_URL}/sse`);

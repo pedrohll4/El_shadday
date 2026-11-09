@@ -158,6 +158,9 @@ export function BuffetSection({ onExploreFullBuffet, onBackToDelivery }) {
     window.addEventListener('buffet_gallery_updated', handleGallerySync);
 
     // ========== CARREGA GALERIA DO SUPABASE ==========
+    // Declarados fora do if para o cleanup conseguir remover os canais
+    let channelCs = null;
+    let channelBg = null;
     if (isSupabaseConfigured && supabase) {
       supabase
         .from('company_settings')
@@ -189,7 +192,6 @@ export function BuffetSection({ onExploreFullBuffet, onBackToDelivery }) {
         .catch(() => {});
 
       // Realtime: escuta mudanças em company_settings
-      let channelCs;
       try {
         channelCs = supabase
           .channel(`realtime_gallery_section_cs_${Date.now()}`)
@@ -214,7 +216,6 @@ export function BuffetSection({ onExploreFullBuffet, onBackToDelivery }) {
       } catch (e) {}
 
       // Realtime: escuta mudanças em buffet_gallery (se existir)
-      let channelBg;
       try {
         channelBg = supabase
           .channel(`realtime_gallery_section_bg_${Date.now()}`)

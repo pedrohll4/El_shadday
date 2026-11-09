@@ -7,11 +7,15 @@
  */
 
 import { supabase, isSupabaseConfigured } from './supabaseClient';
-import { saveStoredProducts, saveStoredPromoSettings, saveStoredRestaurantInfo, saveStoredPizzaFlavors, saveStoredAcaiSettings, saveStoredDistricts, saveStoredCategories, saveStoredExtraSauceConfig, stripPrivateCardMachineSettings } from '../data/menuData';
+import { saveStoredProducts, saveStoredPromoSettings, getStoredRestaurantInfo, saveStoredRestaurantInfo, saveStoredPizzaFlavors, saveStoredAcaiSettings, saveStoredDistricts, saveStoredCategories, saveStoredExtraSauceConfig, stripPrivateCardMachineSettings } from '../data/menuData';
 import { saveStoredBuffetGallery, saveUnavailableBuffetItemIds, getUnavailableBuffetItemIds, saveStoredBuffetCategories } from '../buffet/buffetData';
 
 const CONFIG_TOPIC = 'el-shadday-config-sync-ariquemes-v2';
 const NTFY_CONFIG_URL = `https://ntfy.sh/${CONFIG_TOPIC}`;
+
+// SEGURANÇA: o tópico ntfy.sh é PÚBLICO. Com o Supabase ativo ele não é usado,
+// senão qualquer pessoa poderia publicar preços/loja fechada falsos para os clientes.
+const shouldUseNtfyFallback = () => !(isSupabaseConfigured && supabase);
 
 // Cross-tab channel on the same device
 const configChannel = typeof window !== 'undefined' && window.BroadcastChannel 
@@ -100,7 +104,7 @@ export async function dispatchConfigSync(type, data) {
       } else if (type === 'BUFFET_AVAILABILITY_UPDATE') {
         let currentPromos = {};
         try {
-          const raw = localStorage.getItem('el_shadday_promo_settings');
+          const raw = localStorage.getItem('el_shadday_delivery_promos_v2');
           if (raw) currentPromos = JSON.parse(raw);
         } catch (e) {}
         currentPromos.buffet_unavailable_items = Array.isArray(data) ? data : [];
@@ -150,8 +154,8 @@ export async function dispatchConfigSync(type, data) {
     }
   }
 
-  // 3. Dispatch to Global Cloud Pub/Sub (instant cross-device sync)
-  try {
+  // 3. Dispatch to Global Cloud Pub/Sub (só sem Supabase)
+  if (shouldUseNtfyFallback()) try {
     const rawJson = JSON.stringify(payload);
     // ntfy.sh accepts small payloads (<4KB). If payload contains base64 images or large lists, send lightweight ping
     const bodyToSend = rawJson.length > 3500 
@@ -172,6 +176,27 @@ export async function dispatchConfigSync(type, data) {
   } catch (err) {
     console.warn(`⚠️ [Cloud Sync] Falha ao enviar ${type} para o pub/sub:`, err);
   }
+}
+
+/**
+ * Converte a linha de company_settings (snake_case) para o formato usado pela loja (camelCase).
+ * Só sobrescreve campos que vieram preenchidos do banco.
+ */
+export function mapCompanySettingsToStore(data, currentStore = {}) {
+  if (!data) return currentStore;
+  return {
+    ...currentStore,
+    ...(data.name ? { name: data.name } : {}),
+    ...(data.phone ? { phone: data.phone } : {}),
+    ...(data.phone_display ? { phoneFormatted: data.phone_display } : {}),
+    ...(data.address ? { address: data.address } : {}),
+    ...(data.pix_key ? { pixKey: data.pix_key } : {}),
+    ...(data.pix_name ? { pixName: data.pix_name } : {}),
+    ...(data.delivery_active !== undefined && data.delivery_active !== null ? { isOpen: data.delivery_active } : {}),
+    ...(data.card_machine_notice !== undefined && data.card_machine_notice !== null ? { cardMachineNotice: data.card_machine_notice } : {}),
+    ...(data.card_machine_notice_active !== undefined && data.card_machine_notice_active !== null ? { cardMachineNoticeActive: data.card_machine_notice_active } : {}),
+    ...(data.card_machine_settings ? { cardMachineSettings: stripPrivateCardMachineSettings(data.card_machine_settings) } : {})
+  };
 }
 
 /**
@@ -216,17 +241,19 @@ export async function fetchCloudConfigHistory() {
             saveUnavailableBuffetItemIds(promos.buffet_unavailable_items);
           }
         }
-        if (data.name) {
-          const currentStore = getStoredRestaurantInfo();
-          saveStoredRestaurantInfo({ ...currentStore, ...data });
+        let store = null;
+        if (data.name || data.delivery_active !== undefined) {
+          store = mapCompanySettingsToStore(data, getStoredRestaurantInfo());
+          saveStoredRestaurantInfo(store);
         }
 
         return {
           products,
           gallery,
           promos,
-          store: data,
-          flavors
+          store,
+          flavors,
+          delivery_categories: deliveryCategories
         };
       }
     } catch (err) {
@@ -336,7 +363,7 @@ export function subscribeToConfigEvents({ onProductsUpdate, onGalleryUpdate, onP
   let isCleanedUp = false;
 
   const connectSSE = () => {
-    if (isCleanedUp) return;
+    if (isCleanedUp || !shouldUseNtfyFallback()) return;
     try {
       eventSource = new EventSource(`${NTFY_CONFIG_URL}/sse`);
 

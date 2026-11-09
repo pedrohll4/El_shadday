@@ -803,7 +803,13 @@ if (process.env.RENDER_EXTERNAL_URL && !ENGINE_DISABLED) {
 }
 
 // Inicialização
-server.listen(PORT, '0.0.0.0', async () => {
+// SEGURANÇA: no PC da pizzaria escuta só no próprio computador (127.0.0.1).
+// Antes escutava na rede toda: qualquer aparelho no mesmo Wi-Fi podia pegar o
+// QR Code em /status (e conectar o WhatsApp da loja) ou mandar mensagens via /send.
+// Outros aparelhos usam a ponte do Supabase. Para liberar na rede: WHATSAPP_HOST=0.0.0.0
+const HOST = process.env.WHATSAPP_HOST || (IS_RENDER ? '0.0.0.0' : '127.0.0.1');
+
+server.listen(PORT, HOST, async () => {
   console.log(`\n============================================================`);
   console.log(`🚀 [WhatsApp Service] Motor El Shadday rodando na porta ${PORT}`);
   console.log(`⚡ 100% Gratuito | Sem Limite de Mensagens | Nuvem Render / Local`);

@@ -78,6 +78,7 @@ import { ImageUploader } from './ImageUploader';
 import { isVideoUrl, getVideoPosterUrl, compressImageFile } from '../utils/imageCompressor';
 import { ROLES, ROLE_LABELS, getCurrentUser } from '../services/authService';
 import { getStoredBranches } from '../data/branchesData';
+import { updateBranch } from '../services/branchesService';
 import { MasterFinancialView } from './admin/MasterFinancialView';
 import { BranchManagementView } from './admin/BranchManagementView';
 import { UserManagementView } from './admin/UserManagementView';

@@ -292,3 +292,12 @@ END $$;
 
 -- Fechamento de caixa compartilhado entre aparelhos (2026-11-09)
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS shift_closed_at TIMESTAMPTZ;
+
+-- Colunas usadas pelo app que faltavam no banco (2026-11-09)
+-- Sem elas, açaí, bairros/taxas de entrega, categorias e status de pagamento
+-- não eram salvos na nuvem (o Supabase recusava a gravação em silêncio).
+ALTER TABLE public.company_settings ADD COLUMN IF NOT EXISTS acai_settings JSONB;
+ALTER TABLE public.company_settings ADD COLUMN IF NOT EXISTS buffet_categories JSONB;
+ALTER TABLE public.company_settings ADD COLUMN IF NOT EXISTS delivery_districts JSONB;
+ALTER TABLE public.company_settings ADD COLUMN IF NOT EXISTS delivery_categories JSONB;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS payment_status TEXT;
