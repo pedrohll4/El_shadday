@@ -7,9 +7,7 @@
 import { supabase, isSupabaseConfigured } from './supabaseClient';
 import { isSecureAuthEnabled } from './authService';
 
-// Nome do canal antigo (público). Com o supabase_security.sql aplicado, o nome
-// real é secreto e fica em private_settings (só a equipe logada e o motor leem),
-// então ninguém de fora consegue pegar o QR Code nem mandar comandos ao motor.
+// Canal da ponte com o motor do WhatsApp do PC
 const LEGACY_BRIDGE_TOPIC = 'el_shadday_whatsapp_bridge';
 
 const STORAGE_KEY = 'el_shadday_branch_whatsapp_sessions_v3';
@@ -110,12 +108,12 @@ function markDirectEngineUnreachable(branchId) {
 }
 
 async function resolveBridgeTopic() {
+  // Mesmo canal que o motor do WhatsApp do PC usa (o motor não foi alterado).
+  // Com o login seguro ativo, só quem está logado na equipe entra na ponte.
   if (!(await isSecureAuthEnabled())) return LEGACY_BRIDGE_TOPIC;
   const { data: sessionData } = await supabase.auth.getSession();
-  if (!sessionData?.session) return null; // visitante/cliente: não entra na ponte
-  const { data, error } = await supabase.from('private_settings').select('data').eq('id', 'whatsapp_bridge').maybeSingle();
-  if (error || !data?.data?.topic) return null;
-  return data.data.topic;
+  if (!sessionData?.session) return null;
+  return LEGACY_BRIDGE_TOPIC;
 }
 
 function stopWhatsAppBridge() {

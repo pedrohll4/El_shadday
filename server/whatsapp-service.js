@@ -34,53 +34,7 @@ if (!fs.existsSync(AUTH_DIR)) {
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://yzeemqzxlgudynydvpof.supabase.co';
 const SUPABASE_KEY = process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl6ZWVtcXp4bGd1ZHlueWR2cG9mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE1MjAwOTgsImV4cCI6MjEwNzA5NjA5OH0.aahKZCTuVyJ9lNS09EZPVhaucSRhTL6pDGwKITSUnwg';
 
-// Chave PRIVADA (service_role) — só no PC da pizzaria, nunca no site nem no Git.
-// Com o supabase_security.sql aplicado, o banco só libera pedidos e a sessão do
-// WhatsApp para a equipe; o motor precisa desta chave para funcionar.
-// Coloque em um arquivo ".env.local" na pasta do projeto:
-//   SUPABASE_SERVICE_ROLE_KEY=eyJ...   (Supabase > Project Settings > API > service_role)
-function readLocalEnvFile() {
-  const out = {};
-  for (const file of ['.env.local', path.join('server', '.env.local')]) {
-    try {
-      const full = path.join(process.cwd(), file);
-      if (!fs.existsSync(full)) continue;
-      for (const line of fs.readFileSync(full, 'utf-8').split(/\r?\n/)) {
-        const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
-        if (m) out[m[1]] = m[2].replace(/^['"]|['"]$/g, '').trim();
-      }
-    } catch (e) {}
-  }
-  return out;
-}
-const LOCAL_ENV = readLocalEnvFile();
-const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || LOCAL_ENV.SUPABASE_SERVICE_ROLE_KEY || '';
-const HAS_SERVICE_KEY = !!SERVICE_ROLE_KEY;
-
-const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY || SUPABASE_KEY, {
-  auth: { persistSession: false, autoRefreshToken: false }
-});
-
-if (!HAS_SERVICE_KEY) {
-  console.warn('\n⚠️  [WhatsApp Service] SUPABASE_SERVICE_ROLE_KEY não configurada (arquivo .env.local).');
-  console.warn('    Depois de aplicar o supabase_security.sql, sem ela o motor NÃO vê os pedidos');
-  console.warn('    nem consegue salvar a sessão do WhatsApp. Veja as instruções no topo deste arquivo.\n');
-}
-
-// Erro de "tabela não existe" (banco ainda sem o supabase_security.sql)
-const isMissingTable = (error) => /private_settings|PGRST205|42P01|does not exist|schema cache/i.test(`${error?.code || ''} ${error?.message || ''}`);
-const LEGACY_BRIDGE_TOPIC = 'el_shadday_whatsapp_bridge';
-
-async function resolveBridgeTopic() {
-  try {
-    const { data, error } = await supabase.from('private_settings').select('data').eq('id', 'whatsapp_bridge').maybeSingle();
-    if (!error && data?.data?.topic) return data.data.topic;
-    if (error && !isMissingTable(error)) {
-      console.warn('[WhatsApp Service] Não consegui ler o canal secreto da ponte:', error.message);
-    }
-  } catch (e) {}
-  return LEGACY_BRIDGE_TOPIC;
-}
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // Estado da Conexão
 const state = {
@@ -168,20 +122,13 @@ async function backupAuthToSupabase() {
     const content = fs.readFileSync(credsPath, 'utf-8');
     if (!content || content === lastAuthBackupContent) return;
 
-    const payload = {
-      baileys_cloud_auth: { 'creds.json': content },
-      updated_at: new Date().toISOString()
-    };
-    // Local novo e protegido (só o motor com a chave service_role lê)
-    let { error } = await supabase.from('private_settings').upsert({
-      id: 'whatsapp_session',
-      data: payload,
-      updated_at: new Date().toISOString()
+    const { error } = await supabase.from('company_settings').upsert({
+      id: AUTH_ROW_ID,
+      card_machine_settings: {
+        baileys_cloud_auth: { 'creds.json': content },
+        updated_at: new Date().toISOString()
+      }
     });
-    if (error && isMissingTable(error)) {
-      // Banco ainda sem o supabase_security.sql: usa o local antigo
-      ({ error } = await supabase.from('company_settings').upsert({ id: AUTH_ROW_ID, card_machine_settings: payload }));
-    }
     if (error) throw new Error(error.message);
     lastAuthBackupContent = content;
     lastAuthBackupAt = Date.now();
@@ -208,7 +155,6 @@ async function publishCloudStatusToSettings(force = false) {
     const { data } = await supabase.from('company_settings').select('card_machine_settings').eq('id', 'el_shadday_config').single();
     const existing = { ...(data?.card_machine_settings || {}) };
     delete existing.baileys_cloud_auth;
-    delete existing.customers_directory;
     existing.baileys_cloud_status = state.status;
     existing.baileys_cloud_phone = phone;
     await supabase.from('company_settings').update({ card_machine_settings: existing }).eq('id', 'el_shadday_config');
@@ -228,28 +174,12 @@ function writeAuthFiles(authData) {
 
 async function restoreAuthFromSupabase() {
   try {
-    // 0. Local protegido (private_settings)
-    const { data: privRow, error: privErr } = await supabase.from('private_settings').select('data').eq('id', 'whatsapp_session').maybeSingle();
-    const privAuth = privRow?.data?.baileys_cloud_auth;
-    if (!privErr && privAuth && typeof privAuth === 'object' && privAuth['creds.json']) {
-      writeAuthFiles(privAuth);
-      lastAuthBackupContent = String(privAuth['creds.json']);
-      console.log('✅ [WhatsApp Service] Sessão permanente restaurada do Supabase com sucesso!');
-      return true;
-    }
-
-    // 1. Local antigo (linha separada na tabela pública) — migra se possível
+    // 1. Novo local (linha separada, só creds.json)
     const { data: authRow } = await supabase.from('company_settings').select('card_machine_settings').eq('id', AUTH_ROW_ID).maybeSingle();
     const newAuth = authRow?.card_machine_settings?.baileys_cloud_auth;
     if (newAuth && typeof newAuth === 'object' && newAuth['creds.json']) {
       writeAuthFiles(newAuth);
-      if (!privErr) {
-        lastAuthBackupContent = '';
-        await backupAuthToSupabase();
-        await supabase.from('company_settings').delete().eq('id', AUTH_ROW_ID);
-      } else {
-        lastAuthBackupContent = String(newAuth['creds.json']);
-      }
+      lastAuthBackupContent = String(newAuth['creds.json']);
       console.log('✅ [WhatsApp Service] Sessão permanente restaurada do Supabase com sucesso!');
       return true;
     }
@@ -644,12 +574,10 @@ async function logoutWhatsApp() {
     const { data } = await supabase.from('company_settings').select('card_machine_settings').eq('id', 'el_shadday_config').single();
     const existing = data?.card_machine_settings || {};
     delete existing.baileys_cloud_auth;
-    delete existing.customers_directory;
     delete existing.baileys_cloud_status;
     delete existing.baileys_cloud_phone;
     await supabase.from('company_settings').update({ card_machine_settings: existing }).eq('id', 'el_shadday_config');
     await supabase.from('company_settings').delete().eq('id', AUTH_ROW_ID);
-    await supabase.from('private_settings').delete().eq('id', 'whatsapp_session');
     lastAuthBackupContent = '';
     lastPublishedCloudStatus = null;
   } catch (e) {}
@@ -658,14 +586,10 @@ async function logoutWhatsApp() {
 }
 
 // Escutador de pedidos no Supabase Realtime
-async function initSupabaseOrderWatcher() {
+function initSupabaseOrderWatcher() {
   console.log('[WhatsApp Service] 📡 Conectando ao Supabase Realtime...');
 
-  const bridgeTopic = await resolveBridgeTopic();
-  if (bridgeTopic === LEGACY_BRIDGE_TOPIC) {
-    console.log('[WhatsApp Service] Ponte usando o canal antigo (supabase_security.sql ainda não aplicado ou sem a chave service_role).');
-  }
-  supabaseBridgeChannel = supabase.channel(bridgeTopic);
+  supabaseBridgeChannel = supabase.channel('el_shadday_whatsapp_bridge');
 
   supabaseBridgeChannel
     .on('broadcast', { event: 'REQUEST_STATUS' }, () => {
@@ -879,13 +803,7 @@ if (process.env.RENDER_EXTERNAL_URL && !ENGINE_DISABLED) {
 }
 
 // Inicialização
-// SEGURANÇA: no PC da pizzaria escuta só no próprio computador (127.0.0.1).
-// Antes escutava na rede toda: qualquer aparelho no mesmo Wi-Fi podia pegar o
-// QR Code em /status (e conectar o WhatsApp da loja) ou mandar mensagens via /send.
-// Outros aparelhos usam a ponte do Supabase. Para liberar na rede: WHATSAPP_HOST=0.0.0.0
-const HOST = process.env.WHATSAPP_HOST || (IS_RENDER ? '0.0.0.0' : '127.0.0.1');
-
-server.listen(PORT, HOST, async () => {
+server.listen(PORT, '0.0.0.0', async () => {
   console.log(`\n============================================================`);
   console.log(`🚀 [WhatsApp Service] Motor El Shadday rodando na porta ${PORT}`);
   console.log(`⚡ 100% Gratuito | Sem Limite de Mensagens | Nuvem Render / Local`);
@@ -897,7 +815,7 @@ server.listen(PORT, HOST, async () => {
     return;
   }
 
-  await initSupabaseOrderWatcher();
+  initSupabaseOrderWatcher();
 
   // Tenta restaurar sessão permanente salva no Supabase
   const restored = await restoreAuthFromSupabase();

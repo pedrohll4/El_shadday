@@ -13,6 +13,7 @@
 --     novo e CRIAR orçamento. Não lê pedidos nem dados de clientes.
 --   * Só a equipe logada lê/altera pedidos e configurações.
 --   * Sessão do WhatsApp e lista de clientes saem da tabela pública.
+--   * O motor do WhatsApp do PC continua funcionando SEM nenhuma alteração.
 --   * Número do pedido passa a ser gerado pelo banco (não repete/sobrescreve).
 --
 -- Pode rodar de novo sem problemas (idempotente).
@@ -309,10 +310,57 @@ update public.company_settings
    set card_machine_settings = (card_machine_settings - 'customers_directory') - 'baileys_cloud_auth'
  where id = 'el_shadday_config';
 
--- Nome secreto do canal da ponte WhatsApp (QR Code não fica mais num canal público)
-insert into public.private_settings (id, data)
-values ('whatsapp_bridge', jsonb_build_object('topic', 'wa_bridge_' || encode(extensions.gen_random_bytes(16), 'hex')))
-on conflict (id) do nothing;
+-- ------------------------------------------------------------------------------
+-- 2.1 COMPATIBILIDADE COM O MOTOR DO WHATSAPP DO PC (que NÃO foi alterado)
+-- O motor usa a chave pública. Estas regras deixam ele funcionar igual a hoje:
+--   * o backup da sessão que ele envia é desviado para private_settings
+--     (ninguém de fora consegue LER a sessão);
+--   * ele pode atualizar só o status/telefone do WhatsApp na configuração;
+--   * ele enxerga os pedidos das últimas 12 horas para mandar as mensagens.
+-- ------------------------------------------------------------------------------
+create or replace function public._divert_whatsapp_session_backup()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if new.id = 'el_shadday_whatsapp_session' then
+    insert into public.private_settings (id, data, updated_at)
+    values ('whatsapp_session', coalesce(new.card_machine_settings, '{}'::jsonb), now())
+    on conflict (id) do update set data = excluded.data, updated_at = now();
+    return null; -- não grava na tabela pública
+  end if;
+  return new;
+end $$;
+drop trigger if exists divert_whatsapp_session_backup on public.company_settings;
+create trigger divert_whatsapp_session_backup
+  before insert on public.company_settings
+  for each row execute function public._divert_whatsapp_session_backup();
+
+-- Quem não é da equipe (motor/visitante) só consegue mudar o status do WhatsApp
+create or replace function public._guard_public_settings_update()
+returns trigger language plpgsql security invoker set search_path = public as $$
+declare v jsonb;
+begin
+  if current_user not in ('anon', 'authenticated') or public.is_staff() then
+    return new;
+  end if;
+  v := coalesce(old.card_machine_settings, '{}'::jsonb);
+  if coalesce(new.card_machine_settings, '{}'::jsonb) ? 'baileys_cloud_status' then
+    v := v || jsonb_build_object('baileys_cloud_status', new.card_machine_settings->'baileys_cloud_status');
+  else
+    v := v - 'baileys_cloud_status';
+  end if;
+  if coalesce(new.card_machine_settings, '{}'::jsonb) ? 'baileys_cloud_phone' then
+    v := v || jsonb_build_object('baileys_cloud_phone', new.card_machine_settings->'baileys_cloud_phone');
+  else
+    v := v - 'baileys_cloud_phone';
+  end if;
+  new := old;
+  new.card_machine_settings := v;
+  return new;
+end $$;
+drop trigger if exists guard_public_settings_update on public.company_settings;
+create trigger guard_public_settings_update
+  before update on public.company_settings
+  for each row execute function public._guard_public_settings_update();
 
 -- ------------------------------------------------------------------------------
 -- 3. NÚMERO DO PEDIDO gerado pelo banco (antes cada celular começava do #01
@@ -367,6 +415,9 @@ create policy orders_customer_insert on public.orders for insert to anon, authen
   with check (status = 'RECEBIDO_COZINHA' and shift_closed_at is null);
 create policy orders_staff_all on public.orders for all to authenticated
   using (public.is_staff()) with check (public.is_staff());
+-- Motor do WhatsApp do PC (chave pública): vê só os pedidos das últimas 12 horas
+create policy orders_recent_read_for_whatsapp on public.orders for select to anon
+  using (created_at > now() - interval '12 hours');
 
 -- Orçamentos do buffet: cliente só cria; equipe faz tudo
 create policy quotes_customer_insert on public.buffet_quotes for insert to anon, authenticated
@@ -384,6 +435,12 @@ create policy settings_public_read on public.company_settings for select to anon
   using (id = 'el_shadday_config');
 create policy settings_staff_all on public.company_settings for all to authenticated
   using (public.is_staff()) with check (public.is_staff());
+-- Motor do WhatsApp: atualizar o status (o gatilho acima só deixa mudar isso)
+create policy settings_whatsapp_status_update on public.company_settings for update to anon
+  using (id = 'el_shadday_config') with check (id = 'el_shadday_config');
+-- Motor do WhatsApp: enviar backup da sessão (o gatilho desvia para a tabela privada)
+create policy settings_whatsapp_session_backup on public.company_settings for insert to anon
+  with check (id = 'el_shadday_whatsapp_session');
 
 -- Filiais: todos veem; só o Admin Master altera
 create policy branches_public_read on public.branches for select to anon, authenticated using (true);
