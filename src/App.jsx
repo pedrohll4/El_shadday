@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback, Suspense, lazy } from 'react';
 import { BRANCHES, DEFAULT_BRANCH_ID, getStoredBranches } from './data/branchesData';
 import { INITIAL_MULTI_BRANCH_ORDERS } from './data/initialOrdersData';
-import { getCurrentUser, logoutUser, ROLES } from './services/authService';
+import { getCurrentUser, logoutUser, restoreSession, ROLES } from './services/authService';
 import { 
   PRODUCTS, 
   CATEGORIES, 
@@ -163,6 +163,33 @@ export default function App() {
 
   // Current Logged-in User Session & Roles
   const [currentUser, setCurrentUser] = useState(() => getCurrentUser());
+
+  // Confere no servidor se a sessão salva ainda vale; se expirou, sai do painel
+  useEffect(() => {
+    let alive = true;
+    const forceLogout = () => {
+      setCurrentUser(null);
+      setIsAdminLoggedIn(false);
+      try {
+        sessionStorage.removeItem('el_shadday_admin_auth');
+        sessionStorage.removeItem('el_shadday_buffet_admin_auth');
+      } catch (e) {}
+      setAppView(prev => (prev === 'admin' ? 'delivery' : prev));
+    };
+    restoreSession().then((user) => {
+      if (!alive) return;
+      if (user) {
+        setCurrentUser(user);
+      } else if (getCurrentUser() === null && sessionStorage.getItem('el_shadday_admin_auth') === 'true') {
+        forceLogout();
+      }
+    }).catch(() => {});
+    window.addEventListener('el_shadday_auth_signed_out', forceLogout);
+    return () => {
+      alive = false;
+      window.removeEventListener('el_shadday_auth_signed_out', forceLogout);
+    };
+  }, []);
 
   // Dynamic Branches State
   const [branches, setBranches] = useState(() => getStoredBranches());
@@ -657,7 +684,9 @@ export default function App() {
       window.removeEventListener('cash_register_closed', handleCashClosed);
       if (interval) clearInterval(interval);
     };
-  }, []);
+    // Recarrega e reassina os pedidos quando alguém da equipe entra/sai
+    // (com o banco protegido, visitante não recebe pedidos)
+  }, [currentUser?.id]);
 
   // Handle URL hash changes (#/admin, #admin, #/cozinha, #cardapio-evento, #buffet)
   useEffect(() => {

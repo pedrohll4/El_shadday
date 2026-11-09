@@ -120,6 +120,36 @@ export function getNextOrderNumber(existingOrders = []) {
 }
 
 /**
+ * Reserva o próximo número de pedido NO BANCO (único para todos os aparelhos).
+ * Antes, cada celular contava sozinho a partir do #01 e um cliente novo
+ * sobrescrevia o pedido de outro com o mesmo número.
+ */
+export async function reserveOrderNumber(existingOrders = []) {
+  const localNext = getNextOrderNumber(existingOrders);
+  if (!isSupabaseConfigured || !supabase) return localNext;
+  try {
+    const { data, error } = await supabase.rpc('next_order_number');
+    if (!error && data !== null && data !== undefined && Number.isFinite(Number(data))) {
+      return Number(data);
+    }
+    // Banco ainda sem a função (antes do supabase_security.sql): usa o maior número já gravado
+    const { data: rows } = await supabase
+      .from('orders')
+      .select('id')
+      .order('created_at', { ascending: false })
+      .limit(200);
+    let maxDb = 0;
+    (rows || []).forEach(r => {
+      const n = /^[0-9]{1,9}$/.test(String(r?.id || '')) ? Number(r.id) : NaN;
+      if (Number.isFinite(n) && n > maxDb) maxDb = n;
+    });
+    return Math.max(localNext, maxDb + 1);
+  } catch (e) {
+    return localNext;
+  }
+}
+
+/**
  * Format order sequence for display:
  * 1 -> "01" (or "1")
  * 2 -> "02"
@@ -283,7 +313,7 @@ export async function dispatchOrderToKitchen(orderData) {
       };
       const changeVal = toNumberOrNull(orderData.changeFor || orderData.cashChange || orderData.change_for || null);
 
-      const { error } = await supabase.from('orders').upsert({
+      const buildRow = () => ({
         id: orderData.orderId,
         branch_id: orderData.branchId || 'ariquemes',
         branch_name: orderData.branchName || 'Unidade Ariquemes',
@@ -301,6 +331,18 @@ export async function dispatchOrderToKitchen(orderData) {
         created_at: orderData.createdAt || new Date().toISOString(),
         updated_at: new Date().toISOString()
       });
+
+      // INSERT (nunca sobrescreve outro pedido). Se o número já existe, pega outro.
+      let { error } = await supabase.from('orders').insert(buildRow());
+      for (let attempt = 0; error && error.code === '23505' && attempt < 3; attempt++) {
+        const fresh = await reserveOrderNumber();
+        const freshId = String(fresh).padStart(2, '0');
+        console.warn(`⚠️ Número #${orderData.orderId} já existia no banco; pedido renumerado para #${freshId}`);
+        orderData.orderId = freshId;
+        orderData.orderNumber = fresh;
+        orderData.displayNumber = '#' + freshId;
+        ({ error } = await supabase.from('orders').insert(buildRow()));
+      }
       if (error) {
         console.warn('⚠️ Supabase order insert error:', error.message);
       } else {
@@ -336,7 +378,7 @@ export async function dispatchOrderToKitchen(orderData) {
   }
 
   // 4. Fallback to local /api/orders (dev server / node backend if running)
-  try {
+  if (shouldUseNtfyFallback()) try {
     await fetch('/api/orders', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -426,7 +468,7 @@ export async function dispatchOrderUpdateToKitchen(orderId, updates) {
   } catch (err) {}
 
   // 4. Fallback local /api/orders
-  try {
+  if (shouldUseNtfyFallback()) try {
     await fetch(`/api/orders/${orderId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },

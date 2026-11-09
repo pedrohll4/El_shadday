@@ -5,37 +5,34 @@ import { ElShaddayLogo, GoldFiligree } from './ElShaddayLogo';
 import { authenticateUser } from '../../services/authService';
 
 export function BuffetAdminLoginModal({ isOpen, onClose, onLoginSuccess }) {
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isSubmitting) return;
+    const cleanUser = username.trim();
     const clean = password.trim();
-    if (!clean) {
-      setErrorMsg('Por favor, informe a senha de acesso.');
+    if (!cleanUser || !clean) {
+      setErrorMsg('Informe seu usuário e senha de acesso.');
       return;
     }
+    setIsSubmitting(true);
     try {
-      const user = authenticateUser('', clean);
+      const user = await authenticateUser(cleanUser, clean);
       setErrorMsg('');
       setPassword('');
       sessionStorage.setItem('el_shadday_admin_auth', 'true');
       sessionStorage.setItem('el_shadday_buffet_admin_auth', 'true');
       onLoginSuccess(user);
     } catch (err) {
-      // Also allow default passwords for easy demo access
-      const low = clean.toLowerCase();
-      if (low === 'elshadday' || low === 'admin' || low === 'ariquemes123') {
-        setErrorMsg('');
-        setPassword('');
-        sessionStorage.setItem('el_shadday_admin_auth', 'true');
-        sessionStorage.setItem('el_shadday_buffet_admin_auth', 'true');
-        onLoginSuccess();
-      } else {
-        setErrorMsg('Senha incorreta. A senha padrão do Buffet é: elshadday');
-      }
+      setErrorMsg(err.message || 'Usuário ou senha incorretos.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -71,11 +68,29 @@ export function BuffetAdminLoginModal({ isOpen, onClose, onLoginSuccess }) {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-xs uppercase font-bold tracking-wider text-slate-300 mb-1.5">
+              Usuário
+            </label>
+            <input
+              type="text"
+              autoFocus
+              autoCapitalize="none"
+              autoComplete="username"
+              value={username}
+              onChange={(e) => {
+                setUsername(e.target.value);
+                if (errorMsg) setErrorMsg('');
+              }}
+              placeholder="Ex: admin"
+              className="w-full px-4 py-3 rounded-xl bg-[#15191F] border border-[#2E3744] text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-[#D8B85A] focus:border-[#D8B85A] transition-all"
+            />
+          </div>
+          <div>
+            <label className="block text-xs uppercase font-bold tracking-wider text-slate-300 mb-1.5">
               Senha de Acesso
             </label>
             <input
               type="password"
-              autoFocus
+              autoComplete="current-password"
               value={password}
               onChange={(e) => {
                 setPassword(e.target.value);
@@ -92,15 +107,13 @@ export function BuffetAdminLoginModal({ isOpen, onClose, onLoginSuccess }) {
             )}
           </div>
 
-          <p className="text-[11px] text-slate-400 bg-[#202630] p-2.5 rounded-lg border border-[#2E3744]">
-            Dica: A senha padrão de acesso configurada é <code className="text-[#E8D58A] font-bold">elshadday</code>.
-          </p>
 
           <button
             type="submit"
+            disabled={isSubmitting}
             className="w-full py-3.5 rounded-xl font-bold text-xs uppercase tracking-wider bg-gradient-to-r from-[#D8B85A] via-[#E8D58A] to-[#D8B85A] text-[#15191F] shadow-[0_4px_20px_rgba(216,184,90,0.3)] hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-2"
           >
-            <span>Entrar no Painel</span>
+            <span>{isSubmitting ? 'Entrando...' : 'Entrar no Painel'}</span>
             <ArrowRight className="w-4 h-4 text-[#15191F]" />
           </button>
         </form>

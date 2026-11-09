@@ -65,7 +65,6 @@ CREATE INDEX IF NOT EXISTS idx_gallery_category ON public.buffet_gallery (catego
 
 -- 3.1 LIMPAR FOTOS FAKES/PADRÃO PARA DEIXAR A GALERIA LIVRE PARA AS FOTOS REAIS DO BUFFET
 DELETE FROM public.buffet_gallery WHERE id LIKE 'gal_%' OR url LIKE '%unsplash.com%';
-UPDATE public.company_settings SET buffet_gallery = '[]'::jsonb WHERE id = 'el_shadday_config' AND buffet_gallery::text LIKE '%unsplash.com%';
 
 -- 4. TABELA DE CONFIGURAÇÕES GERAIS DA EMPRESA (COM DADOS REAIS DE ARIQUEMES - RO)
 CREATE TABLE IF NOT EXISTS public.company_settings (
@@ -162,30 +161,16 @@ ON CONFLICT (id) DO UPDATE SET
     pix_name = EXCLUDED.pix_name,
     banner_incluso = EXCLUDED.banner_incluso;
 
+-- Limpa fotos fakes da config (precisa vir depois da criação da tabela)
+UPDATE public.company_settings SET buffet_gallery = '[]'::jsonb WHERE id = 'el_shadday_config' AND buffet_gallery::text LIKE '%unsplash.com%';
+
 -- 5. SEGURANÇA E POLÍTICAS RLS (Row Level Security)
 ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.buffet_quotes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.buffet_gallery ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.company_settings ENABLE ROW LEVEL SECURITY;
 
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Acesso público a pedidos' AND tablename = 'orders') THEN
-    CREATE POLICY "Acesso público a pedidos" ON public.orders FOR ALL USING (true) WITH CHECK (true);
-  END IF;
-
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Acesso público a orçamentos' AND tablename = 'buffet_quotes') THEN
-    CREATE POLICY "Acesso público a orçamentos" ON public.buffet_quotes FOR ALL USING (true) WITH CHECK (true);
-  END IF;
-
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Acesso público à galeria' AND tablename = 'buffet_gallery') THEN
-    CREATE POLICY "Acesso público à galeria" ON public.buffet_gallery FOR ALL USING (true) WITH CHECK (true);
-  END IF;
-
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Acesso público a configurações' AND tablename = 'company_settings') THEN
-    CREATE POLICY "Acesso público a configurações" ON public.company_settings FOR ALL USING (true) WITH CHECK (true);
-  END IF;
-END $$;
+-- Regras de acesso (RLS): ficam em supabase_security.sql (rode depois deste arquivo).
 
 -- 6. HABILITAR SINCRONIZAÇÃO EM TEMPO REAL (REALTIME PARA COZINHA E PAINEL)
 ALTER TABLE public.orders REPLICA IDENTITY FULL;
@@ -277,16 +262,7 @@ CREATE TABLE IF NOT EXISTS public.app_users (
 ALTER TABLE public.branches ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.app_users ENABLE ROW LEVEL SECURITY;
 
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Acesso público a filiais' AND tablename = 'branches') THEN
-    CREATE POLICY "Acesso público a filiais" ON public.branches FOR ALL USING (true) WITH CHECK (true);
-  END IF;
-
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Acesso público a usuários' AND tablename = 'app_users') THEN
-    CREATE POLICY "Acesso público a usuários" ON public.app_users FOR ALL USING (true) WITH CHECK (true);
-  END IF;
-END $$;
+-- Regras de acesso (RLS): ficam em supabase_security.sql (rode depois deste arquivo).
 
 
 

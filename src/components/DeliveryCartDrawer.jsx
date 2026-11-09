@@ -14,7 +14,7 @@ import {
   getCardMachineNoticeText,
   getStoredExtraSauceConfig
 } from '../data/menuData';
-import { dispatchOrderToKitchen, getNextOrderNumber } from '../services/ordersSyncService';
+import { dispatchOrderToKitchen, reserveOrderNumber } from '../services/ordersSyncService';
 import { cleanPhoneNumber } from '../services/whatsappNotificationService';
 import { recordCustomerFromOrder } from '../services/customerService';
 
@@ -133,6 +133,8 @@ export function DeliveryCartDrawer({
   const [copiedPix, setCopiedPix] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
+  const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
+
   if (!isOpen) return null;
 
   const currentDistrict = districtsList.find(d => d.id === selectedDistrict) || districtsList[0] || { id: 'default', name: 'Setor 03', price: 8 };
@@ -161,7 +163,8 @@ export function DeliveryCartDrawer({
     setTimeout(() => setCopiedPix(false), 2500);
   };
 
-  const handleFinalizeWhatsAppOrder = () => {
+  const handleFinalizeWhatsAppOrder = async () => {
+    if (isSubmittingOrder) return;
     if (!isStoreOpen) {
       setErrorMessage(`O estabelecimento está fechado no momento. Horário de funcionamento: ${openingHours || storeInfo?.openingHours || 'Terça a Domingo: 18:00 às 23:30'}`);
       return;
@@ -186,8 +189,25 @@ export function DeliveryCartDrawer({
 
     setErrorMessage('');
 
-    // Generate Unique Sequential Order Number starting from 1 (ex: #01, #02, #03...)
-    const orderNumber = getNextOrderNumber();
+    // Abre a aba do WhatsApp JÁ (no clique), senão o celular bloqueia o pop-up
+    // enquanto esperamos o número do pedido vir do banco.
+    let waWindow = null;
+    try {
+      waWindow = window.open('', '_blank');
+      if (waWindow && waWindow.document) {
+        waWindow.document.title = 'Abrindo WhatsApp...';
+        waWindow.document.body.innerHTML = '<p style="font-family:sans-serif;padding:24px">Abrindo o WhatsApp com o seu pedido...</p>';
+      }
+    } catch (e) {}
+
+    // Número do pedido reservado no banco (único entre todos os clientes)
+    setIsSubmittingOrder(true);
+    let orderNumber;
+    try {
+      orderNumber = await reserveOrderNumber();
+    } finally {
+      setIsSubmittingOrder(false);
+    }
     const orderId = String(orderNumber).padStart(2, '0');
 
     // Format Items list for WhatsApp
@@ -430,7 +450,14 @@ Pedido gerado via Cardápio Digital El Shadday.`;
     onOrderFinished(orderData);
 
     // Open WhatsApp
-    window.open(whatsappUrl, '_blank');
+    if (waWindow && !waWindow.closed) {
+      try {
+        waWindow.location.href = whatsappUrl;
+        return;
+      } catch (e) {}
+    }
+    const opened = window.open(whatsappUrl, '_blank');
+    if (!opened) window.location.href = whatsappUrl;
   };
 
   return (

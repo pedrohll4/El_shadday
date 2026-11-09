@@ -22,6 +22,14 @@ if not exist "node_modules\@whiskeysockets\baileys" (
   call npm install
 )
 
+if not exist ".env.local" (
+  echo [AVISO] Arquivo .env.local nao encontrado.
+  echo         Crie o arquivo .env.local nesta pasta com a linha:
+  echo         SUPABASE_SERVICE_ROLE_KEY=chave_service_role_do_supabase
+  echo         Sem ela, depois da atualizacao de seguranca o motor nao ve os pedidos.
+  echo.
+)
+
 :loop
 echo [%date% %time%] Iniciando motor...
 node server/whatsapp-service.js

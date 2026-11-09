@@ -98,7 +98,7 @@ import {
   openWhatsAppInstantLink
 } from '../services/whatsappNotificationService';
 import { isCloudBaileysActive, fetchEngineStatus } from '../services/whatsappBranchService';
-import { normalizeOrderStatus, getNextOrderNumber, formatOrderNumber } from '../services/ordersSyncService';
+import { normalizeOrderStatus, reserveOrderNumber, formatOrderNumber } from '../services/ordersSyncService';
 import { 
   searchCustomers, 
   recordCustomerFromOrder, 
@@ -3575,7 +3575,9 @@ export function AdminDashboard({
     setPdvCart(prev => prev.filter(i => i.id !== id));
   };
 
-  const handleLaunchPDVOrder = (directBaixa = false) => {
+  const [isLaunchingPdv, setIsLaunchingPdv] = useState(false);
+  const handleLaunchPDVOrder = async (directBaixa = false) => {
+    if (isLaunchingPdv) return;
     setPdvValidationError('');
 
     if (pdvCart.length === 0) {
@@ -3593,7 +3595,14 @@ export function AdminDashboard({
       return;
     }
 
-    const orderNumber = getNextOrderNumber(orders);
+    // Número reservado no banco (único entre todos os aparelhos)
+    setIsLaunchingPdv(true);
+    let orderNumber;
+    try {
+      orderNumber = await reserveOrderNumber(orders);
+    } finally {
+      setIsLaunchingPdv(false);
+    }
     const orderId = String(orderNumber).padStart(2, '0');
 
     let paymentMethodText = 'PIX';

@@ -6,6 +6,48 @@
 
 import { supabase, isSupabaseConfigured } from './supabaseClient';
 import { ARIQUEMES_DISTRICTS } from '../data/menuData';
+import { getCurrentUser } from './authService';
+
+// Lista de clientes (nome/telefone/endereço) fica em private_settings, que só a
+// equipe logada lê. Antes ficava na configuração pública da loja.
+const PRIVATE_CUSTOMERS_ID = 'customers_directory';
+const isTableMissing = (error) => /private_settings|PGRST205|42P01|does not exist|schema cache/i.test(`${error?.code || ''} ${error?.message || ''}`);
+
+async function saveCustomersToCloud(topCustomers) {
+  const { error } = await supabase.from('private_settings').upsert({
+    id: PRIVATE_CUSTOMERS_ID,
+    data: { customers: topCustomers },
+    updated_at: new Date().toISOString()
+  });
+  if (!error) return;
+  if (!isTableMissing(error)) throw new Error(error.message);
+  // Banco ainda sem supabase_security.sql: mantém o local antigo
+  const { data } = await supabase
+    .from('company_settings')
+    .select('card_machine_settings')
+    .eq('id', 'el_shadday_config')
+    .single();
+  const existingSettings = data?.card_machine_settings || {};
+  await supabase.from('company_settings').update({
+    card_machine_settings: { ...existingSettings, customers_directory: topCustomers }
+  }).eq('id', 'el_shadday_config');
+}
+
+async function loadCustomersFromCloud() {
+  const { data, error } = await supabase
+    .from('private_settings')
+    .select('data')
+    .eq('id', PRIVATE_CUSTOMERS_ID)
+    .maybeSingle();
+  if (!error) return Array.isArray(data?.data?.customers) ? data.data.customers : [];
+  if (!isTableMissing(error)) return [];
+  const { data: cs } = await supabase
+    .from('company_settings')
+    .select('card_machine_settings')
+    .eq('id', 'el_shadday_config')
+    .single();
+  return cs?.card_machine_settings?.customers_directory || [];
+}
 
 const CUSTOMERS_STORAGE_KEY = 'el_shadday_customers_v1';
 
@@ -94,30 +136,18 @@ export function saveAllCustomers(customersList) {
     console.warn('Erro ao salvar clientes localmente:', e);
   }
 
-  // Sincroniza em background com Supabase company_settings (com debounce para não sobrecarregar)
-  if (isSupabaseConfigured && supabase) {
+  // Sincroniza em background com o Supabase (só a equipe logada; com debounce)
+  if (isSupabaseConfigured && supabase && getCurrentUser()) {
     if (debounceSyncTimeout) clearTimeout(debounceSyncTimeout);
     debounceSyncTimeout = setTimeout(async () => {
       try {
-        const { data } = await supabase
-          .from('company_settings')
-          .select('card_machine_settings')
-          .eq('id', 'el_shadday_config')
-          .single();
-
-        const existingSettings = data?.card_machine_settings || {};
         // Guarda os últimos 300 clientes mais frequentes para caber confortavelmente em metadata
         const topCustomers = customersList
           .slice()
           .sort((a, b) => new Date(b.lastOrderAt || 0) - new Date(a.lastOrderAt || 0))
           .slice(0, 300);
 
-        await supabase.from('company_settings').update({
-          card_machine_settings: {
-            ...existingSettings,
-            customers_directory: topCustomers
-          }
-        }).eq('id', 'el_shadday_config');
+        await saveCustomersToCloud(topCustomers);
       } catch (err) {
         // Falha silenciosa em caso de offline
       }
@@ -412,15 +442,9 @@ export function searchCustomers(rawQuery, limit = 6) {
  * Sincroniza catálogo de clientes a partir do Supabase na inicialização
  */
 export async function syncCustomersFromCloud() {
-  if (!isSupabaseConfigured || !supabase) return getAllCustomers();
+  if (!isSupabaseConfigured || !supabase || !getCurrentUser()) return getAllCustomers();
   try {
-    const { data } = await supabase
-      .from('company_settings')
-      .select('card_machine_settings')
-      .eq('id', 'el_shadday_config')
-      .single();
-
-    const cloudCustomers = data?.card_machine_settings?.customers_directory;
+    const cloudCustomers = await loadCustomersFromCloud();
     if (Array.isArray(cloudCustomers) && cloudCustomers.length > 0) {
       const local = getAllCustomers();
       const map = new Map();

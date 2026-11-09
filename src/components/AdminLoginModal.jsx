@@ -21,7 +21,7 @@ export function AdminLoginModal({ isOpen, onClose, onLoginSuccess }) {
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
 
@@ -40,7 +40,7 @@ export function AdminLoginModal({ isOpen, onClose, onLoginSuccess }) {
     setIsSubmitting(true);
 
     try {
-      const user = authenticateUser(cleanUser, cleanPass);
+      const user = await authenticateUser(cleanUser, cleanPass);
 
       if (!user) {
         throw new Error('Usuário ou senha incorretos.');

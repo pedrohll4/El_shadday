@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Users, UserPlus, KeyRound, Trash2, ShieldCheck, 
   ChefHat, Building2, Crown, CheckCircle2, AlertTriangle, 
@@ -9,7 +9,7 @@ import {
   ROLES, 
   ROLE_LABELS, 
   ROLE_DESCRIPTIONS, 
-  getStoredUsers, 
+  getStoredUsers, fetchUsers, 
   createUser, 
   updateUser, 
   deleteUser, 
@@ -53,11 +53,23 @@ export function UserManagementView({
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
-  const refreshList = () => {
-    const updated = getStoredUsers();
-    setUsersList(updated);
-    if (onRefreshUsers) onRefreshUsers(updated);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const refreshList = async () => {
+    try {
+      const updated = await fetchUsers();
+      setUsersList(updated);
+      if (onRefreshUsers) onRefreshUsers(updated);
+    } catch (err) {
+      setErrorMsg(err.message || 'Erro ao carregar usuários.');
+    }
   };
+
+  // Carrega a lista do servidor ao abrir a tela
+  useEffect(() => {
+    refreshList();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleOpenCreateModal = () => {
     setNewUsername('');
@@ -70,16 +82,18 @@ export function UserManagementView({
     setIsCreateModalOpen(true);
   };
 
-  const handleCreateUserSubmit = (e) => {
+  const handleCreateUserSubmit = async (e) => {
     e.preventDefault();
+    if (isSaving) return;
     setErrorMsg('');
+    setIsSaving(true);
     try {
       const selectedBranch = branches.find(b => b.id === newBranchId);
       const branchName = newRole === ROLES.SUPER_ADMIN 
         ? 'Todas as Filiais (Global)' 
         : (selectedBranch?.displayName || selectedBranch?.name || 'Unidade');
 
-      const user = createUser({
+      const user = await createUser({
         username: newUsername.trim(),
         name: newName.trim() || newUsername.trim(),
         password: newPassword.trim(),
@@ -94,6 +108,8 @@ export function UserManagementView({
       refreshList();
     } catch (err) {
       setErrorMsg(err.message || 'Erro ao criar usuário.');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -111,10 +127,11 @@ export function UserManagementView({
   };
 
   // Submit Full Edit (Tag, Password, Name, Role, Branch, Active)
-  const handleEditUserSubmit = (e) => {
+  const handleEditUserSubmit = async (e) => {
     e.preventDefault();
-    if (!editModalUser) return;
+    if (!editModalUser || isSaving) return;
     setErrorMsg('');
+    setIsSaving(true);
     try {
       const cleanUsername = editUsername.trim().toLowerCase();
       if (!cleanUsername) {
@@ -136,19 +153,21 @@ export function UserManagementView({
       };
 
       if (editPassword.trim()) {
-        if (editPassword.trim().length < 4) {
-          throw new Error('A nova senha deve ter no mínimo 4 caracteres.');
+        if (editPassword.trim().length < 6) {
+          throw new Error('A nova senha deve ter no mínimo 6 caracteres.');
         }
         updates.password = editPassword.trim();
       }
 
-      const updated = updateUser(editModalUser.id, updates);
+      const updated = await updateUser(editModalUser.id, updates);
       setSuccessMsg(`Usuário/Tag "@${updated.username}" atualizado com sucesso!`);
       setTimeout(() => setSuccessMsg(''), 4500);
       setEditModalUser(null);
       refreshList();
     } catch (err) {
       setErrorMsg(err.message || 'Erro ao atualizar dados do usuário.');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -162,10 +181,11 @@ export function UserManagementView({
   };
 
   // Submit Quick Credentials (Tag and/or Password)
-  const handleQuickCredentialsSubmit = (e) => {
+  const handleQuickCredentialsSubmit = async (e) => {
     e.preventDefault();
-    if (!resetModalUser) return;
+    if (!resetModalUser || isSaving) return;
     setErrorMsg('');
+    setIsSaving(true);
     try {
       const cleanTag = resetUsername.trim().toLowerCase();
       const cleanPass = resetNewPassword.trim();
@@ -183,8 +203,8 @@ export function UserManagementView({
       }
 
       if (cleanPass) {
-        if (cleanPass.length < 4) {
-          throw new Error('A nova senha deve ter no mínimo 4 caracteres.');
+        if (cleanPass.length < 6) {
+          throw new Error('A nova senha deve ter no mínimo 6 caracteres.');
         }
         updates.password = cleanPass;
         changedSomething = true;
@@ -195,7 +215,7 @@ export function UserManagementView({
         return;
       }
 
-      const updated = updateUser(resetModalUser.id, updates);
+      const updated = await updateUser(resetModalUser.id, updates);
       const details = [];
       if (updates.username) details.push(`Tag: @${updated.username}`);
       if (updates.password) details.push('Nova senha aplicada');
@@ -207,26 +227,28 @@ export function UserManagementView({
       refreshList();
     } catch (err) {
       setErrorMsg(err.message || 'Erro ao redefinir credenciais.');
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  const handleToggleUserActive = (user) => {
+  const handleToggleUserActive = async (user) => {
     if (user.role === ROLES.SUPER_ADMIN && user.id === currentUser?.id) {
       alert('Você não pode desativar o seu próprio usuário Master logado.');
       return;
     }
     try {
-      updateUser(user.id, { active: !user.active });
+      await updateUser(user.id, { active: !user.active });
       refreshList();
     } catch (err) {
       alert(err.message);
     }
   };
 
-  const handleDeleteUser = (user) => {
+  const handleDeleteUser = async (user) => {
     if (confirm(`Tem certeza que deseja excluir o usuário "${user.username}"?`)) {
       try {
-        deleteUser(user.id);
+        await deleteUser(user.id);
         setSuccessMsg(`Usuário removido.`);
         setTimeout(() => setSuccessMsg(''), 3000);
         refreshList();
@@ -570,7 +592,7 @@ export function UserManagementView({
                   <input
                     type={showNewPassword ? 'text' : 'password'}
                     required
-                    placeholder="Mínimo 4 caracteres"
+                    placeholder="Mínimo 6 caracteres"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     className="w-full pl-3.5 pr-10 py-2.5 rounded-xl bg-dark-950 border border-dark-750 text-white text-xs focus:border-brand-gold focus:outline-none"
@@ -731,7 +753,7 @@ export function UserManagementView({
                   </button>
                 </div>
                 <p className="text-[10px] text-slate-400 mt-1">
-                  Mínimo 4 caracteres. Se preenchida, o sistema redefine a senha desta conta imediatamente.
+                  Mínimo 6 caracteres. Se preenchida, o sistema redefine a senha desta conta imediatamente.
                 </p>
               </div>
 
@@ -898,7 +920,7 @@ export function UserManagementView({
                 <div className="relative">
                   <input
                     type={showResetPassword ? 'text' : 'password'}
-                    placeholder="Digite a nova senha (mínimo 4 caracteres)"
+                    placeholder="Digite a nova senha (mínimo 6 caracteres)"
                     value={resetNewPassword}
                     onChange={(e) => setResetNewPassword(e.target.value)}
                     className="w-full pl-3.5 pr-10 py-2.5 rounded-xl bg-dark-950 border border-dark-750 text-white text-xs focus:border-brand-gold focus:outline-none"
@@ -912,7 +934,7 @@ export function UserManagementView({
                   </button>
                 </div>
                 <p className="text-[10px] text-slate-400 mt-1">
-                  Mínimo 4 caracteres.
+                  Mínimo 6 caracteres.
                 </p>
               </div>
 

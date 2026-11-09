@@ -1368,7 +1368,8 @@ export function saveStoredPromoSettings(settings) {
 // configurações (ex: sessão do WhatsApp do motor Baileys).
 export function stripPrivateCardMachineSettings(settings) {
   if (!settings || typeof settings !== 'object') return settings;
-  const { baileys_cloud_auth, ...rest } = settings;
+  // Nunca deixar dados privados (sessão do WhatsApp, lista de clientes) na config pública
+  const { baileys_cloud_auth, customers_directory, ...rest } = settings;
   return rest;
 }
 

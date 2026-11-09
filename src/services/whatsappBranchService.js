@@ -5,6 +5,12 @@
  */
 
 import { supabase, isSupabaseConfigured } from './supabaseClient';
+import { isSecureAuthEnabled } from './authService';
+
+// Nome do canal antigo (público). Com o supabase_security.sql aplicado, o nome
+// real é secreto e fica em private_settings (só a equipe logada e o motor leem),
+// então ninguém de fora consegue pegar o QR Code nem mandar comandos ao motor.
+const LEGACY_BRIDGE_TOPIC = 'el_shadday_whatsapp_bridge';
 
 const STORAGE_KEY = 'el_shadday_branch_whatsapp_sessions_v3';
 const CLOUD_URL_KEY = 'el_shadday_cloud_engine_url_v1';
@@ -103,13 +109,34 @@ function markDirectEngineUnreachable(branchId) {
   updateBranchWhatsApp(branchId, { status: 'disconnected', qrCodeDataUrl: null });
 }
 
-if (typeof window !== 'undefined' && isSupabaseConfigured && supabase) {
-  try {
-    const existingChannels = typeof supabase.getChannels === 'function' ? supabase.getChannels() : [];
-    const prevBridge = existingChannels.find(ch => ch?.topic?.includes('el_shadday_whatsapp_bridge'));
-    if (prevBridge) supabase.removeChannel(prevBridge);
+async function resolveBridgeTopic() {
+  if (!(await isSecureAuthEnabled())) return LEGACY_BRIDGE_TOPIC;
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (!sessionData?.session) return null; // visitante/cliente: não entra na ponte
+  const { data, error } = await supabase.from('private_settings').select('data').eq('id', 'whatsapp_bridge').maybeSingle();
+  if (error || !data?.data?.topic) return null;
+  return data.data.topic;
+}
 
-    supabaseBridgeChannel = supabase.channel('el_shadday_whatsapp_bridge');
+function stopWhatsAppBridge() {
+  if (supabaseBridgeChannel && supabase) {
+    try { supabase.removeChannel(supabaseBridgeChannel); } catch (e) {}
+  }
+  supabaseBridgeChannel = null;
+}
+
+let bridgeStarting = null;
+export function startWhatsAppBridge() {
+  if (typeof window === 'undefined' || !isSupabaseConfigured || !supabase) return Promise.resolve(false);
+  if (bridgeStarting) return bridgeStarting;
+  bridgeStarting = (async () => {
+    try {
+      const topic = await resolveBridgeTopic();
+      if (!topic) return false;
+      if (supabaseBridgeChannel && supabaseBridgeChannel.topic && supabaseBridgeChannel.topic.endsWith(topic)) return true;
+      stopWhatsAppBridge();
+
+      supabaseBridgeChannel = supabase.channel(topic);
 
     supabaseBridgeChannel
       .on('broadcast', { event: 'STATUS_UPDATE' }, ({ payload }) => {
@@ -137,9 +164,29 @@ if (typeof window !== 'undefined' && isSupabaseConfigured && supabase) {
         }));
       })
       .subscribe();
-  } catch (err) {
-    console.warn('[WhatsApp Branch] Falha ao inicializar bridge Supabase:', err);
-  }
+      return true;
+    } catch (err) {
+      console.warn('[WhatsApp Branch] Falha ao inicializar bridge Supabase:', err);
+      return false;
+    } finally {
+      bridgeStarting = null;
+    }
+  })();
+  return bridgeStarting;
+}
+
+if (typeof window !== 'undefined' && isSupabaseConfigured && supabase) {
+  startWhatsAppBridge();
+  try {
+    supabase.auth.onAuthStateChange((event) => {
+      // setTimeout: chamar o Supabase direto dentro deste callback pode travar o cliente
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        if (!supabaseBridgeChannel) setTimeout(() => startWhatsAppBridge(), 0);
+      } else if (event === 'SIGNED_OUT') {
+        setTimeout(() => stopWhatsAppBridge(), 0);
+      }
+    });
+  } catch (e) {}
 }
 
 export function formatPhoneDisplay(digits) {
