@@ -58,7 +58,8 @@ import {
 import { 
   fetchCloudConfigHistory, 
   subscribeToConfigEvents,
-  mapCompanySettingsToStore
+  mapCompanySettingsToStore,
+  getCompanySettingsRow
 } from './services/configSyncService';
 import { 
   recordCustomerFromOrder, 
@@ -341,11 +342,7 @@ export default function App() {
           });
       };
 
-      supabase
-        .from('company_settings')
-        .select('*')
-        .eq('id', 'el_shadday_config')
-        .single()
+      getCompanySettingsRow()
         .then(({ data, error }) => {
           if (!error && data) {
             if (Array.isArray(data.buffet_gallery)) {
@@ -522,6 +519,10 @@ export default function App() {
 
   // Sync orders in real-time across devices (Cloud SSE + BroadcastChannel + API)
   useEffect(() => {
+    // Cliente comum não precisa da lista de pedidos: só a equipe logada baixa e
+    // escuta pedidos (economiza banda do Supabase e não expõe dados de clientes).
+    if (isSupabaseConfigured && !currentUser) return undefined;
+
     // 1. Initial load from Cloud history (authoritative orders from Supabase)
     const initSync = async () => {
       try {

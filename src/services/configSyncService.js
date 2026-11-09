@@ -179,6 +179,22 @@ export async function dispatchConfigSync(type, data) {
 }
 
 /**
+ * Busca a linha de configuração da loja UMA vez e compartilha o resultado com quem
+ * pedir nos próximos segundos (antes o site baixava a mesma linha 2x ao abrir).
+ */
+let companySettingsRequest = null;
+export function getCompanySettingsRow() {
+  if (!isSupabaseConfigured || !supabase) return Promise.resolve({ data: null, error: new Error('Supabase off') });
+  if (!companySettingsRequest) {
+    companySettingsRequest = Promise.resolve(
+      supabase.from('company_settings').select('*').eq('id', 'el_shadday_config').single()
+    ).catch(error => ({ data: null, error }));
+    setTimeout(() => { companySettingsRequest = null; }, 5000);
+  }
+  return companySettingsRequest;
+}
+
+/**
  * Converte a linha de company_settings (snake_case) para o formato usado pela loja (camelCase).
  * Só sobrescreve campos que vieram preenchidos do banco.
  */
@@ -207,11 +223,7 @@ export async function fetchCloudConfigHistory() {
   // 1. If Supabase is active, query company_settings directly (Single Source of Truth)
   if (isSupabaseConfigured && supabase) {
     try {
-      const { data, error } = await supabase
-        .from('company_settings')
-        .select('*')
-        .eq('id', 'el_shadday_config')
-        .single();
+      const { data, error } = await getCompanySettingsRow();
 
       if (!error && data) {
         const products = Array.isArray(data.menu_products) && data.menu_products.length > 0 ? data.menu_products : null;

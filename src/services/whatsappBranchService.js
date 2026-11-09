@@ -5,7 +5,7 @@
  */
 
 import { supabase, isSupabaseConfigured } from './supabaseClient';
-import { isSecureAuthEnabled } from './authService';
+import { isSecureAuthEnabled, getCurrentUser } from './authService';
 
 // Canal da ponte com o motor do WhatsApp do PC
 const LEGACY_BRIDGE_TOPIC = 'el_shadday_whatsapp_bridge';
@@ -413,9 +413,11 @@ export async function sendEngineDirectMessage({ phone, message, orderId = null, 
   return { success: false, error: 'Motor WhatsApp não alcançado' };
 }
 
-// Auto-sincroniza a URL do motor e o status na inicialização para todos os navegadores
+// Auto-sincroniza a URL do motor e o status na inicialização (só para a equipe logada;
+// cliente comum não precisa disso e economiza banda do Supabase)
 if (typeof window !== 'undefined') {
   setTimeout(() => {
+    if (!getCurrentUser()) return;
     syncCloudEngineUrlFromDatabase().finally(() => {
       fetchEngineStatus('ariquemes').catch(() => {});
     });
