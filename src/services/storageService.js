@@ -1,4 +1,29 @@
 import { supabase, isSupabaseConfigured } from './supabaseClient';
+import { compressImageFile } from '../utils/imageCompressor';
+
+// Fotos de celular chegam com 5-10 MB. Antes subíamos o ORIGINAL para o Storage
+// (a versão comprimida era descartada). Agora toda imagem é reduzida para no
+// máximo 1200px em WebP antes do upload (~100-200 KB por foto).
+async function optimizeImageForUpload(file) {
+  if (!file?.type?.startsWith('image/') || file.type === 'image/gif' || file.type === 'image/svg+xml') {
+    return file;
+  }
+  try {
+    const result = await compressImageFile(file, {
+      maxWidth: 1200,
+      maxHeight: 1200,
+      quality: 0.78,
+      mimeType: 'image/webp'
+    });
+    if (!result?.dataUrl || result.sizeBytes >= file.size) return file;
+    const blob = await (await fetch(result.dataUrl)).blob();
+    const ext = result.mimeType === 'image/webp' ? 'webp' : 'jpg';
+    return new File([blob], `foto.${ext}`, { type: result.mimeType });
+  } catch (e) {
+    console.warn('⚠️ Não foi possível otimizar a imagem antes do upload:', e);
+    return file;
+  }
+}
 
 /**
  * Faz upload de arquivo de foto ou vídeo diretamente no Supabase Storage
@@ -12,6 +37,7 @@ export async function uploadMediaToSupabaseStorage(file, folder = 'gallery') {
   }
 
   try {
+    file = await optimizeImageForUpload(file);
     const rawExt = file.name ? file.name.split('.').pop() : '';
     const ext = rawExt ? rawExt.toLowerCase() : (file.type.startsWith('video/') ? 'mp4' : 'webp');
     const safeName = `${folder}/${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${ext}`;
@@ -19,7 +45,8 @@ export async function uploadMediaToSupabaseStorage(file, folder = 'gallery') {
     let uploadRes = await supabase.storage
       .from('gallery')
       .upload(safeName, file, {
-        cacheControl: '3600',
+        cacheControl: '31536000',
+        contentType: file.type || undefined,
         upsert: true
       });
 
@@ -29,7 +56,8 @@ export async function uploadMediaToSupabaseStorage(file, folder = 'gallery') {
         uploadRes = await supabase.storage
           .from('gallery')
           .upload(safeName, file, {
-            cacheControl: '3600',
+            cacheControl: '31536000',
+            contentType: file.type || undefined,
             upsert: true
           });
       } catch (bErr) {}
