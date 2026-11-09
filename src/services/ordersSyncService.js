@@ -192,8 +192,54 @@ function mapSupabaseRowToOrder(row) {
     orderStatus: normalized,
     notes: row.notes || '',
     createdAt: row.created_at,
-    updatedAt: row.updated_at
+    updatedAt: row.updated_at,
+    // Fechamento de caixa compartilhado entre aparelhos (coluna opcional shift_closed_at)
+    ...(row.shift_closed_at ? { shiftClosedAt: row.shift_closed_at, isArchived: true } : {})
   };
+}
+
+/**
+ * Marca no Supabase os pedidos encerrados num fechamento de caixa, para que
+ * TODOS os aparelhos vejam o caixa fechado (antes ficava só no navegador local).
+ * Requer a coluna orders.shift_closed_at (ver supabase_schema.sql).
+ */
+export async function persistShiftClosing(orderIds = [], closedAt = new Date().toISOString()) {
+  if (!isSupabaseConfigured || !supabase || !Array.isArray(orderIds) || orderIds.length === 0) return false;
+  try {
+    const { error } = await supabase
+      .from('orders')
+      .update({ shift_closed_at: closedAt })
+      .in('id', orderIds);
+    if (error) throw new Error(error.message);
+    return true;
+  } catch (err) {
+    console.warn('⚠️ Fechamento de caixa salvo só neste aparelho (falta a coluna shift_closed_at?):', err.message || err);
+    return false;
+  }
+}
+
+/**
+ * Reaplica fechamentos de caixa salvos localmente sobre a lista vinda da nuvem,
+ * para que recarregar a página não "reabra" o caixa.
+ */
+export function applyLocalShiftClosings(orders = []) {
+  try {
+    const history = JSON.parse(localStorage.getItem('el_shadday_cash_closing_history_v1') || '[]');
+    if (!Array.isArray(history) || history.length === 0) return orders;
+    const closedMap = new Map();
+    history.forEach(rec => {
+      (rec?.ordersSummary || []).forEach(o => {
+        if (o?.orderId && !closedMap.has(o.orderId)) closedMap.set(o.orderId, { at: rec.closedAt, id: rec.id });
+      });
+    });
+    if (closedMap.size === 0) return orders;
+    return orders.map(o => {
+      const c = o && !o.shiftClosedAt && closedMap.get(o.orderId);
+      return c ? { ...o, shiftClosedAt: c.at, shiftClosingId: c.id, isArchived: true } : o;
+    });
+  } catch (e) {
+    return orders;
+  }
 }
 
 /**

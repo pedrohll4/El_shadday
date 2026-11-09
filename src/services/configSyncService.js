@@ -254,14 +254,8 @@ export async function fetchCloudConfigHistory() {
         if (entry.event === 'message' && entry.message) {
           const parsed = JSON.parse(entry.message);
           if (parsed && parsed.type) {
-            if (parsed.type === 'SUPABASE_CONFIG_SYNC' && parsed.data?.url && parsed.data?.key) {
-              if (typeof window !== 'undefined') {
-                const current = localStorage.getItem('el_shadday_supabase_url');
-                if (!current) {
-                  localStorage.setItem('el_shadday_supabase_url', parsed.data.url);
-                  localStorage.setItem('el_shadday_supabase_anon_key', parsed.data.key);
-                }
-              }
+            if (parsed.type === 'SUPABASE_CONFIG_SYNC') {
+              // SEGURANÇA: ignorado (tópico público)
             } else if (parsed.type === 'PRODUCTS_UPDATE' && Array.isArray(parsed.data)) {
               latestProducts = parsed.data;
             } else if (parsed.type === 'GALLERY_UPDATE' && Array.isArray(parsed.data)) {
@@ -353,15 +347,9 @@ export function subscribeToConfigEvents({ onProductsUpdate, onGalleryUpdate, onP
             const data = JSON.parse(payload.message);
             if (!data || !data.type) return;
 
-            if (data.type === 'SUPABASE_CONFIG_SYNC' && data.data?.url && data.data?.key) {
-              if (typeof window !== 'undefined') {
-                const cur = localStorage.getItem('el_shadday_supabase_url');
-                if (!cur) {
-                  localStorage.setItem('el_shadday_supabase_url', data.data.url);
-                  localStorage.setItem('el_shadday_supabase_anon_key', data.data.key);
-                  window.location.reload();
-                }
-              }
+            // SEGURANÇA: o tópico ntfy é público; nunca aceitar credenciais de banco vindas dele.
+            if (data.type === 'SUPABASE_CONFIG_SYNC') {
+              return;
             } else if (data.type === 'GALLERY_UPDATE_PING' || data.type === 'GALLERY_PING') {
               if (isSupabaseConfigured && supabase) {
                 supabase.from('buffet_gallery').select('*').order('position', { ascending: true }).then(({ data: galData }) => {

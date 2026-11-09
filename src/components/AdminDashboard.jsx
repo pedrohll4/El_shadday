@@ -474,7 +474,7 @@ export function AdminDashboard({
         // Realtime company_settings: sincroniza novas fotos enviadas
         channelCsGallery = supabase
           .channel(`realtime_cs_gallery_admin_${Date.now()}`)
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'company_settings' }, () => {
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'company_settings', filter: 'id=eq.el_shadday_config' }, () => {
             loadFromCompanySettings();
           })
           .subscribe();
@@ -1014,9 +1014,10 @@ export function AdminDashboard({
 
         channelCompanySettingsAdmin = supabase
           .channel(`realtime_cs_menu_admin_${Date.now()}`)
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'company_settings' }, (payload) => {
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'company_settings', filter: 'id=eq.el_shadday_config' }, (payload) => {
             const fresh = payload.new;
-            if (fresh) {
+            // Ignora outras linhas (ex.: sessão do WhatsApp, que tem loja 'fechada' e listas vazias)
+            if (fresh && fresh.id === 'el_shadday_config') {
               if (Array.isArray(fresh.menu_products)) {
                 const normProds = normalizeProductsList(fresh.menu_products);
                 setProductsList(normProds);

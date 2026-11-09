@@ -221,7 +221,7 @@ export function BuffetApp({ currentAppMode, onToggleAppMode, onNavigateToBuilder
         // 3. Escuta alterações em tempo real na tabela company_settings
         ch2 = supabase
           .channel(`realtime_cs_gallery_buffetapp_${Date.now()}`)
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'company_settings' }, () => {
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'company_settings', filter: 'id=eq.el_shadday_config' }, () => {
             loadFromCompanySettings();
           })
           .subscribe();

@@ -5,6 +5,8 @@
  */
 
 const STORAGE_KEY_SETTINGS = 'el_shadday_cash_register_settings_v1';
+import { persistShiftClosing } from './ordersSyncService';
+
 const STORAGE_KEY_HISTORY = 'el_shadday_cash_closing_history_v1';
 
 export const DEFAULT_CASH_SETTINGS = {
@@ -206,6 +208,9 @@ export function executeCashClosing({
   try {
     localStorage.setItem('el_shadday_all_orders', JSON.stringify(updatedAllOrders));
   } catch (e) {}
+
+  // 2b. Grava no Supabase para todos os aparelhos verem o caixa fechado
+  persistShiftClosing(Array.from(shiftOrderIds), now.toISOString());
 
   // 3. Reset daily order numbering sequence so tomorrow starts from #01!
   try {

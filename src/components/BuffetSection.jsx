@@ -193,7 +193,7 @@ export function BuffetSection({ onExploreFullBuffet, onBackToDelivery }) {
       try {
         channelCs = supabase
           .channel(`realtime_gallery_section_cs_${Date.now()}`)
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'company_settings' }, () => {
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'company_settings', filter: 'id=eq.el_shadday_config' }, () => {
             if (!isMounted) return;
             supabase
               .from('company_settings')

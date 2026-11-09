@@ -289,3 +289,6 @@ BEGIN
 END $$;
 
 
+
+-- Fechamento de caixa compartilhado entre aparelhos (2026-11-09)
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS shift_closed_at TIMESTAMPTZ;

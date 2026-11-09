@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { 
   Star, Clock, MapPin, Bike, ShoppingBag, Sparkles, Flame, 
   ChevronRight, ArrowRight, Award, ShieldCheck, HeartHandshake, Crown
 } from 'lucide-react';
 import { RESTAURANT_INFO } from '../data/menuData';
-import { Interactive3DFoodStage } from './Interactive3DFoodStage';
+// three.js carregado à parte, sem travar a abertura do cardápio
+const Interactive3DFoodStage = lazy(() => import('./Interactive3DFoodStage').then(m => ({ default: m.Interactive3DFoodStage })));
 
 export function RestaurantStoreHeader({ 
   activeBranch, 
@@ -199,7 +200,9 @@ export function RestaurantStoreHeader({
 
           {/* RIGHT COLUMN: Interactive 3D Food Stage (Rotate, Drag & Specular Shimmer) */}
           <div className="lg:col-span-5 flex flex-col items-center justify-center relative">
-            <Interactive3DFoodStage />
+            <Suspense fallback={null}>
+              <Interactive3DFoodStage />
+            </Suspense>
           </div>
 
         </div>

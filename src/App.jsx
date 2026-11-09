@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback, Suspense, lazy } from 'react';
 import { BRANCHES, DEFAULT_BRANCH_ID, getStoredBranches } from './data/branchesData';
 import { INITIAL_MULTI_BRANCH_ORDERS } from './data/initialOrdersData';
 import { getCurrentUser, logoutUser, ROLES } from './services/authService';
@@ -42,7 +42,8 @@ import { OrderSuccessModal } from './components/OrderSuccessModal';
 import { BuffetSection } from './components/BuffetSection';
 import { Footer } from './components/Footer';
 import { BuffetApp } from './buffet/BuffetApp';
-import { AdminDashboard } from './components/AdminDashboard';
+// Painel admin (12 mil linhas) só é baixado por quem abre o admin, não por cada cliente
+const AdminDashboard = lazy(() => import('./components/AdminDashboard').then(m => ({ default: m.AdminDashboard })));
 import { AdminLoginModal } from './components/AdminLoginModal';
 import { 
   dispatchOrderToKitchen, 
@@ -50,7 +51,8 @@ import {
   dispatchOrderDelete,
   dispatchClearAllOrders,
   fetchCloudOrdersHistory, 
-  subscribeToKitchenEvents 
+  subscribeToKitchenEvents,
+  applyLocalShiftClosings
 } from './services/ordersSyncService';
 import { 
   fetchCloudConfigHistory, 
@@ -380,9 +382,10 @@ export default function App() {
 
         channelSettings = supabase
           .channel(`realtime_company_settings_app_${Date.now()}`)
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'company_settings' }, (payload) => {
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'company_settings', filter: 'id=eq.el_shadday_config' }, (payload) => {
             const freshData = payload.new;
-            if (freshData) {
+            // Ignora outras linhas (ex.: sessão do WhatsApp, que tem loja 'fechada' e listas vazias)
+            if (freshData && freshData.id === 'el_shadday_config') {
               if (Array.isArray(freshData.delivery_categories)) {
                 const normCats = normalizeCategoriesList(freshData.delivery_categories);
                 setCategories(normCats);
@@ -497,9 +500,10 @@ export default function App() {
         }
         if (Array.isArray(cloudOrders)) {
           if (isSupabaseConfigured) {
-            setAllOrders(cloudOrders);
+            const withClosings = applyLocalShiftClosings(cloudOrders);
+            setAllOrders(withClosings);
             try {
-              localStorage.setItem('el_shadday_all_orders', JSON.stringify(cloudOrders));
+              localStorage.setItem('el_shadday_all_orders', JSON.stringify(withClosings));
             } catch (e) {}
           } else if (cloudOrders.length > 0) {
             setAllOrders(prev => {
@@ -544,6 +548,26 @@ export default function App() {
     };
 
     initSync();
+
+    // Fechamento de caixa: atualiza a lista na hora (antes só mudava o localStorage
+    // e a tela continuava mostrando o caixa aberto)
+    const handleCashClosed = (e) => {
+      const updatedOrders = e?.detail?.updatedOrders;
+      if (!Array.isArray(updatedOrders)) return;
+      const closedById = new Map(updatedOrders.filter(o => o?.shiftClosedAt).map(o => [o.orderId, o]));
+      if (closedById.size === 0) return;
+      setAllOrders(prev => {
+        const updated = prev.map(o => {
+          const c = closedById.get(o.orderId);
+          return c ? { ...o, shiftClosedAt: c.shiftClosedAt, shiftClosingId: c.shiftClosingId, isArchived: true } : o;
+        });
+        try {
+          localStorage.setItem('el_shadday_all_orders', JSON.stringify(updated));
+        } catch (err) {}
+        return updated;
+      });
+    };
+    window.addEventListener('cash_register_closed', handleCashClosed);
 
     // 2. Subscribe to instant real-time events (SSE Cloud + BroadcastChannel local)
     const unsubscribe = subscribeToKitchenEvents({
@@ -625,6 +649,7 @@ export default function App() {
 
     return () => {
       unsubscribe();
+      window.removeEventListener('cash_register_closed', handleCashClosed);
       if (interval) clearInterval(interval);
     };
   }, []);
@@ -1073,6 +1098,7 @@ export default function App() {
   if (appView === 'admin') {
     return (
       <ErrorBoundary>
+        <Suspense fallback={<div className="min-h-screen bg-dark-950 flex items-center justify-center text-white/70">Carregando painel...</div>}>
         <AdminDashboard
           orders={allOrders}
           onUpdateOrderStatus={handleUpdateOrderStatus}
@@ -1091,6 +1117,7 @@ export default function App() {
           currentBranchId={selectedBranchId}
           onSelectBranch={handleSelectBranch}
         />
+        </Suspense>
       </ErrorBoundary>
     );
   }
