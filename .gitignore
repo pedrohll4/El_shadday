@@ -35,3 +35,6 @@ generate_banner_*.py
 
 # Pacote do motor WhatsApp para pendrive (gerado)
 /pendrive/
+
+# Originais das fotos antes da compressao
+/backup_fotos_originais/
