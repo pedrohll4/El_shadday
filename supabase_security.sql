@@ -256,8 +256,8 @@ create or replace function public.setup_master_admin(p_username text, p_password
 returns text language plpgsql security definer set search_path = public as $$
 declare v_user text; v_auth uuid;
 begin
-  if p_password is null or p_password = 'TROQUE_ESTA_SENHA' then
-    raise exception 'Troque "TROQUE_ESTA_SENHA" pela senha do Admin Master antes de rodar.';
+  if p_password is null or p_password = 'TROQUE_ESTA_SENHA' or p_password = 'SUA_SENHA_AQUI' then
+    raise exception 'Troque a senha de exemplo pela senha do Admin Master antes de rodar.';
   end if;
   v_user := public._clean_username(p_username);
   v_auth := public._upsert_auth_user(public._staff_email(v_user), public._check_password(p_password));
