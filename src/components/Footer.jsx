@@ -69,8 +69,9 @@ export function Footer({ onOpenAdmin }) {
               Localização
             </h4>
             <p className="text-xs text-slate-300 leading-relaxed">
-              Rua Maceió, 2333 • Setor 03<br />
-              Ariquemes - RO, CEP 76870-000<br />
+              Av. Canaã, 4065 • Setor 04<br />
+              Esquina, ao lado da Rumotos<br />
+              Ariquemes - RO, CEP 76875-818<br />
               Brasil
             </p>
             <a

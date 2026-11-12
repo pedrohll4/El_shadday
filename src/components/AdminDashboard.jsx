@@ -282,6 +282,14 @@ export function AdminDashboard({
   const knownOrderIdsRef = useRef(new Set((orders || []).map(o => o?.orderId).filter(Boolean)));
   const isInitialOrdersLoadedRef = useRef((orders || []).length > 0);
 
+  // Barra de filtros da Cozinha (Ativos, Em Atraso, Pendentes...) com rolagem lateral
+  const kdsFiltersScrollRef = useRef(null);
+  const scrollKdsFilters = (direction) => {
+    const el = kdsFiltersScrollRef.current;
+    if (!el) return;
+    el.scrollBy({ left: direction === 'left' ? -240 : 240, behavior: 'smooth' });
+  };
+
   // KDS Grid Scheme & Card Density State
   const [kdsGridCols, setKdsGridCols] = useState(() => {
     try {
@@ -3627,15 +3635,15 @@ export function AdminDashboard({
       customerPhone: pdvCustomerPhone.trim(),
       deliveryType: pdvDeliveryType,
       deliveryAddress: {
-        street: pdvDeliveryType === 'delivery' ? pdvAddress.trim() : 'Rua Maceió, 2333 - Setor 03, Ariquemes - RO',
-        address: pdvDeliveryType === 'delivery' ? pdvAddress.trim() : 'Rua Maceió, 2333 - Setor 03, Ariquemes - RO',
+        street: pdvDeliveryType === 'delivery' ? pdvAddress.trim() : 'Av. Canaã, 4065 - Setor 04 (esquina, ao lado da Rumotos), Ariquemes - RO',
+        address: pdvDeliveryType === 'delivery' ? pdvAddress.trim() : 'Av. Canaã, 4065 - Setor 04 (esquina, ao lado da Rumotos), Ariquemes - RO',
         number: pdvDeliveryType === 'delivery' ? pdvNumber.trim() : '',
         district: pdvDeliveryType === 'delivery' ? pdvDistrict.name : 'Balcão',
         reference: pdvDeliveryType === 'delivery' ? pdvReference.trim() : '',
         isPickup: pdvDeliveryType === 'balcao'
       },
-      district: pdvDeliveryType === 'delivery' ? pdvDistrict.name : 'Balcão (Setor 03)',
-      address: pdvDeliveryType === 'delivery' ? pdvAddress.trim() : 'Rua Maceió, 2333 - Setor 03, Ariquemes - RO',
+      district: pdvDeliveryType === 'delivery' ? pdvDistrict.name : 'Balcão (Setor 04)',
+      address: pdvDeliveryType === 'delivery' ? pdvAddress.trim() : 'Av. Canaã, 4065 - Setor 04 (esquina, ao lado da Rumotos), Ariquemes - RO',
       number: pdvDeliveryType === 'delivery' ? pdvNumber.trim() : '',
       reference: pdvDeliveryType === 'delivery' ? pdvReference.trim() : '',
       items: pdvCart,
@@ -4317,7 +4325,7 @@ export function AdminDashboard({
               </div>
 
               {/* WhatsApp Quick Status & Auto-Notify & Buffet Pause Shortcut */}
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2 min-w-0 [&>*]:whitespace-nowrap">
                 {currentBranch?.id === 'ariquemes' && (
                   <button
                     type="button"
@@ -4404,13 +4412,31 @@ export function AdminDashboard({
 
             {/* Filter Bar & Search */}
             <div className="p-3.5 sm:p-4 rounded-2xl bg-dark-900 border border-dark-800 space-y-3">
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-                
-                {/* Filter buttons */}
-                <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto pb-1 no-scrollbar">
+              <div className="flex flex-col gap-3">
+
+                {/* Filter buttons (linha inteira, com barrinha para deslizar e setas) */}
+                <div className="flex items-center gap-1.5 w-full min-w-0">
+                <button
+                  type="button"
+                  onClick={() => scrollKdsFilters('left')}
+                  className="flex-shrink-0 p-1.5 rounded-lg bg-dark-850 hover:bg-dark-800 text-brand-gold border border-brand-gold/30 cursor-pointer transition-all active:scale-90"
+                  title="Deslizar filtros para a esquerda"
+                >
+                  <ChevronLeft className="w-4 h-4 stroke-[2.5]" />
+                </button>
+                <div
+                  ref={kdsFiltersScrollRef}
+                  onWheel={(e) => {
+                    const el = kdsFiltersScrollRef.current;
+                    if (el && e.deltaY !== 0 && Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+                      el.scrollLeft += e.deltaY;
+                    }
+                  }}
+                  className="admin-tabs-scrollbar flex items-center gap-1.5 flex-1 min-w-0 pb-2 pt-0.5 select-none"
+                >
                   <button
                     onClick={() => setSelectedFilter('todos')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex-shrink-0 ${
                       selectedFilter === 'todos' 
                         ? 'bg-brand-gold text-dark-950 font-black' 
                         : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
@@ -4421,7 +4447,7 @@ export function AdminDashboard({
 
                   <button
                     onClick={() => setSelectedFilter('atrasados')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1 ${
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex-shrink-0 flex items-center gap-1 ${
                       selectedFilter === 'atrasados' 
                         ? 'bg-red-500 text-white font-black' 
                         : 'bg-red-500/15 hover:bg-red-500/25 text-red-400 border border-red-500/30'
@@ -4433,7 +4459,7 @@ export function AdminDashboard({
 
                   <button
                     onClick={() => setSelectedFilter('pendentes')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex-shrink-0 ${
                       selectedFilter === 'pendentes' 
                         ? 'bg-amber-500 text-dark-950 font-black' 
                         : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
@@ -4444,7 +4470,7 @@ export function AdminDashboard({
 
                   <button
                     onClick={() => setSelectedFilter('preparo')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex-shrink-0 ${
                       selectedFilter === 'preparo' 
                         ? 'bg-brand-gold text-dark-950 font-black' 
                         : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
@@ -4456,7 +4482,7 @@ export function AdminDashboard({
                   {readyBalcaoCount > 0 && (
                     <button
                       onClick={() => setSelectedFilter('pronto_balcao')}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1 ${
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex-shrink-0 flex items-center gap-1 ${
                         selectedFilter === 'pronto_balcao' 
                           ? 'bg-purple-500 text-white font-black' 
                           : 'bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 border border-purple-500/30'
@@ -4469,7 +4495,7 @@ export function AdminDashboard({
 
                   <button
                     onClick={() => setSelectedFilter('entrega')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex-shrink-0 ${
                       selectedFilter === 'entrega' 
                         ? 'bg-blue-500 text-white font-black' 
                         : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
@@ -4480,7 +4506,7 @@ export function AdminDashboard({
 
                   <button
                     onClick={() => setSelectedFilter('concluidos')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex-shrink-0 ${
                       selectedFilter === 'concluidos' 
                         ? 'bg-emerald-500 text-dark-950 font-black' 
                         : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
@@ -4491,7 +4517,7 @@ export function AdminDashboard({
 
                   <button
                     onClick={() => setSelectedFilter('cancelados')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1 ${
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex-shrink-0 flex items-center gap-1 ${
                       selectedFilter === 'cancelados' 
                         ? 'bg-red-700 text-white font-black' 
                         : 'bg-red-950/40 text-red-400 hover:bg-red-950/70 border border-red-800/40'
@@ -4505,7 +4531,7 @@ export function AdminDashboard({
                     <button
                       type="button"
                       onClick={() => setShowArchivedKdsOrders(!showArchivedKdsOrders)}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1 border ${
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex-shrink-0 flex items-center gap-1 border ${
                         showArchivedKdsOrders 
                           ? 'bg-purple-600 text-white font-black shadow-sm' 
                           : 'bg-dark-850 hover:bg-dark-800 text-purple-300 border-purple-500/30'
@@ -4516,9 +4542,18 @@ export function AdminDashboard({
                     </button>
                   )}
                 </div>
+                <button
+                  type="button"
+                  onClick={() => scrollKdsFilters('right')}
+                  className="flex-shrink-0 p-1.5 rounded-lg bg-dark-850 hover:bg-dark-800 text-brand-gold border border-brand-gold/30 cursor-pointer transition-all active:scale-90"
+                  title="Deslizar filtros para a direita (ver mais opções)"
+                >
+                  <ChevronRight className="w-4 h-4 stroke-[2.5]" />
+                </button>
+                </div>
 
                 {/* Right controls: Grid Layout, Compact Mode, Sound Tester, Auto-Aba & Search */}
-                <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                <div className="flex flex-wrap items-center gap-2 w-full">
                   {/* Grid Layout Scheme Selector */}
                   <div className="flex items-center gap-1 p-0.5 rounded-xl bg-dark-950 border border-dark-750" title="Mudar o esquema da grade de pedidos na tela">
                     <span className="text-[10px] text-slate-500 font-bold px-1.5 uppercase tracking-wider hidden lg:inline">Grade:</span>
@@ -4614,7 +4649,7 @@ export function AdminDashboard({
                     <span>Auto-Aba: <strong>{autoFollowTab ? 'ON' : 'OFF'}</strong></span>
                   </button>
 
-                  <div className="relative w-full sm:w-56">
+                  <div className="relative w-full sm:w-64 sm:ml-auto">
                     <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                     <input
                       type="text"
@@ -4650,7 +4685,7 @@ export function AdminDashboard({
                   </button>
                 </div>
               )}
-              <div className="flex items-center justify-between text-xs text-slate-400 px-1">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400 px-1">
                 <span>Mostrando <strong>{filteredOrders.length}</strong> pedidos</span>
                 <div className="flex items-center gap-3">
                   {orders.length > 0 && onClearAllOrders && (
@@ -4696,6 +4731,8 @@ export function AdminDashboard({
                   ${kdsGridCols === '4' ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5' : ''}
                 `}>
                   {filteredOrders.map((order) => {
+                    // Em 3 ou 4 colunas o cartão é estreito: empilha cabeçalho e pagamento para nada sair da borda
+                    const isNarrowCard = kdsGridCols === '3' || kdsGridCols === '4';
                     const elapsedMin = getElapsedMinutes(order.createdAt);
                     const isDelayed = isOrderDelayed(order);
                     const currentStatus = normalizeOrderStatus(order);
@@ -4707,15 +4744,15 @@ export function AdminDashboard({
                     return (
                       <div
                         key={order.orderId}
-                        className={`rounded-2xl border flex flex-col justify-between transition-all duration-300 shadow-md ${
+                        className={`rounded-2xl border flex flex-col justify-between min-w-0 overflow-hidden break-words transition-all duration-300 shadow-md ${
                           kdsCompactMode ? 'p-3' : 'p-4 sm:p-5'
                         } ${
                           isHighlighted
-                            ? 'bg-brand-gold/15 border-brand-gold ring-2 ring-brand-gold shadow-glow-gold scale-[1.01]'
+                            ? 'bg-brand-gold/15 border-brand-gold ring-2 ring-inset ring-brand-gold shadow-glow-gold'
                             : isCancelled
                             ? 'bg-red-950/15 border-red-900/50 opacity-80'
                             : isDelayed
-                            ? 'bg-red-950/20 border-red-500/60 ring-1 ring-red-500/40'
+                            ? 'bg-red-950/20 border-red-500/60 ring-1 ring-inset ring-red-500/40'
                             : currentStatus === 'CONCLUIDO'
                             ? 'bg-dark-900/60 border-dark-800 opacity-75'
                             : 'bg-dark-900 border-dark-800 hover:border-brand-gold/50'
@@ -4723,8 +4760,8 @@ export function AdminDashboard({
                       >
                         <div>
                           {/* Top Header of the card */}
-                          <div className={`flex items-start justify-between gap-2 border-b border-dark-800 ${kdsCompactMode ? 'pb-2' : 'pb-3'}`}>
-                            <div>
+                          <div className={`flex gap-2 border-b border-dark-800 ${isNarrowCard ? 'flex-col' : 'flex-col sm:flex-row sm:items-start sm:justify-between'} ${kdsCompactMode ? 'pb-2' : 'pb-3'}`}>
+                            <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-2 flex-wrap">
                                 <span className="font-display font-black text-xl text-brand-gold tracking-tight bg-dark-950 px-2.5 py-0.5 rounded-xl border border-brand-gold/40 shadow-sm">
                                   #{orderDisplayNumber}
@@ -4802,10 +4839,10 @@ export function AdminDashboard({
                                 )}
                               </div>
 
-                              <div className="text-xs font-bold text-white mt-1 flex items-center gap-1.5 flex-wrap">
-                                <span className="flex items-center gap-1">
-                                  <User className="w-3.5 h-3.5 text-brand-gold" />
-                                  <span>{order.customerName}</span>
+                              <div className="text-xs font-bold text-white mt-1 flex items-center gap-1.5 flex-wrap min-w-0">
+                                <span className="flex items-center gap-1 min-w-0">
+                                  <User className="w-3.5 h-3.5 text-brand-gold flex-shrink-0" />
+                                  <span className="break-words min-w-0">{order.customerName}</span>
                                 </span>
 
                                 {order.customerPhone && (
@@ -4818,22 +4855,22 @@ export function AdminDashboard({
                             </div>
 
                             {/* Payment Status Pill */}
-                            <div className="text-right">
+                            <div className={`min-w-0 ${isNarrowCard ? 'w-full text-left' : 'w-full sm:w-auto sm:max-w-[55%] text-left sm:text-right'}`}>
                               {isPaid ? (
                                 <span className="px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/40 text-emerald-400 font-bold text-[11px] inline-flex items-center gap-1">
                                   <CheckCircle2 className="w-3 h-3" />
                                   <span>PAGO</span>
                                 </span>
                               ) : (
-                                <div className="space-y-1">
-                                  <span className="px-2.5 py-1 rounded-lg bg-amber-500/15 border border-amber-500/40 text-amber-400 font-bold text-[11px] inline-flex items-center gap-1">
-                                    <AlertTriangle className="w-3 h-3" />
+                                <div className={`flex flex-wrap items-center gap-x-2 gap-y-1 ${isNarrowCard ? '' : 'sm:justify-end'}`}>
+                                  <span className="px-2.5 py-1 rounded-lg bg-amber-500/15 border border-amber-500/40 text-amber-400 font-bold text-[11px] inline-flex items-center gap-1 whitespace-nowrap">
+                                    <AlertTriangle className="w-3 h-3 flex-shrink-0" />
                                     <span>COBRAR NA ENTREGA</span>
                                   </span>
                                   {!isCancelled && (
                                     <button
                                       onClick={() => onUpdatePaymentStatus(order.orderId, 'PAGO_APROVADO')}
-                                      className="text-[10px] text-emerald-400 hover:text-emerald-300 underline block text-right cursor-pointer"
+                                      className="text-[10px] text-emerald-400 hover:text-emerald-300 underline cursor-pointer whitespace-nowrap"
                                     >
                                       Marcar como Pago
                                     </button>
@@ -4841,8 +4878,8 @@ export function AdminDashboard({
                                 </div>
                               )}
                               <div className="mt-1.5 p-1.5 rounded-lg bg-dark-950/70 border border-dark-800 text-[11px] space-y-1">
-                                <div className="flex items-center justify-between gap-1.5">
-                                  <span className="font-bold text-slate-200 flex items-center gap-1 truncate" title={order.paymentMethod || 'A Definir'}>
+                                <div className="flex items-center justify-between gap-1.5 min-w-0">
+                                  <span className="font-bold text-slate-200 flex items-center gap-1 truncate min-w-0" title={order.paymentMethod || 'A Definir'}>
                                     <CreditCard className="w-3 h-3 text-brand-gold flex-shrink-0" />
                                     <span className="truncate">{order.paymentMethod || 'A Definir'}</span>
                                   </span>
@@ -4874,10 +4911,10 @@ export function AdminDashboard({
 
                           {/* Delivery address & info */}
                           <div className="py-2.5 text-xs text-slate-300 space-y-1">
-                            <div className="flex items-center gap-1.5">
-                              <MapPin className="w-3.5 h-3.5 text-brand-gold flex-shrink-0" />
-                              <span>
-                                <strong>{order.deliveryType === 'delivery' ? order.district : 'Retirada no Balcão (Setor 03)'}</strong>
+                            <div className="flex items-start gap-1.5 min-w-0">
+                              <MapPin className="w-3.5 h-3.5 text-brand-gold flex-shrink-0 mt-0.5" />
+                              <span className="min-w-0 break-words">
+                                <strong>{order.deliveryType === 'delivery' ? order.district : 'Retirada no Balcão (Setor 04)'}</strong>
                                 {order.deliveryType === 'delivery' && ` • ${order.address}${order.number ? `, Nº ${order.number}` : ''}`}
                               </span>
                             </div>
@@ -4896,10 +4933,10 @@ export function AdminDashboard({
                           {/* Interactive Status Flow Stepper / Pipeline */}
                           {!isCancelled ? (
                             <div className="bg-dark-950/90 p-2 sm:p-2.5 rounded-xl border border-dark-850 my-2 space-y-1.5">
-                              <div className="flex items-center justify-between text-[10px] font-bold text-slate-400 px-0.5">
-                                <span className="flex items-center gap-1 text-slate-300">
-                                  <Sliders className="w-3 h-3 text-brand-gold" />
-                                  <span>FLUXO DO PEDIDO (CLIQUE P/ MUDAR):</span>
+                              <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 text-[10px] font-bold text-slate-400 px-0.5">
+                                <span className="flex items-center gap-1 text-slate-300 min-w-0">
+                                  <Sliders className="w-3 h-3 text-brand-gold flex-shrink-0" />
+                                  <span>{isNarrowCard ? 'FLUXO DO PEDIDO:' : 'FLUXO DO PEDIDO (CLIQUE P/ MUDAR):'}</span>
                                 </span>
                                 <span className="text-[10px] text-brand-goldLight font-bold">
                                   {currentStatus === 'RECEBIDO_COZINHA' && '🟡 1. Na Fila'}
@@ -4915,30 +4952,30 @@ export function AdminDashboard({
                                 <button
                                   type="button"
                                   onClick={() => handleUpdateStatusAndTab(order, 'RECEBIDO_COZINHA')}
-                                  className={`py-1.5 px-1 rounded-lg text-[11px] font-bold flex flex-col sm:flex-row items-center justify-center gap-1 transition-all cursor-pointer ${
+                                  className={`py-1.5 px-1 rounded-lg font-bold flex flex-col items-center justify-center gap-0.5 min-w-0 transition-all cursor-pointer ${isNarrowCard ? 'text-[10px]' : 'text-[11px] sm:flex-row sm:gap-1'} ${
                                     currentStatus === 'RECEBIDO_COZINHA'
-                                      ? 'bg-amber-500 text-dark-950 font-black shadow-sm ring-1 ring-amber-400 scale-[1.02]'
+                                      ? 'bg-amber-500 text-dark-950 font-black shadow-sm ring-1 ring-inset ring-amber-400'
                                       : 'bg-dark-900 hover:bg-dark-850 text-slate-400 hover:text-amber-300 border border-dark-800'
                                   }`}
                                   title="Mover de volta para Pendente (Fila)"
                                 >
                                   <Clock className="w-3 h-3 flex-shrink-0" />
-                                  <span className="truncate">1. Pendente</span>
+                                  <span className="truncate max-w-full">{isNarrowCard ? 'Fila' : '1. Pendente'}</span>
                                 </button>
 
                                 {/* 2. No Forno */}
                                 <button
                                   type="button"
                                   onClick={() => handleUpdateStatusAndTab(order, 'EM_PREPARO')}
-                                  className={`py-1.5 px-1 rounded-lg text-[11px] font-bold flex flex-col sm:flex-row items-center justify-center gap-1 transition-all cursor-pointer ${
+                                  className={`py-1.5 px-1 rounded-lg font-bold flex flex-col items-center justify-center gap-0.5 min-w-0 transition-all cursor-pointer ${isNarrowCard ? 'text-[10px]' : 'text-[11px] sm:flex-row sm:gap-1'} ${
                                     currentStatus === 'EM_PREPARO'
-                                      ? 'bg-brand-gold text-dark-950 font-black shadow-sm ring-1 ring-amber-300 scale-[1.02]'
+                                      ? 'bg-brand-gold text-dark-950 font-black shadow-sm ring-1 ring-inset ring-amber-300'
                                       : 'bg-dark-900 hover:bg-dark-850 text-slate-400 hover:text-brand-gold border border-dark-800'
                                   }`}
                                   title="Mover para No Forno (Em Preparo)"
                                 >
                                   <Flame className="w-3 h-3 flex-shrink-0" />
-                                  <span className="truncate">2. No Forno</span>
+                                  <span className="truncate max-w-full">{isNarrowCard ? 'Forno' : '2. No Forno'}</span>
                                 </button>
 
                                 {/* 3. Saiu Entrega / Balcão */}
@@ -4952,9 +4989,9 @@ export function AdminDashboard({
                                       handleUpdateStatusAndTab(order, 'SAIU_ENTREGA');
                                     }
                                   }}
-                                  className={`py-1.5 px-1 rounded-lg text-[11px] font-bold flex flex-col sm:flex-row items-center justify-center gap-1 transition-all cursor-pointer ${
+                                  className={`py-1.5 px-1 rounded-lg font-bold flex flex-col items-center justify-center gap-0.5 min-w-0 transition-all cursor-pointer ${isNarrowCard ? 'text-[10px]' : 'text-[11px] sm:flex-row sm:gap-1'} ${
                                     currentStatus === 'SAIU_ENTREGA' || currentStatus === 'PRONTO_BALCAO'
-                                      ? 'bg-blue-500 text-white font-black shadow-sm ring-1 ring-blue-400 scale-[1.02]'
+                                      ? 'bg-blue-500 text-white font-black shadow-sm ring-1 ring-inset ring-blue-400'
                                       : 'bg-dark-900 hover:bg-dark-850 text-slate-400 hover:text-blue-300 border border-dark-800'
                                   }`}
                                   title={(order.deliveryType === 'balcao' || order.deliveryType === 'retirada' || order.district === 'Balcão') ? 'Marcar Pronto no Balcão' : 'Mover para Saiu para Entrega'}
@@ -4964,28 +5001,28 @@ export function AdminDashboard({
                                   ) : (
                                     <Bike className="w-3 h-3 flex-shrink-0" />
                                   )}
-                                  <span className="truncate">{(order.deliveryType === 'balcao' || order.deliveryType === 'retirada' || order.district === 'Balcão') ? '3. Balcão' : '3. Entrega'}</span>
+                                  <span className="truncate max-w-full">{(order.deliveryType === 'balcao' || order.deliveryType === 'retirada' || order.district === 'Balcão') ? (isNarrowCard ? 'Balcão' : '3. Balcão') : (isNarrowCard ? 'Entrega' : '3. Entrega')}</span>
                                 </button>
 
                                 {/* 4. Concluído */}
                                 <button
                                   type="button"
                                   onClick={() => handleUpdateStatusAndTab(order, 'CONCLUIDO')}
-                                  className={`py-1.5 px-1 rounded-lg text-[11px] font-bold flex flex-col sm:flex-row items-center justify-center gap-1 transition-all cursor-pointer ${
+                                  className={`py-1.5 px-1 rounded-lg font-bold flex flex-col items-center justify-center gap-0.5 min-w-0 transition-all cursor-pointer ${isNarrowCard ? 'text-[10px]' : 'text-[11px] sm:flex-row sm:gap-1'} ${
                                     currentStatus === 'CONCLUIDO'
-                                      ? 'bg-emerald-500 text-dark-950 font-black shadow-sm ring-1 ring-emerald-400 scale-[1.02]'
+                                      ? 'bg-emerald-500 text-dark-950 font-black shadow-sm ring-1 ring-inset ring-emerald-400'
                                       : 'bg-dark-900 hover:bg-dark-850 text-slate-400 hover:text-emerald-300 border border-dark-800'
                                   }`}
                                   title="Marcar como Concluído / Finalizado"
                                 >
                                   <CheckCircle2 className="w-3 h-3 flex-shrink-0" />
-                                  <span className="truncate">4. Concluído</span>
+                                  <span className="truncate max-w-full">{isNarrowCard ? 'Pronto' : '4. Concluído'}</span>
                                 </button>
                               </div>
                             </div>
                           ) : (
-                            <div className="bg-red-950/40 p-2.5 rounded-xl border border-red-500/40 my-2 flex items-center justify-between gap-2">
-                              <div className="flex items-center gap-2 text-red-400 text-xs font-bold">
+                            <div className="bg-red-950/40 p-2.5 rounded-xl border border-red-500/40 my-2 flex flex-wrap items-center justify-between gap-2">
+                              <div className="flex items-center gap-2 text-red-400 text-xs font-bold min-w-0">
                                 <XCircle className="w-4 h-4 flex-shrink-0" />
                                 <span>Pedido Cancelado: {order.cancelReason || 'Sem motivo'}</span>
                               </div>
@@ -5002,8 +5039,8 @@ export function AdminDashboard({
                           )}
 
                           {/* Items List (Kitchen preparation list) */}
-                          <div className="bg-dark-950 p-3 rounded-xl border border-dark-850 space-y-2 mt-1">
-                            <div className="flex items-center justify-between gap-2">
+                          <div className={`bg-dark-950 rounded-xl border border-dark-850 space-y-2 mt-1 min-w-0 ${isNarrowCard ? 'p-2.5' : 'p-3'}`}>
+                            <div className="flex flex-wrap items-center justify-between gap-2">
                               <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                                 O que precisa ser feito:
                               </div>
@@ -5022,9 +5059,9 @@ export function AdminDashboard({
                             <div className="space-y-1.5 text-xs">
                               {(order.items || []).map((it, idx) => (
                                 <div key={idx} className="border-b border-dark-900 pb-1 last:border-0 last:pb-0">
-                                  <div className="font-bold text-white flex items-center justify-between">
-                                    <span>{it.quantity}x {it.name}</span>
-                                    <span className="text-slate-400 text-[11px]">
+                                  <div className="font-bold text-white flex items-start justify-between gap-2">
+                                    <span className="min-w-0 break-words">{it.quantity}x {it.name}</span>
+                                    <span className="text-slate-400 text-[11px] flex-shrink-0 whitespace-nowrap">
                                       R$ {((it.price || 0) * (it.quantity || 1)).toFixed(2).replace('.', ',')}
                                     </span>
                                   </div>
@@ -5124,7 +5161,7 @@ export function AdminDashboard({
                           </div>
 
                           {/* Total */}
-                          <div className="flex justify-between items-baseline pt-3 text-xs">
+                          <div className="flex flex-wrap justify-between items-baseline gap-x-2 pt-3 text-xs">
                             <span className="text-slate-400">Total com Entrega:</span>
                             <div className="text-right">
                               {(Number(order.serviceAmount || order.serviceFee) > 0) && (
@@ -9397,7 +9434,7 @@ export function AdminDashboard({
                         type="text"
                         value={tempStoreAddress}
                         onChange={(e) => setTempStoreAddress(e.target.value)}
-                        placeholder="Ex: Rua Maceió, 2333 - Setor 03, Ariquemes - RO"
+                        placeholder="Ex: Av. Canaã, 4065 - Setor 04 (esquina, ao lado da Rumotos), Ariquemes - RO"
                         className="w-full px-3.5 py-2 rounded-xl bg-dark-900 border border-dark-700 text-xs text-white"
                       />
                     </div>

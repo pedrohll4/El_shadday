@@ -12,7 +12,7 @@ export const INITIAL_BUFFET_COMPANY = {
   instagram: "@elshadday_buffet",
   instagramUrl: "https://instagram.com",
   city: "Ariquemes - RO",
-  address: "Rua Maceió, 2333 - Setor 03, Ariquemes - RO",
+  address: "Av. Canaã, 4065 - Setor 04 (esquina, ao lado da Rumotos), Ariquemes - RO",
   logoUrl: "https://assets.olaclick.app/companies/logos/67bb7c61-2505-4b36-a16c-6a4979bb3651.png",
   bannerUrl: "https://assets.olaclick.app/companies/backgrounds/dfd052f1-d436-49bb-a996-f2f05ce0d456.webp",
   aboutText: `O El Shadday Serviços de Buffet nasceu para transformar momentos especiais em experiências inesquecíveis. Trabalhamos com dedicação, qualidade e cuidado em cada detalhe, oferecendo soluções completas para diferentes tipos de eventos. Nossa missão é proporcionar momentos gastronômicos memoráveis com atendimento de excelência.`,

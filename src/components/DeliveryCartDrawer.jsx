@@ -17,6 +17,7 @@ import {
 import { dispatchOrderToKitchen, reserveOrderNumber } from '../services/ordersSyncService';
 import { cleanPhoneNumber } from '../services/whatsappNotificationService';
 import { recordCustomerFromOrder } from '../services/customerService';
+import { STORE_ADDRESS, fixLegacyStoreAddress } from '../data/branchesData';
 
 export function DeliveryCartDrawer({ 
   isOpen, 
@@ -368,7 +369,7 @@ ${reference.trim() ? `📌 *Referência:* ${reference.trim()}\n` : ''}🛵 *Taxa
     } else {
       deliveryText = 
 `🛍️ *Tipo:* Retirada no Balcão
-🏢 *Local:* ${activeBranch?.address || 'Rua Maceió, 2333 - Setor 03, Ariquemes - RO'}
+🏢 *Local:* ${fixLegacyStoreAddress(activeBranch?.address) || STORE_ADDRESS}
 🛵 *Taxa:* Grátis (Retirada)`;
     }
 
@@ -410,8 +411,8 @@ Pedido gerado via Cardápio Digital El Shadday.`;
       customerPhone: customerPhone.trim(),
       deliveryType,
       deliveryAddress: {
-        street: deliveryType === 'delivery' ? streetAddress.trim() : (activeBranch?.address || 'Rua Maceió, 2333 - Setor 03, Ariquemes - RO'),
-        address: deliveryType === 'delivery' ? streetAddress.trim() : (activeBranch?.address || 'Rua Maceió, 2333 - Setor 03, Ariquemes - RO'),
+        street: deliveryType === 'delivery' ? streetAddress.trim() : (fixLegacyStoreAddress(activeBranch?.address) || STORE_ADDRESS),
+        address: deliveryType === 'delivery' ? streetAddress.trim() : (fixLegacyStoreAddress(activeBranch?.address) || STORE_ADDRESS),
         number: addressNumber.trim(),
         district: deliveryType === 'delivery' ? currentDistrict.name : 'Balcão',
         reference: reference.trim(),
@@ -420,7 +421,7 @@ Pedido gerado via Cardápio Digital El Shadday.`;
       district: deliveryType === 'delivery' ? currentDistrict.name : 'Balcão',
       address: deliveryType === 'delivery' 
         ? `${streetAddress.trim()}${addressNumber.trim() ? `, Nº ${addressNumber.trim()}` : ''}`
-        : (activeBranch?.address || 'Rua Maceió, 2333 - Setor 03, Ariquemes - RO'),
+        : (fixLegacyStoreAddress(activeBranch?.address) || STORE_ADDRESS),
       number: addressNumber.trim(),
       reference: reference.trim(),
       notes: orderNotes.trim(),
@@ -917,7 +918,7 @@ Pedido gerado via Cardápio Digital El Shadday.`;
                     <span>Retirada no Balcão da Pizzaria:</span>
                   </div>
                   <p className="text-slate-400">
-                    Rua Maceió, 2333 - Setor 03, Ariquemes - RO
+                    Av. Canaã, 4065 - Setor 04 (esquina, ao lado da Rumotos), Ariquemes - RO
                   </p>
                   <p className="text-[11px] text-emerald-400 font-semibold pt-1">
                     ✓ Taxa de entrega gratuita!

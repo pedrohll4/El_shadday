@@ -339,7 +339,7 @@ Seu pedido está quentinho. Bom apetite! 🍕😋`
 ----------------------------------------
 Olá, *${customerName}*! O seu pedido *#${orderId}* já ficou pronto, quentinho e embalado esperando por você no balcão! 🍕✨
 
-🏢 *Local de Retirada:* Av Canaã, 4065 - Ariquemes - RO
+🏢 *Local de Retirada:* Av. Canaã, 4065 - Setor 04 (esquina, ao lado da Rumotos), Ariquemes - RO
 ⏰ Pode passar para retirar a qualquer momento.
 
 Estamos te esperando! 💛`

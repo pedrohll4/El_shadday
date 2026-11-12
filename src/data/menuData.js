@@ -1,11 +1,12 @@
 import { isSupabaseConfigured } from '../services/supabaseClient.js';
+import { STORE_ADDRESS, fixLegacyStoreAddress } from './branchesData.js';
 
 export const RESTAURANT_INFO = {
   name: "El Shadday Delivery Esfirraria e Pizzaria",
   shortName: "El Shadday",
   phone: "5569992228682",
   phoneFormatted: "(69) 99222-8682",
-  address: "Av Canaã, 4065 - Ariquemes - RO, 76875-818",
+  address: STORE_ADDRESS,
   mapsUrl: "https://www.google.com/maps/search/?api=1&query=-9.9130722,-63.0289001",
   deliveryTime: "45 - 75 min",
   openingHours: "Terça a Domingo: 18:00 às 23:30",
@@ -38,8 +39,8 @@ export const ARIQUEMES_DISTRICTS = [
   // --- BAIRROS R$ 8,00 ---
   { id: "setor-01", name: "Setor 01", price: 8 },
   { id: "setor-02", name: "Setor 02", price: 8 },
-  { id: "setor-03", name: "Setor 03 (Próximo à Loja)", price: 8 },
-  { id: "setor-04", name: "Setor 04", price: 8 },
+  { id: "setor-03", name: "Setor 03", price: 8 },
+  { id: "setor-04", name: "Setor 04 (Próximo à Loja)", price: 8 },
   { id: "setor-05", name: "Setor 05", price: 8 },
   { id: "setor-06", name: "Setor 06", price: 8 },
   { id: "setor-07", name: "Setor 07", price: 8 },
@@ -1386,6 +1387,7 @@ export function getStoredRestaurantInfo() {
         return { 
           ...RESTAURANT_INFO, 
           ...parsed,
+          address: fixLegacyStoreAddress(parsed.address) || RESTAURANT_INFO.address,
           isOpen: parsed.isOpen !== undefined ? parsed.isOpen : RESTAURANT_INFO.isOpen,
           closedMessage: parsed.closedMessage || RESTAURANT_INFO.closedMessage,
           reopenTime: parsed.reopenTime || RESTAURANT_INFO.reopenTime,

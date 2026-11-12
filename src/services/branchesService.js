@@ -1,4 +1,4 @@
-import { BRANCHES as INITIAL_BRANCHES, DEFAULT_BRANCH_ID } from '../data/branchesData.js';
+import { BRANCHES as INITIAL_BRANCHES, DEFAULT_BRANCH_ID, getStoredBranches as readBranchesWithMigration } from '../data/branchesData.js';
 
 const STORAGE_BRANCHES_KEY = 'el_shadday_branches_v2';
 
@@ -8,7 +8,8 @@ export function getStoredBranches() {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
+        // Corrige endereço antigo salvo (Rua Maceió) automaticamente
+        return readBranchesWithMigration();
       }
     }
   } catch (e) {

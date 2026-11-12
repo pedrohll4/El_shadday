@@ -1,4 +1,4 @@
-import { getStoredBranches } from '../data/branchesData';
+import { getStoredBranches, fixLegacyStoreAddress, STORE_ADDRESS } from '../data/branchesData';
 import { getBranchWhatsApp, sendEngineDirectMessage } from './whatsappBranchService';
 
 const STORAGE_SETTINGS_KEY = 'el_shadday_whatsapp_settings_v1';
@@ -155,7 +155,7 @@ export function buildStatusMessage({ order, statusType, branch, reason = '' }) {
   const orderId = order?.orderId || 'S/N';
   const branchName = branch?.displayName || branch?.name || order?.branchName || 'El Shadday Ariquemes';
   const branchPhone = branch?.phoneFormatted || branch?.whatsappFormatted || '(69) 99222-8682';
-  const branchAddress = branch?.address || 'Rua Maceió, 2333 - Setor 03, Ariquemes - RO';
+  const branchAddress = fixLegacyStoreAddress(branch?.address) || STORE_ADDRESS;
   const isBalcao = order?.deliveryType === 'balcao' || order?.deliveryType === 'retirada';
   const deliveryAddress = order?.address ? `${order.address}${order.number ? `, Nº ${order.number}` : ''}${order.district ? ` (${order.district})` : ''}` : '';
 

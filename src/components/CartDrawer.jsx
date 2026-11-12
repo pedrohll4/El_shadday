@@ -471,7 +471,7 @@ export function CartDrawer({
                     }`}
                   >
                     <div className="text-xs sm:text-sm font-bold">🏪 Retirada</div>
-                    <div className="text-[11px] text-emerald-400">Sem taxa (Setor 03)</div>
+                    <div className="text-[11px] text-emerald-400">Sem taxa (Setor 04)</div>
                   </button>
                 </div>
               </div>
@@ -510,7 +510,7 @@ export function CartDrawer({
                       </label>
                       <input
                         type="text"
-                        placeholder="Ex: Rua Maceió"
+                        placeholder="Ex: Av. Canaã"
                         value={streetAddress}
                         onChange={(e) => setStreetAddress(e.target.value)}
                         className="w-full px-3 py-2 rounded-xl bg-dark-900 border border-dark-750 text-white text-xs focus:outline-none focus:border-brand-gold"
@@ -522,7 +522,7 @@ export function CartDrawer({
                       </label>
                       <input
                         type="text"
-                        placeholder="Ex: 2333"
+                        placeholder="Ex: 4065"
                         value={addressNumber}
                         onChange={(e) => setAddressNumber(e.target.value)}
                         className="w-full px-3 py-2 rounded-xl bg-dark-900 border border-dark-750 text-white text-xs focus:outline-none focus:border-brand-gold"

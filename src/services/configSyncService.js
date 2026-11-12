@@ -8,6 +8,7 @@
 
 import { supabase, isSupabaseConfigured } from './supabaseClient';
 import { saveStoredProducts, saveStoredPromoSettings, getStoredRestaurantInfo, saveStoredRestaurantInfo, saveStoredPizzaFlavors, saveStoredAcaiSettings, saveStoredDistricts, saveStoredCategories, saveStoredExtraSauceConfig, stripPrivateCardMachineSettings } from '../data/menuData';
+import { fixLegacyStoreAddress } from '../data/branchesData';
 import { saveStoredBuffetGallery, saveUnavailableBuffetItemIds, getUnavailableBuffetItemIds, saveStoredBuffetCategories } from '../buffet/buffetData';
 
 const CONFIG_TOPIC = 'el-shadday-config-sync-ariquemes-v2';
@@ -205,7 +206,7 @@ export function mapCompanySettingsToStore(data, currentStore = {}) {
     ...(data.name ? { name: data.name } : {}),
     ...(data.phone ? { phone: data.phone } : {}),
     ...(data.phone_display ? { phoneFormatted: data.phone_display } : {}),
-    ...(data.address ? { address: data.address } : {}),
+    ...(data.address ? { address: fixLegacyStoreAddress(data.address) } : {}),
     ...(data.pix_key ? { pixKey: data.pix_key } : {}),
     ...(data.pix_name ? { pixName: data.pix_name } : {}),
     ...(data.delivery_active !== undefined && data.delivery_active !== null ? { isOpen: data.delivery_active } : {}),

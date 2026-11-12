@@ -1,3 +1,24 @@
+// Endereço atual da loja (Ariquemes). Usado nas mensagens de WhatsApp e no site.
+export const STORE_ADDRESS = 'Av. Canaã, 4065 - Setor 04 (esquina, ao lado da Rumotos), Ariquemes - RO';
+
+// Troca automaticamente o endereço antigo (Rua Maceió / Setor 03) que pode ter
+// ficado salvo no navegador ou no banco pelo endereço novo.
+export function fixLegacyStoreAddress(address) {
+  if (!address || typeof address !== 'string') return address;
+  if (/macei[oó]/i.test(address) || /^Av.? Canaã, 4065 - Ariquemes/i.test(address)) return STORE_ADDRESS;
+  return address;
+}
+
+function migrateBranches(list) {
+  let changed = false;
+  const fixed = list.map(b => {
+    const addr = fixLegacyStoreAddress(b?.address);
+    if (b && addr !== b.address) { changed = true; return { ...b, address: addr }; }
+    return b;
+  });
+  return { fixed, changed };
+}
+
 export const BRANCHES = [
   {
     id: 'ariquemes',
@@ -6,7 +27,7 @@ export const BRANCHES = [
     subtitle: 'Matriz • Delivery & Balcão',
     status: 'active', // 'active' | 'construction' | 'closed'
     badge: 'Aberta para Pedidos',
-    address: 'Rua Maceió, 2333 - Setor 03, Ariquemes - RO',
+    address: 'Av. Canaã, 4065 - Setor 04 (esquina, ao lado da Rumotos), Ariquemes - RO',
     phone: '5569992228682',
     phoneFormatted: '(69) 99222-8682',
     whatsapp: '5569992228682',
@@ -57,7 +78,11 @@ export function getStoredBranches() {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
+        const { fixed, changed } = migrateBranches(parsed);
+        if (changed) {
+          try { localStorage.setItem(STORAGE_BRANCHES_KEY, JSON.stringify(fixed)); } catch (e) {}
+        }
+        return fixed;
       }
     }
   } catch (e) {

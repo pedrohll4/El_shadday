@@ -26,7 +26,7 @@ export function OrderConfirmationView({ order, onBackToMenu }) {
         message += `🧭 *Referência:* ${order.reference}\n`;
       }
     } else {
-      message += `📍 *Retirada:* R. Maceió, 2333 - Setor 03 (Balcão)\n`;
+      message += `📍 *Retirada:* Av. Canaã, 4065 - Setor 04 (esquina, ao lado da Rumotos), Ariquemes - RO (Balcão)\n`;
     }
 
     message += `\n*ITENS CONFIRMADOS:*\n`;
