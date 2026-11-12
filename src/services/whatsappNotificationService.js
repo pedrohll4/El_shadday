@@ -280,6 +280,12 @@ export async function sendCustomerWhatsAppNotification({
 }) {
   if (!order) return { success: false, error: 'Pedido inválido' };
 
+  // Pedido concluído/entregue nunca dispara mensagem automática para o cliente.
+  // (Só o envio manual pelo botão 'Avisar Cliente' continua possível.)
+  if (!forceOpen && String(statusType).toUpperCase() === 'CONCLUIDO') {
+    return { success: false, reason: 'complete_never_notifies' };
+  }
+
   if (!forceOpen && shouldBlockDuplicateDispatch(order.orderId, statusType)) {
     console.log('[WhatsApp] Disparo duplicado ignorado no cliente:', order.orderId, statusType);
     return { success: true, duplicateIgnored: true };

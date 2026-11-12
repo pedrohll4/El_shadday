@@ -668,6 +668,17 @@ function initSupabaseOrderWatcher() {
 
             let notifyType = normalizeStatusKey(status);
 
+            // Pedido concluído/entregue NÃO manda mensagem pro cliente.
+            // Só manda aviso de cancelamento (com o motivo) quando a cozinha cancela.
+            if (notifyType === 'CONCLUIDO') {
+              console.log(`[Supabase Realtime] Pedido #${orderId} concluído - sem mensagem para o cliente`);
+              return;
+            }
+
+            // Cancelamento: quem manda é o painel, junto com o motivo digitado pela cozinha.
+            // (Aqui o motivo não está no banco, então não envia para não sair sem motivo ou repetido.)
+            if (notifyType === 'CANCELADO') return;
+
             if (!tryAcquireSendLock(orderId, notifyType)) {
               console.log(`[Supabase Realtime] ⚠️ Ignorando UPDATE duplicado para #${orderId} (${notifyType})`);
               return;
