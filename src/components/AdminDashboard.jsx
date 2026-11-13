@@ -55,6 +55,7 @@ import { BoxBuilderModal } from './BoxBuilderModal';
 import { ComboCustomizerModal } from './ComboCustomizerModal';
 import { AcaiCustomizerModal } from './AcaiCustomizerModal';
 import { EditOrderItemsModal } from './EditOrderItemsModal';
+import { EditOrderCustomerModal } from './EditOrderCustomerModal';
 import { 
   GALLERY_CATEGORIES, 
   INITIAL_BUFFET_GALLERY, 
@@ -352,6 +353,7 @@ export function AdminDashboard({
   // Change Payment / Cash Change Modal State (KDS / Cozinha)
   const [changePaymentModalOrder, setChangePaymentModalOrder] = useState(null);
   const [editItemsModalOrder, setEditItemsModalOrder] = useState(null);
+  const [editCustomerModalOrder, setEditCustomerModalOrder] = useState(null);
   const [editPaymentType, setEditPaymentType] = useState('pix'); // 'pix' | 'dinheiro' | 'credito' | 'debito' | 'misto'
   const [editCashChange, setEditCashChange] = useState('');
   const [editPaymentStatus, setEditPaymentStatus] = useState('PENDENTE_COBRANCA'); // 'PENDENTE_COBRANCA' | 'PAGO_APROVADO'
@@ -4851,6 +4853,18 @@ export function AdminDashboard({
                                     <span>{order.customerPhone}</span>
                                   </span>
                                 )}
+
+                                {!isCancelled && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditCustomerModalOrder(order)}
+                                    className="px-2 py-0.5 rounded bg-brand-gold/15 hover:bg-brand-gold/25 border border-brand-gold/40 text-[10px] font-black text-brand-gold flex items-center gap-1 transition-all cursor-pointer flex-shrink-0"
+                                    title="Corrigir nome, telefone, endereço ou trocar entre retirada e entrega"
+                                  >
+                                    <Edit2 className="w-2.5 h-2.5" />
+                                    <span>Editar Cliente</span>
+                                  </button>
+                                )}
                               </div>
                             </div>
 
@@ -6682,9 +6696,20 @@ export function AdminDashboard({
 
                             {/* Customer Info */}
                             <div className="space-y-1">
-                              <div className="text-sm font-bold text-white flex items-center gap-1.5">
+                              <div className="text-sm font-bold text-white flex items-center gap-1.5 min-w-0">
                                 <User className="w-3.5 h-3.5 text-brand-gold flex-shrink-0" />
-                                <span className="truncate">{order.customerName || 'Cliente Balcão'}</span>
+                                <span className="truncate min-w-0">{order.customerName || 'Cliente Balcão'}</span>
+                                {normalizeOrderStatus(order) !== 'CANCELADO' && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditCustomerModalOrder(order)}
+                                    className="ml-auto px-2 py-0.5 rounded bg-brand-gold/15 hover:bg-brand-gold/25 border border-brand-gold/40 text-[10px] font-black text-brand-gold flex items-center gap-1 transition-all cursor-pointer flex-shrink-0"
+                                    title="Corrigir nome, telefone, endereço, pagamento ou trocar entre retirada e entrega"
+                                  >
+                                    <Edit2 className="w-2.5 h-2.5" />
+                                    <span>Editar</span>
+                                  </button>
+                                )}
                               </div>
 
                               <div className="flex items-center gap-3 text-xs text-slate-400 flex-wrap">
@@ -11028,6 +11053,25 @@ export function AdminDashboard({
             const handler = onUpdateOrderDetails || onUpdatePaymentMethod;
             if (handler) handler(editItemsModalOrder.orderId, updates);
             setEditItemsModalOrder(null);
+          }}
+        />
+      )}
+
+      {editCustomerModalOrder && (
+        <EditOrderCustomerModal
+          order={editCustomerModalOrder}
+          districts={districtsList}
+          formatOrderNumber={formatOrderNumber}
+          onClose={() => setEditCustomerModalOrder(null)}
+          onOpenPayment={() => {
+            const o = editCustomerModalOrder;
+            setEditCustomerModalOrder(null);
+            handleOpenChangePaymentModal(o);
+          }}
+          onSave={(updates) => {
+            const handler = onUpdateOrderDetails || onUpdatePaymentMethod;
+            if (handler) handler(editCustomerModalOrder.orderId, updates);
+            setEditCustomerModalOrder(null);
           }}
         />
       )}
