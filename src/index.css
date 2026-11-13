@@ -6,6 +6,7 @@
   html, body, #root {
     max-width: 100vw;
     overflow-x: hidden;
+    overflow-x: clip; /* corta a sobra lateral sem quebrar as barras fixas (sticky) */
     position: relative;
     -webkit-tap-highlight-color: transparent;
     -webkit-font-smoothing: antialiased;
@@ -171,3 +172,15 @@
   transform: scale(1.06);
 }
 
+
+/* Folha que sobe de baixo (vitrine do cliente) */
+@keyframes sheet-up {
+  from { transform: translateY(24px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.animate-sheet-up { animation: sheet-up 0.22s ease-out; }
+
+/* Detalhe do pedido no painel: letras e botões maiores para ler de longe */
+.kds-detail-zoom { zoom: 1.12; }
+@media (min-width: 640px) { .kds-detail-zoom { zoom: 1.3; } }
+@media (min-width: 1280px) { .kds-detail-zoom { zoom: 1.4; } }

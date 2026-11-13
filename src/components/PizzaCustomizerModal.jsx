@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { StepFlow, OptionRow, OptionFilters, NotesStep, money } from './storefront/StepFlow';
 import { X, Pizza, Check, Sparkles, AlertCircle, Info, Search, Flame, ArrowUpRight, Wine, Plus } from 'lucide-react';
 import { 
   getStoredPizzaFlavors, 
@@ -8,6 +9,7 @@ import {
   INITIAL_PIZZA_FLAVORS,
   BEVERAGE_OPTIONS,
   DYDYO_FLAVORS,
+  getAutoFlavorImage,
   getStoredExtraSauceConfig
 } from '../data/menuData';
 
@@ -178,7 +180,7 @@ export function PizzaCustomizerModal({ isOpen, onClose, pizzaProduct, onAddPizza
     }
   };
 
-  const handleConfirm = () => {
+  const handleConfirm = (qty = 1) => {
     if (selectedFlavors.length === 0) return;
 
     const flavorNames = selectedFlavors.map(f => f.name);
@@ -216,459 +218,155 @@ export function PizzaCustomizerModal({ isOpen, onClose, pizzaProduct, onAddPizza
       description: `Sabores: ${flavorNames.join(' e ')}.${pizzaProduct.bordaGratis ? ' Acompanha borda de Catupiry grátis.' : ''}${upgradeText}${beverageText}${sauceText}${notes ? ` Obs: ${notes}` : ''}`
     };
 
-    onAddPizzaToCart(customPizza);
+    onAddPizzaToCart({ ...customPizza, quantity: Math.max(1, Number(qty) || 1) });
     onClose();
   };
 
   const isComplete = selectedFlavors.length > 0;
 
-  return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-dark-950/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 animate-fade-in">
-      <div className="relative w-full max-w-xl bg-dark-900 border border-brand-gold/40 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
-        
-        {/* Header */}
-        <div className="p-4 sm:p-5 border-b border-dark-800 bg-gradient-to-r from-dark-900 to-dark-850 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-brand-gold/20 flex items-center justify-center text-brand-gold border border-brand-gold/30 flex-shrink-0">
-              <Pizza className="w-5 h-5" />
-            </div>
-            <div>
-              <h2 className="font-display font-extrabold text-base sm:text-lg text-white leading-tight">
-                {pizzaProduct.name}
-              </h2>
-              <div className="flex items-center gap-2 mt-0.5">
-                <span className="text-xs text-brand-gold font-bold">
-                  Escolha até {maxFlavors} {maxFlavors === 1 ? 'sabor' : 'sabores'} ({selectedFlavors.length}/{maxFlavors})
-                </span>
-                <span className="text-[11px] text-slate-400">• Base: R$ {basePrice.toFixed(2).replace('.', ',')}</span>
-              </div>
-            </div>
-          </div>
+  const sauceActive = extraSauceConfig?.active !== false;
+  const CATEGORY_LABELS = { salgadas: 'Salgadas', especiais: 'Especiais', doces: 'Doces' };
 
-          <button
-            onClick={onClose}
-            className="w-9 h-9 rounded-full bg-dark-800 hover:bg-dark-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors cursor-pointer flex-shrink-0"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Closed Store Alert */}
-        {!isStoreOpen && (
-          <div className="bg-red-950/90 border-b border-red-500/30 px-4 py-2 flex items-center justify-center gap-2 text-xs font-bold text-red-200">
-            <span>⛔ Estabelecimento Fechado • Apenas visualização de sabores (pedidos pausados)</span>
-          </div>
-        )}
-
-        {/* Borda Grátis Banner */}
-        {pizzaProduct.bordaGratis && (
-          <div className="bg-gradient-to-r from-amber-500/20 via-brand-gold/25 to-amber-500/20 border-b border-brand-gold/30 px-4 py-2 flex items-center justify-center gap-2 text-xs font-bold text-brand-goldLight">
-            <Sparkles className="w-4 h-4 text-brand-gold animate-pulse" />
-            <span>Borda Recheada de Catupiry 100% GRÁTIS Inclusa!</span>
-          </div>
-        )}
-
-        {/* Pricing Notice */}
-        <div className="bg-dark-950/80 px-4 py-2 border-b border-dark-800 flex items-center gap-2 text-[11px] text-slate-300">
-          <Info className="w-3.5 h-3.5 text-brand-gold flex-shrink-0" />
-          <span>
-            <strong className="text-white">Regra de Preço:</strong> Cobrado pelo sabor de <strong>maior valor</strong> selecionado. Sabores com valor igual ou inferior ao preço base não agregam acréscimo.
-          </span>
-        </div>
-
-        {/* Search & Category Filter */}
-        <div className="p-3.5 sm:px-5 sm:pt-4 border-b border-dark-800/80 bg-dark-900 space-y-2.5">
-          <div className="relative">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-            <input
-              type="text"
-              placeholder="Buscar sabor por nome ou ingredientes..."
-              value={flavorSearch}
-              onChange={(e) => setFlavorSearch(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 text-xs rounded-xl bg-dark-850 border border-dark-800 text-white placeholder-slate-500 focus:outline-none focus:border-brand-gold"
-            />
-          </div>
-
-          {/* Category Filter Pills */}
-          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-0.5">
-            <button
-              type="button"
-              onClick={() => setCategoryFilter('todos')}
-              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-colors cursor-pointer ${
-                categoryFilter === 'todos'
-                  ? 'bg-brand-gold text-dark-950 font-black'
-                  : 'bg-dark-800 text-slate-300 hover:bg-dark-750'
-              }`}
-            >
-              Todos ({availableFlavors.length})
-            </button>
-            {availableCategories.map(cat => {
-              const label = cat === 'salgadas' ? 'Salgadas 🧀' : cat === 'especiais' ? 'Especiais ⭐' : cat === 'doces' ? 'Doces 🍫' : cat;
+  const steps = [
+    {
+      id: 'sabores',
+      title: maxFlavors > 1 ? `Escolha até ${maxFlavors} sabores` : 'Escolha o sabor',
+      shortTitle: 'Sabores',
+      hint: 'O valor final será o do sabor mais caro escolhido.',
+      min: 1,
+      max: maxFlavors,
+      count: selectedFlavors.length,
+      missingText: 'Escolha pelo menos 1 sabor para continuar',
+      content: (
+        <div>
+          <OptionFilters
+            search={flavorSearch}
+            onSearch={setFlavorSearch}
+            categories={availableCategories}
+            active={categoryFilter}
+            onCategory={setCategoryFilter}
+            labels={CATEGORY_LABELS}
+          />
+          <div className="space-y-2">
+            {filteredFlavors.length === 0 && (
+              <p className="py-8 text-center text-sm text-slate-500">Nenhum sabor encontrado.</p>
+            )}
+            {[...filteredFlavors].sort((a, b) => (Number(getPizzaFlavorPrice(a, sizeKey, basePrice)) || 0) - (Number(getPizzaFlavorPrice(b, sizeKey, basePrice)) || 0)).map(flavor => {
+              const isSel = selectedFlavors.some(f => f.id === flavor.id || f.name === flavor.name);
+              const flavorPrice = Math.max(basePrice, Number(getPizzaFlavorPrice(flavor, sizeKey, basePrice)) || 0);
               return (
-                <button
-                  key={cat}
-                  type="button"
-                  onClick={() => setCategoryFilter(cat)}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-colors cursor-pointer capitalize ${
-                    categoryFilter === cat
-                      ? 'bg-brand-gold text-dark-950 font-black'
-                      : 'bg-dark-800 text-slate-300 hover:bg-dark-750'
-                  }`}
-                >
-                  {label}
-                </button>
+                <OptionRow
+                  key={flavor.id || flavor.name}
+                  title={flavor.name}
+                  description={flavor.description}
+                  priceText={money(flavorPrice)}
+                  image={flavor.image || (flavor.imageRemoved ? null : getAutoFlavorImage(flavor))}
+                  imageFit="contain"
+                  selected={isSel}
+                  disabled={!isSel && selectedFlavors.length >= maxFlavors}
+                  onClick={() => toggleFlavor(flavor)}
+                />
               );
             })}
           </div>
         </div>
-
-        {/* Flavor Selector List */}
-        <div className="flex-1 overflow-y-auto p-3.5 sm:p-5 space-y-2">
-          {filteredFlavors.length === 0 ? (
-            <div className="text-center py-8 text-slate-500 text-xs">
-              Nenhum sabor encontrado para a busca informada.
-            </div>
-          ) : (
-            filteredFlavors.map((flavor) => {
-              const isSelected = selectedFlavors.some(f => f.id === flavor.id || f.name === flavor.name);
-              const isDisabled = !isSelected && selectedFlavors.length >= maxFlavors;
-              const flavorPriceForSize = getPizzaFlavorPrice(flavor, sizeKey, basePrice);
-              const isStandard = flavorPriceForSize <= basePrice && flavor.category !== 'especiais';
-              const effectivePrice = isStandard ? basePrice : flavorPriceForSize;
-              const isFlavorMoreExpensive = effectivePrice > basePrice;
-
-              const imageSrc = flavor.image || '';
-
-              return (
-                <button
-                  key={flavor.id || flavor.name}
-                  type="button"
-                  onClick={() => toggleFlavor(flavor)}
-                  disabled={isDisabled}
-                  className={`w-full p-2.5 sm:p-3 rounded-2xl border text-left flex items-center justify-between gap-3 transition-all cursor-pointer group ${
-                    isSelected
-                      ? 'bg-brand-gold/15 border-brand-gold text-white font-bold shadow-md'
-                      : isDisabled
-                      ? 'bg-dark-900/40 border-dark-800 text-slate-500 opacity-40 cursor-not-allowed'
-                      : 'bg-dark-850 hover:bg-dark-800 text-slate-200 border-dark-800 hover:border-dark-700'
-                  }`}
-                >
-                  {/* Left: Illustrated transparent-background pizza photo */}
-                  <div className="relative w-14 h-14 sm:w-16 sm:h-16 flex-shrink-0 flex items-center justify-center rounded-xl bg-dark-900/80 border border-dark-800/80 p-1 group-hover:scale-105 transition-transform">
-                    {imageSrc ? (
-                      <img
-                        src={imageSrc}
-                        alt={flavor.name}
-                        className="w-full h-full object-contain filter drop-shadow-md"
-                        loading="lazy"
-                        onError={(e) => {
-                          e.currentTarget.style.display = 'none';
-                        }}
-                      />
-                    ) : (
-                      <Pizza className="w-6 h-6 sm:w-7 sm:h-7 text-brand-gold/60" />
-                    )}
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs sm:text-sm font-bold text-white">
-                        {flavor.name}
-                      </span>
-                      {flavor.category && (
-                        <span className={`text-[10px] px-1.5 py-0.2 rounded font-medium ${
-                          flavor.category === 'especiais' 
-                            ? 'bg-amber-400/20 text-amber-300 border border-amber-400/30' 
-                            : flavor.category === 'doces'
-                            ? 'bg-pink-400/20 text-pink-300 border border-pink-400/30'
-                            : 'bg-slate-800 text-slate-400'
-                        }`}>
-                          {flavor.category === 'especiais' ? 'Especial ⭐' : flavor.category === 'doces' ? 'Doce 🍫' : 'Tradicional'}
-                        </span>
-                      )}
-                    </div>
-
-                    {flavor.description && (
-                      <p className="text-[11px] text-slate-400 line-clamp-1 sm:line-clamp-2 mt-0.5 font-normal">
-                        {flavor.description}
-                      </p>
-                    )}
-
-                    {/* Preço do Sabor */}
-                    <div className="mt-1 flex items-center gap-2 flex-wrap">
-                      {isStandard ? (
-                        <span className="text-[10px] text-emerald-400 font-semibold">
-                          Incluso no tamanho (Sem acréscimo)
-                        </span>
-                      ) : (
-                        <>
-                          <span className="text-xs font-black text-brand-gold">
-                            R$ {flavorPriceForSize.toFixed(2).replace('.', ',')}
-                          </span>
-                          {isFlavorMoreExpensive ? (
-                            <span className="inline-flex items-center gap-0.5 text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold">
-                              <ArrowUpRight className="w-3 h-3 text-amber-400" />
-                              <span>Puxa p/ R$ {flavorPriceForSize.toFixed(2).replace('.', ',')}</span>
-                            </span>
-                          ) : (
-                            <span className="text-[10px] text-emerald-400 font-semibold">
-                              (Sem acréscimo)
-                            </span>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Selection Checkbox */}
-                  <div className={`w-5 h-5 rounded-md flex items-center justify-center border flex-shrink-0 mt-1 transition-all ${
-                    isSelected
-                      ? 'bg-brand-gold border-brand-gold text-dark-950'
-                      : 'border-slate-600 bg-dark-900'
-                  }`}>
-                    {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
-                  </div>
-                </button>
-              );
-            })
-          )}
-
-          {/* 1. SELEÇÃO DE REFRIGERANTE / BEBIDA */}
-          {isDydyoIncluded ? (
-            <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-dark-950 to-dark-900 border border-amber-500/40 space-y-2.5">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
-                  <span className="text-base">🥤</span>
-                  <span>Escolha o Sabor do seu Dydyo 2L:</span>
-                </span>
-                <span className="text-[10px] text-amber-300 font-bold bg-amber-500/15 px-2 py-0.5 rounded border border-amber-500/30">
-                  Incluso no Combo
-                </span>
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {DYDYO_FLAVORS.map((dydyo) => {
-                  const isSelected = selectedDydyo === dydyo.name;
-                  return (
-                    <button
-                      key={dydyo.id}
-                      type="button"
-                      onClick={() => setSelectedDydyo(dydyo.name)}
-                      className={`p-2.5 rounded-xl border text-left transition-all flex items-center gap-2 cursor-pointer ${
-                        isSelected
-                          ? 'bg-amber-500/20 border-amber-400 text-white ring-1 ring-amber-400/50 shadow-md'
-                          : 'bg-dark-850 hover:bg-dark-800 border-dark-750 text-slate-300'
-                      }`}
-                    >
-                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
-                        isSelected ? 'border-amber-400 bg-amber-400 text-dark-950' : 'border-dark-600'
-                      }`}>
-                        {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="text-xs font-bold leading-tight truncate">{dydyo.flavor}</div>
-                        <div className="text-[10px] text-slate-400 truncate">{dydyo.badge || '2L Gelado'}</div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ) : (
-            <div className="p-3.5 sm:p-4 rounded-2xl bg-dark-900 border border-dark-750 space-y-2.5">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
-                  <span className="text-base">🥤</span>
-                  <span>Deseja Adicionar Refrigerante ou Bebida Gelada? (Opcional)</span>
-                </label>
-                <span className="text-[10px] text-slate-400 bg-dark-800 px-2 py-0.5 rounded">
-                  {selectedBeverageId === 'none' ? 'Sem Bebida' : 'Bebida Adicionada'}
-                </span>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-52 overflow-y-auto pr-1">
-                {/* Opção Sem Bebida */}
-                <button
-                  type="button"
-                  onClick={() => setSelectedBeverageId('none')}
-                  className={`p-2.5 rounded-xl border text-left transition-all flex items-center justify-between cursor-pointer ${
-                    selectedBeverageId === 'none'
-                      ? 'bg-brand-gold/15 border-brand-gold text-white font-bold'
-                      : 'bg-dark-850 hover:bg-dark-800 border-dark-800 text-slate-400'
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
-                      selectedBeverageId === 'none' ? 'border-brand-gold bg-brand-gold text-dark-950' : 'border-dark-600'
-                    }`}>
-                      {selectedBeverageId === 'none' && <Check className="w-3 h-3 stroke-[3]" />}
-                    </div>
-                    <span className="text-xs font-semibold">Apenas a pizza (Sem bebida)</span>
-                  </div>
-                  <span className="text-[11px] text-slate-400">R$ 0,00</span>
-                </button>
-
-                {/* Lista de Bebidas Disponíveis */}
-                {BEVERAGE_OPTIONS.map((bev) => {
-                  const isSelected = selectedBeverageId === bev.id;
-                  return (
-                    <button
-                      key={bev.id}
-                      type="button"
-                      onClick={() => setSelectedBeverageId(bev.id)}
-                      className={`p-2.5 rounded-xl border text-left transition-all flex items-center justify-between cursor-pointer ${
-                        isSelected
-                          ? 'bg-amber-500/20 border-amber-400 text-white font-bold shadow-md'
-                          : 'bg-dark-850 hover:bg-dark-800 border-dark-800 text-slate-300'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
-                          isSelected ? 'border-amber-400 bg-amber-400 text-dark-950' : 'border-dark-600'
-                        }`}>
-                          {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
-                        </div>
-                        <div className="min-w-0 truncate">
-                          <span className="text-xs block truncate font-medium">{bev.name}</span>
-                          {bev.badge && <span className="text-[9px] text-amber-300 font-normal">{bev.badge}</span>}
-                        </div>
-                      </div>
-                      <span className="text-xs font-black text-amber-300 whitespace-nowrap ml-2">
-                        + R$ {bev.price.toFixed(2).replace('.', ',')}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* 2. SELEÇÃO DE MOLHO EXTRA DA CASA */}
-          {extraSauceConfig?.active !== false && (
-            <div className={`p-3.5 sm:p-4 rounded-2xl border transition-all ${
-              wantsExtraSauce 
-                ? 'bg-amber-500/15 border-amber-400 shadow-md ring-1 ring-amber-400/40' 
-                : 'bg-dark-900 border-dark-750'
-            }`}>
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-start gap-2.5 min-w-0">
-                  <span className="text-xl flex-shrink-0">🧂</span>
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs font-bold text-white">
-                        {extraSauceConfig.name || 'Molho Especial da Casa'}
-                      </span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-black border border-amber-500/30">
-                        + R$ {Number(extraSauceConfig.price || 0).toFixed(2).replace('.', ',')}
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-slate-400 mt-0.5">
-                      {extraSauceConfig.description || 'Pote generoso de molho artesanal especial da El Shadday (perfeito para bordas e recheios).'}
-                    </p>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setWantsExtraSauce(!wantsExtraSauce)}
-                  className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap flex-shrink-0 ${
-                    wantsExtraSauce
-                      ? 'bg-amber-400 text-dark-950 shadow-md scale-102'
-                      : 'bg-dark-800 hover:bg-dark-750 text-slate-300 border border-dark-700'
-                  }`}
-                >
-                  <Check className={`w-3.5 h-3.5 stroke-[3] ${wantsExtraSauce ? 'opacity-100' : 'opacity-30'}`} />
-                  <span>{wantsExtraSauce ? 'Molho Adicionado' : 'Adicionar Molho'}</span>
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Observations */}
-          <div className="pt-1">
-            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
-              Observações (opcional):
-            </label>
-            <input
-              type="text"
-              placeholder="Ex: Sem cebola em uma metade, massa bem crocante, orégano à parte..."
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-dark-850 border border-dark-800 text-white placeholder-slate-500 focus:outline-none focus:border-brand-gold"
+      )
+    },
+    isDydyoIncluded ? {
+      id: 'refri',
+      title: 'Escolha o refri (já incluso)',
+      shortTitle: 'Refri',
+      min: 1,
+      max: 1,
+      count: selectedDydyo ? 1 : 0,
+      content: (
+        <div className="space-y-2">
+          {DYDYO_FLAVORS.map(d => (
+            <OptionRow
+              key={d.id}
+              title={d.name}
+              description={d.description}
+              image={d.image || null}
+              badge={d.badge}
+              multi={false}
+              selected={selectedDydyo === d.name}
+              onClick={() => setSelectedDydyo(d.name)}
             />
-          </div>
+          ))}
         </div>
-
-        {/* Footer */}
-        <div className="p-4 sm:p-5 border-t border-dark-800 bg-dark-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-400">Total da Pizza:</span>
-              {isPriceUpgraded && (
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold flex items-center gap-1">
-                  <Flame className="w-2.5 h-2.5 text-amber-400" />
-                  <span>Maior sabor</span>
-                </span>
-              )}
-            </div>
-            <div className="flex items-baseline gap-2">
-              <div className="text-2xl font-black text-brand-gold">
-                R$ {totalPizzaPrice.toFixed(2).replace('.', ',')}
-              </div>
-              {(isPriceUpgraded || beveragePrice > 0 || extraSaucePrice > 0) && (
-                <div className="text-[11px] text-slate-500 line-through">
-                  R$ {basePrice.toFixed(2).replace('.', ',')}
-                </div>
-              )}
-            </div>
-            
-            {/* Detalhamento de Adicionais no rodapé */}
-            <div className="flex flex-wrap items-center gap-2 mt-0.5 text-[10px] text-slate-400">
-              {isPriceUpgraded && highestPricedFlavor && (
-                <span className="text-amber-300 font-medium">
-                  Sabor: {highestPricedFlavor.name}
-                </span>
-              )}
-              {beveragePrice > 0 && selectedBeverage && (
-                <span className="text-cyan-300 font-medium">
-                  • Bebida: +R$ {beveragePrice.toFixed(2).replace('.', ',')}
-                </span>
-              )}
-              {extraSaucePrice > 0 && (
-                <span className="text-amber-200 font-medium">
-                  • Molho: +R$ {extraSaucePrice.toFixed(2).replace('.', ',')}
-                </span>
-              )}
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2.5 rounded-xl bg-dark-850 hover:bg-dark-800 text-slate-300 font-semibold text-xs cursor-pointer"
-            >
-              Cancelar
-            </button>
-            <button
-              type="button"
-              onClick={handleConfirm}
-              disabled={!isComplete || !isStoreOpen}
-              className={`px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center gap-1.5 transition-all ${
-                !isStoreOpen
-                  ? 'bg-dark-800 text-slate-500 border border-red-500/30 cursor-not-allowed'
-                  : isComplete
-                  ? 'bg-brand-gold hover:bg-amber-400 text-dark-950 shadow-glow-gold cursor-pointer hover:scale-102'
-                  : 'bg-dark-800 text-slate-500 cursor-not-allowed'
-              }`}
-            >
-              <Check className="w-4 h-4 stroke-[3]" />
-              <span>{!isStoreOpen ? '⛔ Fechado para Pedidos' : 'Adicionar Pizza'}</span>
-            </button>
-          </div>
+      )
+    } : {
+      id: 'bebida',
+      title: 'Vai querer bebida?',
+      shortTitle: 'Bebida',
+      min: 1,
+      max: 1,
+      count: 1,
+      content: (
+        <div className="space-y-2">
+          <OptionRow
+            title="Não, obrigado"
+            multi={false}
+            selected={selectedBeverageId === 'none'}
+            onClick={() => setSelectedBeverageId('none')}
+          />
+          {BEVERAGE_OPTIONS.map(b => (
+            <OptionRow
+              key={b.id}
+              title={b.name}
+              image={b.image || null}
+              priceText={`+ ${money(b.price)}`}
+              multi={false}
+              selected={selectedBeverageId === b.id}
+              onClick={() => setSelectedBeverageId(b.id)}
+            />
+          ))}
         </div>
+      )
+    },
+    sauceActive && {
+      id: 'molho',
+      title: 'Adicionar molho?',
+      shortTitle: 'Molho',
+      min: 1,
+      max: 1,
+      count: 1,
+      content: (
+        <div className="space-y-2">
+          <OptionRow title="Não precisa de molho" multi={false} selected={!wantsExtraSauce} onClick={() => setWantsExtraSauce(false)} />
+          <OptionRow
+            title={`Sim, adicionar ${extraSauceConfig.name || 'molho da casa'}`}
+            description={extraSauceConfig.description}
+            priceText={`+ ${money(extraSauceConfig.price)}`}
+            multi={false}
+            selected={wantsExtraSauce}
+            onClick={() => setWantsExtraSauce(true)}
+          />
+        </div>
+      )
+    },
+    {
+      id: 'obs',
+      title: 'Observação',
+      shortTitle: 'Observação',
+      content: <NotesStep value={notes} onChange={setNotes} />
+    }
+  ].filter(Boolean);
 
-      </div>
-    </div>
+  return (
+    <StepFlow
+      isOpen={isOpen}
+      onClose={onClose}
+      product={{
+        id: pizzaProduct.id,
+        name: pizzaProduct.name,
+        image: pizzaProduct.image,
+        description: `${pizzaProduct.description || ''}${pizzaProduct.bordaGratis ? ' Borda de Catupiry grátis.' : ''}`.trim()
+      }}
+      steps={steps}
+      unitPrice={totalPizzaPrice}
+      isStoreOpen={isStoreOpen}
+      onFinish={(qty) => handleConfirm(qty)}
+    />
   );
 }

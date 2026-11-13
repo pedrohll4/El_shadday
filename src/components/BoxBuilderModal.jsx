@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { StepFlow, OptionRow, OptionFilters, NotesStep, money } from './storefront/StepFlow';
 import { 
   X, Package, Check, Sparkles, MessageSquare, Flame 
 } from 'lucide-react';
@@ -252,7 +253,7 @@ export function BoxBuilderModal({ isOpen, onClose, onAddBoxToCart, initialBox = 
     return opt.description;
   };
 
-  const handleConfirm = () => {
+  const handleConfirm = (qty = 1) => {
     const isDoces = currentOption.hasDoces;
     const isSemSuinos = currentOption.semSuinos;
 
@@ -291,377 +292,96 @@ export function BoxBuilderModal({ isOpen, onClose, onAddBoxToCart, initialBox = 
       description: `${currentOption.displayTitle} (${isDoces ? `${salgadasCount} Salgadas + ${docesCount} Doces` : `${totalCount} Salgadas`})${isSemSuinos ? ' • 🚫 Sem carne suína' : ''}${beverageText}${sauceText}${notes.trim() ? ` • Obs: ${notes.trim()}` : ''}`
     };
 
-    onAddBoxToCart(customItem);
+    onAddBoxToCart({ ...customItem, quantity: Math.max(1, Number(qty) || 1) });
     onClose();
   };
 
-  return (
-    <div className="fixed inset-0 z-50 overflow-hidden bg-dark-950/85 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in">
-      <div className="relative w-full max-w-xl bg-dark-900 border-t sm:border border-brand-gold/40 rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col max-h-[92dvh] sm:max-h-[85vh] overflow-hidden">
-        
-        {/* Header */}
-        <div className="flex-shrink-0 p-4 sm:p-5 border-b border-dark-800 bg-gradient-to-r from-dark-950 to-dark-900 flex items-center justify-between">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-2xl bg-brand-gold/20 flex items-center justify-center text-brand-gold border border-brand-gold/30 flex-shrink-0">
-              <Package className="w-5 h-5" />
-            </div>
-            <div className="min-w-0">
-              <h2 className="font-display font-extrabold text-base sm:text-lg text-white leading-tight truncate">
-                {name}
-              </h2>
-              <p className="text-[11px] sm:text-xs text-brand-gold font-medium">
-                Pioneiros em Ariquemes • Massas frescas e artesanais todos os dias
-              </p>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-9 h-9 rounded-full bg-dark-800 hover:bg-dark-750 text-slate-400 hover:text-white flex items-center justify-center transition-colors cursor-pointer border border-dark-700 flex-shrink-0 ml-2"
-            aria-label="Fechar"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Closed Store Alert */}
-        {!isStoreOpen && (
-          <div className="bg-red-950/90 border-b border-red-500/30 px-4 py-2 flex items-center justify-center gap-2 text-xs font-bold text-red-200">
-            <span>⛔ Estabelecimento Fechado • Apenas visualização da caixa (pedidos pausados)</span>
-          </div>
-        )}
-
-        {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto overscroll-contain p-4 sm:p-5 space-y-4">
-          
-          {/* Card Resumo do Produto Selecionado (Fixo e sem opções de alterar tamanho) */}
-          <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-dark-950 to-dark-850 border border-brand-gold/30 flex items-center justify-between gap-3 shadow-inner">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-12 h-12 rounded-xl overflow-hidden bg-dark-900 border border-dark-750 flex-shrink-0">
-                <img
-                  src={boxImage}
-                  alt={name}
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <div className="min-w-0">
-                <div className="text-xs sm:text-sm font-extrabold text-white truncate">
-                  {name}
-                </div>
-                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                  <span className="text-[11px] font-black text-brand-gold bg-brand-gold/15 px-2 py-0.5 rounded border border-brand-gold/30">
-                    {totalCount} Esfirras
-                  </span>
-                  {isDydyoCombo && (
-                    <span className="text-[11px] font-black text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded border border-amber-500/30 flex items-center gap-1">
-                      <span>🥤</span>
-                      <span>+ {selectedDydyo}</span>
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="text-right flex-shrink-0">
-              <span className="text-[10px] text-slate-400 block">Preço:</span>
-              <span className="text-base sm:text-lg font-black text-brand-gold">
-                R$ {price.toFixed(2).replace('.', ',')}
-              </span>
-            </div>
-          </div>
-
-          {/* As 4 Opções de Sortidas Exclusivas */}
-          <div>
-            <div className="flex items-center justify-between mb-2.5">
-              <span className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-brand-gold" />
-                <span>Escolha como deseja o sortido:</span>
-              </span>
-              <span className="text-[11px] text-brand-gold font-bold">
-                Total fixo: {totalCount} esfirras
-              </span>
-            </div>
-
-            <div className="space-y-2.5">
-              {BOX_SORTIDO_OPTIONS.map((opt) => {
-                const isSelected = selectedOptionId === opt.id;
-                const compositionText = opt.hasDoces 
-                  ? `${salgadasCount} Salgadas + ${docesCount} Doces`
-                  : `${totalCount} Esfirras Salgadas`;
-
-                return (
-                  <div
-                    key={opt.id}
-                    onClick={() => setSelectedOptionId(opt.id)}
-                    className={`group relative p-3.5 rounded-2xl border transition-all cursor-pointer select-none ${
-                      isSelected
-                        ? 'bg-brand-gold/10 border-brand-gold shadow-md shadow-brand-gold/10 ring-1 ring-brand-gold/50'
-                        : 'bg-dark-850 hover:bg-dark-800 border-dark-800 hover:border-dark-750'
-                    }`}
-                  >
-                    <div className="flex items-start gap-3">
-                      {/* Radio Circle */}
-                      <div className={`w-5 h-5 rounded-full border-2 mt-0.5 flex items-center justify-center transition-colors flex-shrink-0 ${
-                        isSelected 
-                          ? 'border-brand-gold bg-brand-gold text-dark-950' 
-                          : 'border-dark-700 bg-dark-900 group-hover:border-slate-500'
-                      }`}>
-                        {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
-                      </div>
-
-                      {/* Info & Details */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-xs sm:text-sm font-bold text-white">
-                            {opt.displayTitle}
-                          </span>
-                          
-                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold border ${opt.badgeColor}`}>
-                            {opt.tag}
-                          </span>
-                        </div>
-
-                        {/* Composition pill */}
-                        <div className="mt-1 flex items-center gap-2">
-                          <span className="text-[11px] font-extrabold text-brand-gold bg-dark-900 px-2 py-0.5 rounded-md border border-dark-800">
-                            {opt.icon} {compositionText}
-                          </span>
-                          {opt.semSuinos && (
-                            <span className="text-[10px] font-bold text-red-400 bg-red-950/40 px-1.5 py-0.5 rounded border border-red-500/30">
-                              Sem calabresa/bacon
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Description */}
-                        <p className="mt-1 text-xs text-slate-400 leading-relaxed">
-                          {getOptionDescription(opt)}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* 1. SELEÇÃO DE REFRIGERANTE / BEBIDA */}
-          {isDydyoCombo ? (
-            <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-dark-950 to-dark-900 border border-amber-500/40 space-y-2.5">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
-                  <span className="text-base">🥤</span>
-                  <span>Escolha o Sabor do seu Dydyo 2L:</span>
-                </span>
-                <span className="text-[10px] text-amber-300 font-bold bg-amber-500/15 px-2 py-0.5 rounded border border-amber-500/30">
-                  Incluso no Combo
-                </span>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                {DYDYO_FLAVORS.map((dydyo) => {
-                  const isSelected = selectedDydyo === dydyo.name;
-                  return (
-                    <button
-                      key={dydyo.id}
-                      type="button"
-                      onClick={() => setSelectedDydyo(dydyo.name)}
-                      className={`p-2.5 rounded-xl border text-left transition-all flex items-center gap-2.5 cursor-pointer ${
-                        isSelected
-                          ? 'bg-amber-500/20 border-amber-400 text-white ring-1 ring-amber-400/50 shadow-md'
-                          : 'bg-dark-850 hover:bg-dark-800 border-dark-750 text-slate-300'
-                      }`}
-                    >
-                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
-                        isSelected ? 'border-amber-400 bg-amber-400 text-dark-950' : 'border-dark-600'
-                      }`}>
-                        {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="text-xs font-bold leading-tight truncate">
-                          {dydyo.flavor}
-                        </div>
-                        <div className="text-[10px] text-slate-400 truncate">
-                          {dydyo.badge || '2L Gelado'}
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ) : (
-            <div className="p-3.5 sm:p-4 rounded-2xl bg-dark-900 border border-dark-750 space-y-2.5">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
-                  <span className="text-base">🥤</span>
-                  <span>Deseja Adicionar Refrigerante ou Bebida Gelada? (Opcional)</span>
-                </label>
-                <span className="text-[10px] text-slate-400 bg-dark-800 px-2 py-0.5 rounded">
-                  {selectedBeverageId === 'none' ? 'Sem Bebida' : 'Bebida Adicionada'}
-                </span>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
-                {/* Opção Sem Bebida */}
-                <button
-                  type="button"
-                  onClick={() => setSelectedBeverageId('none')}
-                  className={`p-2.5 rounded-xl border text-left transition-all flex items-center justify-between cursor-pointer ${
-                    selectedBeverageId === 'none'
-                      ? 'bg-brand-gold/15 border-brand-gold text-white font-bold'
-                      : 'bg-dark-850 hover:bg-dark-800 border-dark-800 text-slate-400'
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
-                      selectedBeverageId === 'none' ? 'border-brand-gold bg-brand-gold text-dark-950' : 'border-dark-600'
-                    }`}>
-                      {selectedBeverageId === 'none' && <Check className="w-3 h-3 stroke-[3]" />}
-                    </div>
-                    <span className="text-xs font-semibold">Apenas as esfirras (Sem bebida)</span>
-                  </div>
-                  <span className="text-[11px] text-slate-400">R$ 0,00</span>
-                </button>
-
-                {/* Lista de Bebidas */}
-                {BEVERAGE_OPTIONS.map((bev) => {
-                  const isSelected = selectedBeverageId === bev.id;
-                  return (
-                    <button
-                      key={bev.id}
-                      type="button"
-                      onClick={() => setSelectedBeverageId(bev.id)}
-                      className={`p-2.5 rounded-xl border text-left transition-all flex items-center justify-between cursor-pointer ${
-                        isSelected
-                          ? 'bg-amber-500/20 border-amber-400 text-white font-bold shadow-md'
-                          : 'bg-dark-850 hover:bg-dark-800 border-dark-800 text-slate-300'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
-                          isSelected ? 'border-amber-400 bg-amber-400 text-dark-950' : 'border-dark-600'
-                        }`}>
-                          {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
-                        </div>
-                        <div className="min-w-0 truncate">
-                          <span className="text-xs block truncate font-medium">{bev.name}</span>
-                          {bev.badge && <span className="text-[9px] text-amber-300 font-normal">{bev.badge}</span>}
-                        </div>
-                      </div>
-                      <span className="text-xs font-black text-amber-300 whitespace-nowrap ml-2">
-                        + R$ {bev.price.toFixed(2).replace('.', ',')}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* 2. SELEÇÃO DE MOLHO EXTRA DA CASA */}
-          {extraSauceConfig?.active !== false && (
-            <div className={`p-3.5 sm:p-4 rounded-2xl border transition-all ${
-              wantsExtraSauce 
-                ? 'bg-amber-500/15 border-amber-400 shadow-md ring-1 ring-amber-400/40' 
-                : 'bg-dark-900 border-dark-750'
-            }`}>
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-start gap-2.5 min-w-0">
-                  <span className="text-xl flex-shrink-0">🧂</span>
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs font-bold text-white">
-                        {extraSauceConfig.name || 'Molho Especial da Casa'}
-                      </span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-black border border-amber-500/30">
-                        + R$ {Number(extraSauceConfig.price || 0).toFixed(2).replace('.', ',')}
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-slate-400 mt-0.5">
-                      {extraSauceConfig.description || 'Pote generoso de molho artesanal especial da El Shadday (perfeito para molhar as esfirras quentinhas).'}
-                    </p>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setWantsExtraSauce(!wantsExtraSauce)}
-                  className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap flex-shrink-0 ${
-                    wantsExtraSauce
-                      ? 'bg-amber-400 text-dark-950 shadow-md scale-102'
-                      : 'bg-dark-800 hover:bg-dark-750 text-slate-300 border border-dark-700'
-                  }`}
-                >
-                  <Check className={`w-3.5 h-3.5 stroke-[3] ${wantsExtraSauce ? 'opacity-100' : 'opacity-30'}`} />
-                  <span>{wantsExtraSauce ? 'Molho Adicionado' : 'Adicionar Molho'}</span>
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Observações para a Cozinha (Opcional) */}
-          <div>
-            <label className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5 mb-1.5">
-              <MessageSquare className="w-3.5 h-3.5 text-brand-gold" />
-              <span>Observações para a Cozinha (Opcional):</span>
-            </label>
-            <input
-              type="text"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Ex: Bem assadas, separar doces em caixinha menor, etc."
-              className="w-full bg-dark-950 border border-dark-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand-gold transition-colors"
-              maxLength={120}
+  const sauceActive = extraSauceConfig?.active !== false;
+  const steps = [
+    {
+      id: 'tipo',
+      title: 'Como quer as esfirras?',
+      shortTitle: 'Esfirras',
+      hint: `São ${totalCount} esfirras sortidas pela casa.`,
+      min: 1,
+      max: 1,
+      count: selectedOptionId ? 1 : 0,
+      content: (
+        <div className="space-y-2">
+          {BOX_SORTIDO_OPTIONS.map(opt => (
+            <OptionRow
+              key={opt.id}
+              title={`${opt.icon} ${opt.displayTitle}`}
+              description={getOptionDescription(opt)}
+              multi={false}
+              selected={selectedOptionId === opt.id}
+              onClick={() => setSelectedOptionId(opt.id)}
             />
-          </div>
-
+          ))}
         </div>
-
-        {/* Footer */}
-        <div className="flex-shrink-0 p-4 border-t border-dark-800 bg-dark-950 flex flex-col sm:flex-row items-center justify-between gap-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
-          <div className="flex items-center justify-between w-full sm:w-auto sm:flex-col sm:items-start">
-            <div>
-              <span className="text-[11px] text-slate-400 block">Total do Pedido:</span>
-              <div className="text-xl sm:text-2xl font-black text-brand-gold leading-tight">
-                R$ {finalPrice.toFixed(2).replace('.', ',')}
-              </div>
-            </div>
-
-            {creditPrice && (
-              <span className="text-[10px] text-slate-500">
-                *No crédito: R$ {finalCreditPrice.toFixed(2).replace('.', ',')}
-              </span>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2 w-full sm:w-auto">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2.5 rounded-xl bg-dark-850 hover:bg-dark-800 text-slate-300 font-semibold text-xs transition-colors cursor-pointer"
-            >
-              Cancelar
-            </button>
-
-            <button
-              type="button"
-              onClick={handleConfirm}
-              disabled={!isStoreOpen}
-              className={`flex-1 sm:flex-none px-6 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all ${
-                !isStoreOpen
-                  ? 'bg-dark-800 text-slate-500 border border-red-500/30 cursor-not-allowed'
-                  : 'bg-gradient-to-r from-brand-gold to-amber-500 hover:from-amber-400 hover:to-brand-gold text-dark-950 shadow-glow-gold cursor-pointer hover:scale-102 active:scale-98'
-              }`}
-            >
-              <Check className="w-4 h-4 stroke-[3]" />
-              <span>{!isStoreOpen ? '⛔ Fechado para Pedidos' : `Adicionar Caixa (${totalCount} un)`}</span>
-            </button>
-          </div>
+      )
+    },
+    isDydyoCombo ? {
+      id: 'refri',
+      title: 'Escolha o refri (já incluso)',
+      shortTitle: 'Refri',
+      min: 1,
+      max: 1,
+      count: selectedDydyo ? 1 : 0,
+      content: (
+        <div className="space-y-2">
+          {DYDYO_FLAVORS.map(d => (
+            <OptionRow key={d.id} title={d.name} description={d.description} image={d.image || null} badge={d.badge} multi={false} selected={selectedDydyo === d.name} onClick={() => setSelectedDydyo(d.name)} />
+          ))}
         </div>
+      )
+    } : {
+      id: 'bebida',
+      title: 'Vai querer bebida?',
+      shortTitle: 'Bebida',
+      min: 1,
+      max: 1,
+      count: 1,
+      content: (
+        <div className="space-y-2">
+          <OptionRow title="Não, obrigado" multi={false} selected={selectedBeverageId === 'none'} onClick={() => setSelectedBeverageId('none')} />
+          {BEVERAGE_OPTIONS.map(b => (
+            <OptionRow key={b.id} title={b.name} image={b.image || null} priceText={`+ ${money(b.price)}`} multi={false} selected={selectedBeverageId === b.id} onClick={() => setSelectedBeverageId(b.id)} />
+          ))}
+        </div>
+      )
+    },
+    sauceActive && {
+      id: 'molho',
+      title: 'Adicionar molho?',
+      shortTitle: 'Molho',
+      min: 1,
+      max: 1,
+      count: 1,
+      content: (
+        <div className="space-y-2">
+          <OptionRow title="Não precisa de molho" multi={false} selected={!wantsExtraSauce} onClick={() => setWantsExtraSauce(false)} />
+          <OptionRow title={`Sim, adicionar ${extraSauceConfig.name || 'molho da casa'}`} description={extraSauceConfig.description} priceText={`+ ${money(extraSauceConfig.price)}`} multi={false} selected={wantsExtraSauce} onClick={() => setWantsExtraSauce(true)} />
+        </div>
+      )
+    },
+    {
+      id: 'obs',
+      title: 'Observação',
+      shortTitle: 'Observação',
+      content: <NotesStep value={notes} onChange={setNotes} placeholder="Ex.: mais esfirras de frango, entregar bem quentinha..." />
+    }
+  ].filter(Boolean);
 
-      </div>
-    </div>
+  return (
+    <StepFlow
+      isOpen={isOpen}
+      onClose={onClose}
+      product={{ id: initialBox?.id || name, name, image: boxImage, description: initialBox?.description }}
+      steps={steps}
+      unitPrice={finalPrice}
+      isStoreOpen={isStoreOpen}
+      onFinish={(qty) => handleConfirm(qty)}
+    />
   );
 }

@@ -625,14 +625,47 @@ export async function fetchCloudOrdersHistory() {
 /**
  * Subscribe kitchen panel to real-time events
  */
-export function subscribeToKitchenEvents({ onNewOrder, onOrderUpdate, onOrderDelete, onAllOrdersCleared } = {}) {
+// Avisa a tela se a conexão "ao vivo" dos pedidos está funcionando
+function emitLiveStatus(status) {
+  try {
+    window.__elShaddayOrdersLive = status;
+    window.dispatchEvent(new CustomEvent('el_shadday_orders_live', { detail: status }));
+  } catch (e) {}
+}
+
+/**
+ * Busca só os pedidos criados/alterados nos últimos minutos (consulta leve).
+ * Serve de rede de segurança caso a conexão ao vivo tenha caído.
+ */
+export async function fetchRecentlyChangedOrders(minutes = 3) {
+  if (!isSupabaseConfigured || !supabase) return null;
+  try {
+    const since = new Date(Date.now() - minutes * 60 * 1000).toISOString();
+    const { data, error } = await supabase
+      .from('orders')
+      .select('*')
+      .or(`created_at.gte.${since},updated_at.gte.${since}`)
+      .order('created_at', { ascending: false })
+      .limit(50);
+    if (error || !Array.isArray(data)) return null;
+    return data.map(mapSupabaseRowToOrder).filter(Boolean);
+  } catch (e) {
+    return null;
+  }
+}
+
+export function subscribeToKitchenEvents({ onNewOrder, onOrderUpdate, onOrderDelete, onAllOrdersCleared, onReconnected } = {}) {
   let eventSource = null;
   let supabaseChannel = null;
   let isCleanedUp = false;
+  let retryTimer = null;
+  let retryDelay = 2000;
+  let hasConnectedOnce = false;
 
 
-  // 1. Supabase Realtime Subscription (WebSockets)
-  if (isSupabaseConfigured && supabase) {
+  // 1. Supabase Realtime Subscription (WebSockets) - reconecta sozinho se cair
+  const connectRealtime = () => {
+    if (isCleanedUp || !isSupabaseConfigured || !supabase) return;
     try {
       const existingChannels = typeof supabase.getChannels === 'function' ? supabase.getChannels() : [];
       const prevLive = existingChannels.find(ch => ch?.topic?.includes('kds_orders_live'));
@@ -677,12 +710,37 @@ export function subscribeToKitchenEvents({ onNewOrder, onOrderUpdate, onOrderDel
             }
           }
         )
-        .subscribe((status) => {
-          console.log('📡 Supabase Realtime Status:', status);
-        });
+        ;
+      const thisChannel = supabaseChannel;
+      thisChannel.subscribe((status) => {
+        if (isCleanedUp || thisChannel !== supabaseChannel) return;
+        console.log('📡 Supabase Realtime Status:', status);
+        if (status === 'SUBSCRIBED') {
+          retryDelay = 2000;
+          emitLiveStatus('live');
+          // Voltou depois de cair: busca o que chegou enquanto estava fora
+          if (hasConnectedOnce && onReconnected) onReconnected();
+          hasConnectedOnce = true;
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          emitLiveStatus('reconnecting');
+          supabaseChannel = null;
+          try { supabase.removeChannel(thisChannel); } catch (e) {}
+          if (retryTimer) clearTimeout(retryTimer);
+          retryTimer = setTimeout(connectRealtime, retryDelay);
+          retryDelay = Math.min(retryDelay * 2, 30000);
+        }
+      });
     } catch (err) {
       console.warn('Supabase Realtime subscription error:', err);
+      emitLiveStatus('reconnecting');
+      if (retryTimer) clearTimeout(retryTimer);
+      retryTimer = setTimeout(connectRealtime, retryDelay);
+      retryDelay = Math.min(retryDelay * 2, 30000);
     }
+  };
+  if (isSupabaseConfigured && supabase) {
+    emitLiveStatus('connecting');
+    connectRealtime();
   }
 
   // 2. Server-Sent Events (SSE) Fallback via ntfy.sh
@@ -752,8 +810,11 @@ export function subscribeToKitchenEvents({ onNewOrder, onOrderUpdate, onOrderDel
   // Cleanup handler
   return () => {
     isCleanedUp = true;
+    if (retryTimer) clearTimeout(retryTimer);
     if (supabaseChannel && supabase) {
-      supabase.removeChannel(supabaseChannel);
+      const ch = supabaseChannel;
+      supabaseChannel = null;
+      supabase.removeChannel(ch);
     }
     if (eventSource) {
       eventSource.close();

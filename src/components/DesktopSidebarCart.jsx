@@ -81,7 +81,7 @@ export function DesktopSidebarCart({
 
   return (
     <aside className="hidden lg:block lg:col-span-4 xl:col-span-4">
-      <div className="sticky top-28 bg-dark-900/90 backdrop-blur-xl border border-white/5 rounded-3xl p-5 shadow-2xl flex flex-col justify-between max-h-[calc(100vh-140px)]">
+      <div className="sticky top-6 bg-dark-900/90 backdrop-blur-xl border border-white/5 rounded-3xl p-5 shadow-2xl flex flex-col justify-between max-h-[calc(100vh-48px)]">
         
         {/* Cart Header */}
         <div>

@@ -14,6 +14,7 @@ import {
   GripVertical, ArrowUp, ArrowDown, ChevronsUp, HeartHandshake, IceCream, Soup, Wine,
   ClipboardList, Wrench
 } from 'lucide-react';
+import { AdminShell } from './admin/AdminShell';
 import { 
   RESTAURANT_INFO, 
   ARIQUEMES_DISTRICTS, 
@@ -117,6 +118,30 @@ const CATEGORY_ICONS_MAP = {
   IceCream,
   Soup,
   Layers
+};
+
+// Colunas do quadro de pedidos (estilo Ola Click)
+const KDS_KANBAN_COLUMNS = [
+  { id: 'novos', title: 'Novos / pendentes', statuses: ['RECEBIDO_COZINHA'], always: true, headerCls: 'bg-amber-500/15 text-amber-300' },
+  { id: 'preparo', title: 'Em preparo', statuses: ['EM_PREPARO'], always: true, headerCls: 'bg-brand-gold/15 text-brand-goldLight' },
+  { id: 'prontos', title: 'Prontos / em entrega', statuses: ['PRONTO_BALCAO', 'SAIU_ENTREGA'], always: true, headerCls: 'bg-blue-500/15 text-blue-300' },
+  { id: 'concluidos', title: 'Concluídos', statuses: ['CONCLUIDO'], always: true, dropHint: 'Arraste um pedido aqui para concluir', headerCls: 'bg-emerald-500/15 text-emerald-300' },
+  { id: 'cancelados', title: 'Cancelados', statuses: ['CANCELADO'], headerCls: 'bg-red-500/15 text-red-300' }
+];
+
+const ADMIN_TAB_TITLES = {
+  kds: 'Pedidos',
+  pdv: 'Novo pedido',
+  menu: 'Cardápio',
+  settings: 'Configurações',
+  qrcode: 'QR Code e link da loja',
+  whatsapp: 'WhatsApp',
+  'master-overview': 'Faturamento',
+  'branch-overview': 'Desempenho da filial',
+  branches: 'Filiais',
+  users: 'Usuários',
+  buffet: 'Buffet: pratos',
+  gallery: 'Buffet: galeria'
 };
 
 export function AdminDashboard({ 
@@ -282,6 +307,7 @@ export function AdminDashboard({
   const [isAudioUnlocked, setIsAudioUnlocked] = useState(false);
   const knownOrderIdsRef = useRef(new Set((orders || []).map(o => o?.orderId).filter(Boolean)));
   const isInitialOrdersLoadedRef = useRef((orders || []).length > 0);
+  const panelOpenedAtRef = useRef(Date.now()); // hora em que o painel abriu (para não perder o alarme do 1º pedido)
 
   // Barra de filtros da Cozinha (Ativos, Em Atraso, Pendentes...) com rolagem lateral
   const kdsFiltersScrollRef = useRef(null);
@@ -294,11 +320,14 @@ export function AdminDashboard({
   // KDS Grid Scheme & Card Density State
   const [kdsGridCols, setKdsGridCols] = useState(() => {
     try {
-      return localStorage.getItem('el_shadday_kds_grid_cols') || '3';
+      return localStorage.getItem('el_shadday_kds_grid_cols_v2') || 'kanban';
     } catch (e) {
       return '3';
     }
   });
+  const [kanbanDragOrderId, setKanbanDragOrderId] = useState(null); // pedido sendo arrastado no quadro
+  const [kanbanDragOverCol, setKanbanDragOverCol] = useState(null);
+  const [kanbanDetailOrderId, setKanbanDetailOrderId] = useState(null); // pedido aberto no painel lateral do quadro
   const [kdsCompactMode, setKdsCompactMode] = useState(() => {
     try {
       return localStorage.getItem('el_shadday_kds_compact_mode') === 'true';
@@ -310,7 +339,7 @@ export function AdminDashboard({
   const handleSetKdsGridCols = (cols) => {
     setKdsGridCols(cols);
     try {
-      localStorage.setItem('el_shadday_kds_grid_cols', cols);
+      localStorage.setItem('el_shadday_kds_grid_cols_v2', cols);
     } catch (e) {}
   };
 
@@ -384,6 +413,9 @@ export function AdminDashboard({
   const [pdvSuccessOrder, setPdvSuccessOrder] = useState(null);
   const [pdvValidationError, setPdvValidationError] = useState('');
   const [pdvSubTab, setPdvSubTab] = useState('novo'); // 'novo' | 'baixa'
+  const [pdvTicketOpen, setPdvTicketOpen] = useState(false); // comanda aberta em tela cheia no celular
+  const [pdvExtrasOpen, setPdvExtrasOpen] = useState(''); // 'obs' | 'desc' | 'serv'
+  useEffect(() => { if (pdvSuccessOrder) setPdvTicketOpen(false); }, [pdvSuccessOrder]);
   const [pdvBaixaSearch, setPdvBaixaSearch] = useState('');
   const [pdvBaixaFilter, setPdvBaixaFilter] = useState('abertos'); // 'abertos' | 'balcao' | 'delivery' | 'concluidos'
   const [pdvBaixaToast, setPdvBaixaToast] = useState(null);
@@ -1592,6 +1624,8 @@ export function AdminDashboard({
       category: flavorFormCategory,
       description: flavorFormDescription.trim(),
       image: flavorFormImage.trim(),
+      // Foto apagada no formulário = sem foto de propósito; com foto = volta a mostrar
+      imageRemoved: !flavorFormImage.trim() && Boolean(editingFlavor?.imageRemoved),
       isAvailable: flavorFormIsAvailable
     };
 
@@ -1864,7 +1898,7 @@ export function AdminDashboard({
   const handleRemoveFlavorPhoto = (flavorId) => {
     const target = pizzaFlavors.find(f => f.id === flavorId);
     if (!window.confirm(`Deseja remover a foto do sabor "${target?.name || ''}"?`)) return;
-    const updated = pizzaFlavors.map(f => f.id === flavorId ? { ...f, image: '' } : f);
+    const updated = pizzaFlavors.map(f => f.id === flavorId ? { ...f, image: '', imageRemoved: true } : f);
     setPizzaFlavors(updated);
     saveStoredPizzaFlavors(updated);
     dispatchConfigSync('PIZZA_FLAVORS_UPDATE', updated);
@@ -2513,13 +2547,18 @@ export function AdminDashboard({
 
     // Se é a primeira carga de histórico, apenas popula os IDs conhecidos sem disparar alarme sonoro
     if (!isInitialOrdersLoadedRef.current) {
-      if (list.length > 0) {
-        list.forEach(o => {
-          if (o?.orderId) knownOrderIdsRef.current.add(o.orderId);
-        });
-        isInitialOrdersLoadedRef.current = true;
-      }
-      return;
+      if (list.length === 0) return;
+      isInitialOrdersLoadedRef.current = true;
+      // Pedidos antigos só entram na lista; pedido feito DEPOIS que o painel abriu
+      // (ex.: 1º pedido do dia com a lista vazia) ainda toca o alarme
+      let hasFresh = false;
+      list.forEach(o => {
+        if (!o?.orderId) return;
+        const created = new Date(o.createdAt || 0).getTime();
+        if (created > panelOpenedAtRef.current - 5000) hasFresh = true;
+        else knownOrderIdsRef.current.add(o.orderId);
+      });
+      if (!hasFresh) return;
     }
 
     const newOrders = list.filter(o => o?.orderId && !knownOrderIdsRef.current.has(o.orderId));
@@ -3094,7 +3133,7 @@ export function AdminDashboard({
     };
 
     const targetInfo = STATUS_MAP[normNewStatus];
-    if (autoFollowTab && targetInfo) {
+    if (autoFollowTab && targetInfo && kdsGridCols !== 'kanban') {
       setSelectedFilter(targetInfo.tab);
       setStatusChangeToast({
         orderId: formatOrderNumber(order),
@@ -3378,7 +3417,7 @@ export function AdminDashboard({
       id: customPizza.id,
       name: customPizza.name,
       price: customPizza.price,
-      quantity: 1,
+      quantity: customPizza.quantity || 1,
       notes: customPizza.notes || '',
       flavors: customPizza.flavors,
       bordaGratis: customPizza.bordaGratis,
@@ -3400,7 +3439,7 @@ export function AdminDashboard({
       id: customBox.id,
       name: customBox.name,
       price: customBox.price,
-      quantity: 1,
+      quantity: customBox.quantity || 1,
       isCustomBox: true,
       isBox: true,
       isSortido: customBox.isSortido,
@@ -3443,7 +3482,7 @@ export function AdminDashboard({
       id: customCombo.id,
       name: customCombo.name,
       price: customCombo.price,
-      quantity: 1,
+      quantity: customCombo.quantity || 1,
       isCombo: true,
       isCustomCombo: true,
       pizzaSelections: customCombo.pizzaSelections,
@@ -3802,939 +3841,10 @@ export function AdminDashboard({
     playChime(newPayStatus === 'PAGO_APROVADO');
   };
 
-  return (
-    <div className="min-h-screen bg-dark-950 text-slate-100 flex flex-col font-sans">
-      
-      {/* Real-time Order Alert Banner */}
-      {newOrderAlert && (
-        <div className="bg-gradient-to-r from-emerald-600 via-emerald-500 to-emerald-600 text-dark-950 font-black px-4 py-3 flex items-center justify-between shadow-2xl animate-bounce-subtle z-50 sticky top-0">
-          <div className="flex items-center gap-2 text-xs sm:text-sm">
-            <BellRing className="w-5 h-5 animate-pulse" />
-            <span>NOVO PEDIDO CHEGOU NA COZINHA! #{formatOrderNumber(newOrderAlert)} - {newOrderAlert.customerName} (R$ {(newOrderAlert.total || 0).toFixed(2).replace('.', ',')})</span>
-          </div>
-          <button
-            onClick={() => setNewOrderAlert(null)}
-            className="text-xs bg-dark-950 text-white px-2.5 py-1 rounded-lg cursor-pointer"
-          >
-            Dispensar
-          </button>
-        </div>
-      )}
-
-      {/* Top Navbar */}
-      <header className="bg-dark-900 border-b border-dark-800 sticky top-0 z-40 px-3 sm:px-6 py-3 shadow-md">
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
-          
-          {/* Brand & Role Header */}
-          <div className="flex items-center gap-3">
-            <div className={`w-11 h-11 rounded-2xl flex items-center justify-center border ${
-              currentUser?.role === ROLES.SUPER_ADMIN
-                ? 'bg-brand-gold/20 text-brand-gold border-brand-gold/40'
-                : currentUser?.role === ROLES.BRANCH_ADMIN
-                ? 'bg-blue-500/20 text-blue-400 border border-blue-500/40'
-                : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
-            }`}>
-              {currentUser?.role === ROLES.SUPER_ADMIN ? (
-                <Crown className="w-6 h-6" />
-              ) : currentUser?.role === ROLES.BRANCH_ADMIN ? (
-                <Building2 className="w-6 h-6" />
-              ) : (
-                <ChefHat className="w-6 h-6" />
-              )}
-            </div>
-
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="font-display font-extrabold text-base sm:text-lg text-white">
-                  {currentUser?.role === ROLES.SUPER_ADMIN
-                    ? 'Painel Master El Shadday'
-                    : currentUser?.role === ROLES.BRANCH_ADMIN
-                    ? `Admin • ${currentBranch?.name || 'Filial'}`
-                    : `Cozinha KDS • ${currentBranch?.name || 'Filial'}`}
-                </h1>
-                
-                <span className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full border ${
-                  currentUser?.role === ROLES.SUPER_ADMIN
-                    ? 'bg-brand-gold/20 text-brand-gold border-brand-gold/40'
-                    : currentUser?.role === ROLES.BRANCH_ADMIN
-                    ? 'bg-blue-500/20 text-blue-400 border border-blue-500/40'
-                    : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 animate-pulse'
-                }`}>
-                  {ROLE_LABELS[currentUser?.role] || 'Painel de Gestão'}
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-400">
-                {currentUser?.role === ROLES.SUPER_ADMIN
-                  ? 'Diretoria • Faturamento, Lucro Consolidado, Filiais e Usuários'
-                  : currentUser?.role === ROLES.BRANCH_ADMIN
-                  ? `${currentBranch?.displayName} • Gestão de Cardápio, Preços & Vendas da Filial`
-                  : `${currentBranch?.displayName} • Comandas em Tempo Real e Operação`}
-              </p>
-            </div>
-          </div>
-
-          {/* Quick Header Actions & Branch Switcher */}
-          <div className="flex items-center gap-2 flex-wrap">
-            
-            {/* Super Admin Branch Filter Dropdown */}
-            {currentUser?.role === ROLES.SUPER_ADMIN && (
-              <div className="flex items-center gap-1.5 bg-dark-950 px-3 py-1.5 rounded-2xl border border-dark-750">
-                <Store className="w-3.5 h-3.5 text-brand-gold" />
-                <span className="text-[11px] text-slate-400 font-bold hidden sm:inline">Filial:</span>
-                <select
-                  value={masterBranchFilter}
-                  onChange={(e) => setMasterBranchFilter(e.target.value)}
-                  className="bg-transparent text-xs font-black text-white focus:outline-none cursor-pointer"
-                >
-                  <option value="all" className="bg-dark-900 text-white">Todas as Filiais (Global)</option>
-                  {branchesList.map(b => (
-                    <option key={b.id} value={b.id} className="bg-dark-900 text-white">
-                      {b.name} ({b.displayName})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {/* User chip */}
-            {currentUser && (
-              <div className="hidden xl:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-dark-950 border border-dark-800 text-xs">
-                <span className="text-slate-400">Olá,</span>
-                <span className="font-bold text-white">{currentUser.name}</span>
-              </div>
-            )}
-
-            {/* Quick Open/Closed Status Toggle */}
-            <div className="flex items-center gap-1.5 bg-dark-950 px-2.5 py-1.5 rounded-2xl border border-dark-750 shadow-sm">
-              <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${restaurantSettings.isOpen !== false ? 'bg-emerald-400 animate-pulse' : 'bg-red-500'}`} />
-              <div className="hidden sm:flex flex-col text-left mr-1 leading-none">
-                <span className="text-[9px] uppercase font-bold text-slate-400">Loja</span>
-                <span className={`text-[11px] font-black ${restaurantSettings.isOpen !== false ? 'text-emerald-400' : 'text-red-400'}`}>
-                  {restaurantSettings.isOpen !== false ? 'Aberta' : 'Fechada'}
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={handleQuickToggleStoreStatus}
-                className={`px-2.5 py-1 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1 ${
-                  restaurantSettings.isOpen !== false
-                    ? 'bg-red-500/15 hover:bg-red-500/25 text-red-300 border border-red-500/40 hover:scale-102'
-                    : 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/50 hover:scale-102 animate-pulse'
-                }`}
-                title={restaurantSettings.isOpen !== false ? "Clique para fechar a loja e pausar pedidos no site" : "Clique para abrir a loja e liberar pedidos no site"}
-              >
-                <span>{restaurantSettings.isOpen !== false ? '🔴 Fechar Loja' : '🟢 Abrir Loja'}</span>
-              </button>
-            </div>
-
-            <button
-              onClick={handleUnlockAndTestAudio}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
-                isAudioUnlocked
-                  ? 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/40'
-                  : 'bg-gradient-to-r from-brand-gold to-amber-400 text-dark-950 font-black animate-pulse shadow-glow-gold'
-              }`}
-              title="Ativar/testar alarme sonoro da cozinha"
-            >
-              <BellRing className="w-3.5 h-3.5" />
-              <span>{isAudioUnlocked ? 'Som Ativo' : 'ATIVAR SOM'}</span>
-            </button>
-
-            <button
-              onClick={onBackToSite}
-              className="px-3 py-1.5 rounded-xl bg-dark-800 hover:bg-dark-750 text-slate-300 font-semibold text-xs border border-dark-700 flex items-center gap-1.5 transition-colors cursor-pointer"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              <span>Ver Site</span>
-            </button>
-
-            <button
-              onClick={onLogout}
-              className="px-3 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 font-semibold text-xs border border-red-500/30 flex items-center gap-1.5 transition-colors cursor-pointer"
-              title="Sair do painel administrativo"
-            >
-              <LogOut className="w-3.5 h-3.5" />
-              <span>Sair</span>
-            </button>
-          </div>
-
-        </div>
-
-        {/* Navigation Tabs with Visible Scrollbar ("Rotbar") and Scroll Chevrons */}
-        {currentUser?.role !== ROLES.KITCHEN && (
-          <div className="relative max-w-7xl mx-auto mt-3 border-t border-dark-800 pt-2">
-            
-            {/* Scroll Left Button */}
-            {canScrollLeft && (
-              <button
-                type="button"
-                onClick={() => handleScrollTabs('left')}
-                className="absolute left-0 top-1/2 -translate-y-1/2 z-20 p-2 rounded-xl bg-dark-900/95 hover:bg-dark-850 text-brand-gold border border-brand-gold/40 shadow-xl backdrop-blur-md cursor-pointer transition-all active:scale-90 flex items-center justify-center -translate-x-1 sm:-translate-x-2"
-                title="Rolar abas para a esquerda"
-              >
-                <ChevronLeft className="w-4 h-4 stroke-[2.5]" />
-              </button>
-            )}
-
-            <div
-              ref={tabsNavRef}
-              onScroll={checkTabsScroll}
-              onWheel={(e) => {
-                if (e.deltaY !== 0 && tabsNavRef.current) {
-                  tabsNavRef.current.scrollLeft += e.deltaY;
-                  checkTabsScroll();
-                }
-              }}
-              className="admin-tabs-scrollbar flex items-center gap-1.5 pb-2.5 pt-0.5 text-xs select-none scroll-smooth"
-            >
-              
-              {/* 1. COZINHA (KDS) */}
-              <button
-                type="button"
-                onClick={() => setActiveAdminTab('kds')}
-                className={`px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
-                  activeAdminTab === 'kds'
-                    ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
-                    : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
-                }`}
-              >
-                <ChefHat className="w-4 h-4" />
-                <span>Cozinha</span>
-                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
-                  activeAdminTab === 'kds' ? 'bg-dark-950 text-brand-gold' : 'bg-dark-900 text-slate-400'
-                }`}>
-                  {activeOrdersList.length}
-                </span>
-              </button>
-
-              {/* 2. NOVO PEDIDO (PDV) */}
-              <button
-                type="button"
-                onClick={() => setActiveAdminTab('pdv')}
-                className={`px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
-                  activeAdminTab === 'pdv'
-                    ? 'bg-emerald-500 text-dark-950 font-black shadow-sm'
-                    : 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/30'
-                }`}
-              >
-                <Plus className="w-4 h-4 stroke-[3]" />
-                <span>Novo Pedido</span>
-                {pdvCart.length > 0 && (
-                  <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-500 text-dark-950 font-black">
-                    {pdvCart.length}
-                  </span>
-                )}
-              </button>
-
-              {/* 3. CARDÁPIO */}
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveAdminTab('menu');
-                  setMenuSubTab('products');
-                }}
-                className={`px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
-                  activeAdminTab === 'menu'
-                    ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
-                    : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
-                }`}
-              >
-                <Utensils className="w-4 h-4" />
-                <span>Cardápio</span>
-                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
-                  activeAdminTab === 'menu' ? 'bg-dark-950 text-brand-gold' : 'bg-dark-900 text-slate-400'
-                }`}>
-                  {scopedProductsList.length}
-                </span>
-              </button>
-
-              {/* 4. WHATSAPP MULTI-FILIAL */}
-              <button
-                type="button"
-                onClick={() => setActiveAdminTab('whatsapp')}
-                className={`px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
-                  activeAdminTab === 'whatsapp'
-                    ? 'bg-emerald-500 text-dark-950 font-black shadow-sm'
-                    : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
-                }`}
-                title="Gerenciador de Conexões WhatsApp das Filiais"
-              >
-                <MessageSquare className="w-4 h-4 text-emerald-400" />
-                <span>WhatsApp</span>
-              </button>
-
-              {/* 5. QR CODE MESA / BALCÃO */}
-              <button
-                type="button"
-                onClick={() => setActiveAdminTab('qrcode')}
-                className={`px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
-                  activeAdminTab === 'qrcode'
-                    ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
-                    : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
-                }`}
-                title="QR Code e Link Oficial da Filial"
-              >
-                <QrCode className="w-4 h-4" />
-                <span>QR Code Mesa</span>
-              </button>
-
-              {/* 6. CONFIGURAÇÕES (TAXA, LOJA, CUPONS) */}
-              <button
-                type="button"
-                onClick={() => setActiveAdminTab('settings')}
-                className={`px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
-                  activeAdminTab === 'settings'
-                    ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
-                    : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
-                }`}
-                title="Taxa da maquininha, dados da filial e cupons"
-              >
-                <Settings2 className="w-4 h-4" />
-                <span>Configurações</span>
-              </button>
-
-              {/* ABAS DO MASTER (SUPER_ADMIN) */}
-              {currentUser?.role === ROLES.SUPER_ADMIN && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => setActiveAdminTab('master-overview')}
-                    className={`px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
-                      activeAdminTab === 'master-overview'
-                        ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
-                        : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
-                    }`}
-                  >
-                    <BarChart3 className="w-4 h-4" />
-                    <span>Faturamento</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setActiveAdminTab('branches')}
-                    className={`px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
-                      activeAdminTab === 'branches'
-                        ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
-                        : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
-                    }`}
-                  >
-                    <Building2 className="w-4 h-4" />
-                    <span>Filiais</span>
-                    <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
-                      activeAdminTab === 'branches' ? 'bg-dark-950 text-brand-gold' : 'bg-dark-900 text-slate-400'
-                    }`}>
-                      {branchesList.length}
-                    </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setActiveAdminTab('users')}
-                    className={`px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
-                      activeAdminTab === 'users'
-                        ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
-                        : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
-                    }`}
-                  >
-                    <Users className="w-4 h-4" />
-                    <span>Usuários</span>
-                  </button>
-                </>
-              )}
-
-              {/* DESEMPENHO DA FILIAL (BRANCH_ADMIN) */}
-              {currentUser?.role === ROLES.BRANCH_ADMIN && (
-                <button
-                  type="button"
-                  onClick={() => setActiveAdminTab('branch-overview')}
-                  className={`px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
-                    activeAdminTab === 'branch-overview'
-                      ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
-                      : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
-                  }`}
-                >
-                  <BarChart3 className="w-4 h-4" />
-                  <span>Desempenho</span>
-                </button>
-              )}
-
-              {/* BUFFET DISPONIBILIDADE (APENAS ARIQUEMES) */}
-              {currentBranch?.id === 'ariquemes' && (currentUser?.role === ROLES.SUPER_ADMIN || currentUser?.branchId === 'ariquemes') && (
-                <button
-                  type="button"
-                  onClick={() => setActiveAdminTab('buffet')}
-                  className={`px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
-                    activeAdminTab === 'buffet'
-                      ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
-                      : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
-                  }`}
-                  title="Controlar disponibilidade dos pratos do Buffet (pausar se acabar na cozinha)"
-                >
-                  <Utensils className="w-4 h-4" />
-                  <span>Buffet (Pratos)</span>
-                  {unavailableBuffetIds.length > 0 ? (
-                    <span className="text-[10px] px-1.5 py-0.2 rounded-full font-black bg-rose-500 text-white animate-pulse">
-                      ⛔ {unavailableBuffetIds.length} pausados
-                    </span>
-                  ) : (
-                    <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
-                      activeAdminTab === 'buffet' ? 'bg-dark-950 text-brand-gold' : 'bg-dark-900 text-slate-400'
-                    }`}>
-                      Ativo
-                    </span>
-                  )}
-                </button>
-              )}
-
-              {/* GALERIA BUFFET (APENAS ARIQUEMES) */}
-              {currentBranch?.id === 'ariquemes' && (currentUser?.role === ROLES.SUPER_ADMIN || currentUser?.branchId === 'ariquemes') && (
-                <button
-                  type="button"
-                  onClick={() => setActiveAdminTab('gallery')}
-                  className={`px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
-                    activeAdminTab === 'gallery'
-                      ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
-                      : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
-                  }`}
-                >
-                  <Camera className="w-4 h-4" />
-                  <span>Galeria Buffet</span>
-                </button>
-              )}
-
-              {/* ATALHO BUFFET (APENAS ARIQUEMES) */}
-              {onSwitchToBuffet && currentBranch?.id === 'ariquemes' && (
-                <button
-                  type="button"
-                  onClick={onSwitchToBuffet}
-                  className="px-3 py-1.5 rounded-xl font-bold flex items-center gap-1 bg-amber-500/10 text-brand-gold hover:bg-amber-500/20 border border-brand-gold/30 transition-all cursor-pointer whitespace-nowrap text-xs flex-shrink-0"
-                  title="Acessar vitrine do Buffet El Shadday Ariquemes"
-                >
-                  <Sparkles className="w-3.5 h-3.5" />
-                  <span>Buffet 👑</span>
-                </button>
-              )}
-
-            </div>
-
-            {/* Scroll Right Button */}
-            {canScrollRight && (
-              <button
-                type="button"
-                onClick={() => handleScrollTabs('right')}
-                className="absolute right-0 top-1/2 -translate-y-1/2 z-20 p-2 rounded-xl bg-dark-900/95 hover:bg-dark-850 text-brand-gold border border-brand-gold/40 shadow-xl backdrop-blur-md cursor-pointer transition-all active:scale-90 flex items-center justify-center translate-x-1 sm:translate-x-2 animate-pulse"
-                title="Rolar abas para a direita (ver mais opções)"
-              >
-                <ChevronRight className="w-4 h-4 stroke-[2.5]" />
-              </button>
-            )}
-
-          </div>
-        )}
-      </header>
-
-      {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-5 space-y-6">
-        
-        {/* VIEW 0A: MASTER FINANCIAL & PROFIT VIEW */}
-        {activeAdminTab === 'master-overview' && currentUser?.role === ROLES.SUPER_ADMIN && (
-          <MasterFinancialView
-            orders={orders}
-            branches={branchesList}
-            onNavigateToBranchMenu={(bId) => {
-              setMasterBranchFilter(bId);
-              setActiveAdminTab('menu');
-            }}
-            onNavigateToBranchKitchen={(bId) => {
-              setMasterBranchFilter(bId);
-              setActiveAdminTab('kds');
-            }}
-          />
-        )}
-
-        {/* VIEW 0B: BRANCH OVERVIEW (FOR BRANCH ADMIN) */}
-        {activeAdminTab === 'branch-overview' && currentUser?.role === ROLES.BRANCH_ADMIN && (
-          <MasterFinancialView
-            orders={orders.filter(o => (o.branchId || 'ariquemes') === (currentUser?.branchId || 'ariquemes'))}
-            branches={branchesList.filter(b => b.id === (currentUser?.branchId || 'ariquemes'))}
-            onNavigateToBranchMenu={() => setActiveAdminTab('menu')}
-            onNavigateToBranchKitchen={() => setActiveAdminTab('kds')}
-          />
-        )}
-
-        {/* VIEW 0C: BRANCHES MANAGEMENT (SUPER ADMIN) */}
-        {activeAdminTab === 'branches' && currentUser?.role === ROLES.SUPER_ADMIN && (
-          <BranchManagementView
-            branches={branchesList}
-            onRefreshBranches={() => setBranchesList(getStoredBranches())}
-            onNavigateToBranchMenu={(bId) => {
-              setMasterBranchFilter(bId);
-              setActiveAdminTab('menu');
-            }}
-            onNavigateToBranchKitchen={(bId) => {
-              setMasterBranchFilter(bId);
-              setActiveAdminTab('kds');
-            }}
-          />
-        )}
-
-        {/* VIEW 0D: USERS MANAGEMENT (SUPER ADMIN) */}
-        {activeAdminTab === 'users' && currentUser?.role === ROLES.SUPER_ADMIN && (
-          <UserManagementView
-            branches={branchesList}
-            currentUser={currentUser}
-            onRefreshUsers={() => {}}
-          />
-        )}
-        
-        {/* ============================================================== */}
-        {/* VIEW 1: KITCHEN DISPLAY SYSTEM (KDS) & ORDERS FEED             */}
-        {/* ============================================================== */}
-        {activeAdminTab === 'kds' && (
-          <div className="space-y-5 animate-fade-in">
-
-            {/* Operational Status Strip (Compact, Clean & Fast) */}
-            <div className="flex flex-wrap items-center justify-between gap-3 p-3 sm:p-4 rounded-2xl bg-dark-900 border border-dark-800 shadow-md">
-              
-              {/* Order Flow Counts */}
-              <div className="flex items-center gap-2 flex-wrap text-xs">
-                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-dark-950 border border-dark-800">
-                  <span className="text-slate-400">Total na Fila:</span>
-                  <span className="font-black text-white">{activeOrdersList.length}</span>
-                </div>
-                
-                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400">
-                  <span>Pendentes:</span>
-                  <span className="font-bold">{pendingCount}</span>
-                </div>
-                
-                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-gold/10 border border-brand-gold/30 text-brand-gold">
-                  <span>No Forno:</span>
-                  <span className="font-bold">{inPrepCount}</span>
-                </div>
-                
-                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-400">
-                  <span>Em Entrega:</span>
-                  <span className="font-bold">{inDeliveryCount}</span>
-                </div>
-
-                {delayedCount > 0 && (
-                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-500/15 border border-red-500/40 text-red-400 font-bold animate-pulse">
-                    <AlertTriangle className="w-3.5 h-3.5" />
-                    <span>Atrasados (+35m): {delayedCount}</span>
-                  </div>
-                )}
-              </div>
-
-              {/* WhatsApp Quick Status & Auto-Notify & Buffet Pause Shortcut */}
-              <div className="flex flex-wrap items-center gap-2 min-w-0 [&>*]:whitespace-nowrap">
-                {currentBranch?.id === 'ariquemes' && (
-                  <button
-                    type="button"
-                    onClick={() => setActiveAdminTab('buffet')}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-brand-gold text-xs font-bold transition-colors cursor-pointer"
-                    title="Acessar controle de pratos que acabaram no Buffet"
-                  >
-                    <Utensils className="w-3.5 h-3.5" />
-                    <span>Buffet: Pausar Pratos</span>
-                    {unavailableBuffetIds.length > 0 && (
-                      <span className="px-1.5 py-0.2 rounded-full bg-rose-500 text-white font-black text-[10px]">
-                        {unavailableBuffetIds.length} pausados
-                      </span>
-                    )}
-                  </button>
-                )}
-                {currentUser?.role !== ROLES.KITCHEN ? (
-                  <button
-                    type="button"
-                    onClick={() => setActiveAdminTab('whatsapp')}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-400 text-xs font-semibold transition-colors cursor-pointer"
-                    title="Clique para gerenciar a conexão do WhatsApp desta filial"
-                  >
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                    <span>WhatsApp: <strong>{currentBranch?.phoneFormatted || '(69) 99222-8682'}</strong></span>
-                  </button>
-                ) : (
-                  <div
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-semibold select-none"
-                    title="WhatsApp da filial ativo para envio de status"
-                  >
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                    <span>WhatsApp: <strong>{currentBranch?.phoneFormatted || '(69) 99222-8682'}</strong></span>
-                  </div>
-                )}
-
-                {currentUser?.role !== ROLES.KITCHEN ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const nextState = !whatsAppSettings.autoNotify;
-                      const updated = { ...whatsAppSettings, autoNotify: nextState };
-                      setWhatsAppSettings(updated);
-                      saveWhatsAppSettings(updated);
-                    }}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                      whatsAppSettings.autoNotify
-                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                        : 'bg-dark-800 text-slate-400 border border-dark-750'
-                    }`}
-                    title="Ativar ou pausar envio automático de mensagens no WhatsApp do cliente"
-                  >
-                    {whatsAppSettings.autoNotify ? '🔔 Avisos: ON' : '🔕 Avisos: OFF'}
-                  </button>
-                ) : (
-                  <div
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold select-none ${
-                      whatsAppSettings.autoNotify
-                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                        : 'bg-dark-800 text-slate-400 border border-dark-750'
-                    }`}
-                    title="Avisos automáticos de status via WhatsApp"
-                  >
-                    {whatsAppSettings.autoNotify ? '🔔 Avisos: ON' : '🔕 Avisos: OFF'}
-                  </div>
-                )}
-
-                {/* Fechar Caixa Button */}
-                <button
-                  type="button"
-                  onClick={() => setIsCashClosingModalOpen(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-dark-950 hover:bg-dark-850 border border-brand-gold/40 text-xs font-bold transition-all cursor-pointer shadow-sm"
-                  title="Controle de Caixa: Ver resumo do turno atual ou fechar o caixa"
-                >
-                  <Lock className="w-3.5 h-3.5 text-brand-gold" />
-                  <span className="text-slate-300">Caixa: <strong className="text-brand-gold">R$ {currentShiftTotals.grossRevenue.toFixed(2).replace('.', ',')}</strong></span>
-                  <span className="text-[10px] bg-brand-gold/15 text-amber-300 px-1.5 py-0.5 rounded font-black border border-brand-gold/30">
-                    Fechar
-                  </span>
-                </button>
-              </div>
-
-            </div>
-
-            {/* Filter Bar & Search */}
-            <div className="p-3.5 sm:p-4 rounded-2xl bg-dark-900 border border-dark-800 space-y-3">
-              <div className="flex flex-col gap-3">
-
-                {/* Filter buttons (linha inteira, com barrinha para deslizar e setas) */}
-                <div className="flex items-center gap-1.5 w-full min-w-0">
-                <button
-                  type="button"
-                  onClick={() => scrollKdsFilters('left')}
-                  className="flex-shrink-0 p-1.5 rounded-lg bg-dark-850 hover:bg-dark-800 text-brand-gold border border-brand-gold/30 cursor-pointer transition-all active:scale-90"
-                  title="Deslizar filtros para a esquerda"
-                >
-                  <ChevronLeft className="w-4 h-4 stroke-[2.5]" />
-                </button>
-                <div
-                  ref={kdsFiltersScrollRef}
-                  onWheel={(e) => {
-                    const el = kdsFiltersScrollRef.current;
-                    if (el && e.deltaY !== 0 && Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
-                      el.scrollLeft += e.deltaY;
-                    }
-                  }}
-                  className="admin-tabs-scrollbar flex items-center gap-1.5 flex-1 min-w-0 pb-2 pt-0.5 select-none"
-                >
-                  <button
-                    onClick={() => setSelectedFilter('todos')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex-shrink-0 ${
-                      selectedFilter === 'todos' 
-                        ? 'bg-brand-gold text-dark-950 font-black' 
-                        : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
-                    }`}
-                  >
-                    Ativos ({activeOrdersList.length})
-                  </button>
-
-                  <button
-                    onClick={() => setSelectedFilter('atrasados')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex-shrink-0 flex items-center gap-1 ${
-                      selectedFilter === 'atrasados' 
-                        ? 'bg-red-500 text-white font-black' 
-                        : 'bg-red-500/15 hover:bg-red-500/25 text-red-400 border border-red-500/30'
-                    }`}
-                  >
-                    <AlertTriangle className="w-3.5 h-3.5" />
-                    <span>Em Atraso ({delayedCount})</span>
-                  </button>
-
-                  <button
-                    onClick={() => setSelectedFilter('pendentes')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex-shrink-0 ${
-                      selectedFilter === 'pendentes' 
-                        ? 'bg-amber-500 text-dark-950 font-black' 
-                        : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
-                    }`}
-                  >
-                    Pendentes ({pendingCount})
-                  </button>
-
-                  <button
-                    onClick={() => setSelectedFilter('preparo')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex-shrink-0 ${
-                      selectedFilter === 'preparo' 
-                        ? 'bg-brand-gold text-dark-950 font-black' 
-                        : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
-                    }`}
-                  >
-                    No Forno ({inPrepCount})
-                  </button>
-
-                  {readyBalcaoCount > 0 && (
-                    <button
-                      onClick={() => setSelectedFilter('pronto_balcao')}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex-shrink-0 flex items-center gap-1 ${
-                        selectedFilter === 'pronto_balcao' 
-                          ? 'bg-purple-500 text-white font-black' 
-                          : 'bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 border border-purple-500/30'
-                      }`}
-                    >
-                      <Store className="w-3.5 h-3.5" />
-                      <span>Pronto Balcão ({readyBalcaoCount})</span>
-                    </button>
-                  )}
-
-                  <button
-                    onClick={() => setSelectedFilter('entrega')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex-shrink-0 ${
-                      selectedFilter === 'entrega' 
-                        ? 'bg-blue-500 text-white font-black' 
-                        : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
-                    }`}
-                  >
-                    Saiu p/ Entrega ({inDeliveryCount})
-                  </button>
-
-                  <button
-                    onClick={() => setSelectedFilter('concluidos')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex-shrink-0 ${
-                      selectedFilter === 'concluidos' 
-                        ? 'bg-emerald-500 text-dark-950 font-black' 
-                        : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
-                    }`}
-                  >
-                    Prontos / Entregues ({completedCount})
-                  </button>
-
-                  <button
-                    onClick={() => setSelectedFilter('cancelados')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex-shrink-0 flex items-center gap-1 ${
-                      selectedFilter === 'cancelados' 
-                        ? 'bg-red-700 text-white font-black' 
-                        : 'bg-red-950/40 text-red-400 hover:bg-red-950/70 border border-red-800/40'
-                    }`}
-                  >
-                    <XCircle className="w-3.5 h-3.5" />
-                    <span>Cancelados ({cancelledCount})</span>
-                  </button>
-
-                  {scopedOrders.some(o => o.shiftClosedAt || o.isArchived) && (
-                    <button
-                      type="button"
-                      onClick={() => setShowArchivedKdsOrders(!showArchivedKdsOrders)}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex-shrink-0 flex items-center gap-1 border ${
-                        showArchivedKdsOrders 
-                          ? 'bg-purple-600 text-white font-black shadow-sm' 
-                          : 'bg-dark-850 hover:bg-dark-800 text-purple-300 border-purple-500/30'
-                      }`}
-                      title="Clique para ver os pedidos dos caixas anteriores que já foram fechados"
-                    >
-                      <span>📦 {showArchivedKdsOrders ? 'Ocultar Caixas Fechados' : 'Ver Caixas Fechados'}</span>
-                    </button>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => scrollKdsFilters('right')}
-                  className="flex-shrink-0 p-1.5 rounded-lg bg-dark-850 hover:bg-dark-800 text-brand-gold border border-brand-gold/30 cursor-pointer transition-all active:scale-90"
-                  title="Deslizar filtros para a direita (ver mais opções)"
-                >
-                  <ChevronRight className="w-4 h-4 stroke-[2.5]" />
-                </button>
-                </div>
-
-                {/* Right controls: Grid Layout, Compact Mode, Sound Tester, Auto-Aba & Search */}
-                <div className="flex flex-wrap items-center gap-2 w-full">
-                  {/* Grid Layout Scheme Selector */}
-                  <div className="flex items-center gap-1 p-0.5 rounded-xl bg-dark-950 border border-dark-750" title="Mudar o esquema da grade de pedidos na tela">
-                    <span className="text-[10px] text-slate-500 font-bold px-1.5 uppercase tracking-wider hidden lg:inline">Grade:</span>
-                    <button
-                      type="button"
-                      onClick={() => handleSetKdsGridCols('2')}
-                      className={`px-2 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                        kdsGridCols === '2'
-                          ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
-                          : 'text-slate-400 hover:text-white hover:bg-dark-800'
-                      }`}
-                      title="2 Colunas (Padrão Grande)"
-                    >
-                      2 Col
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleSetKdsGridCols('3')}
-                      className={`px-2 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                        kdsGridCols === '3'
-                          ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
-                          : 'text-slate-400 hover:text-white hover:bg-dark-800'
-                      }`}
-                      title="3 Colunas (Recomendado - Mais pedidos visíveis na tela)"
-                    >
-                      3 Col
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleSetKdsGridCols('4')}
-                      className={`px-2 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                        kdsGridCols === '4'
-                          ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
-                          : 'text-slate-400 hover:text-white hover:bg-dark-800'
-                      }`}
-                      title="4 Colunas (Mural Compacto - Máxima visão para dias de pico)"
-                    >
-                      4 Col
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleSetKdsGridCols('1')}
-                      className={`px-2 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                        kdsGridCols === '1'
-                          ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
-                          : 'text-slate-400 hover:text-white hover:bg-dark-800'
-                      }`}
-                      title="1 Coluna (Lista corrida)"
-                    >
-                      1 Col
-                    </button>
-                  </div>
-
-                  {/* Compact Mode Toggle */}
-                  <button
-                    type="button"
-                    onClick={handleToggleKdsCompactMode}
-                    className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 border ${
-                      kdsCompactMode
-                        ? 'bg-brand-gold/20 text-brand-gold border-brand-gold/50'
-                        : 'bg-dark-850 text-slate-400 border-dark-750 hover:bg-dark-800'
-                    }`}
-                    title="Diminui o tamanho e o espaçamento dos cartões para caber ainda mais pedidos na tela"
-                  >
-                    <span>🗜️ {kdsCompactMode ? 'Compacto: ON' : 'Compacto: OFF'}</span>
-                  </button>
-
-                  {/* Sound Test / Volume Button */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsAudioUnlocked(true);
-                      playChime(true);
-                    }}
-                    className="px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/40"
-                    title="Testar o alarme sonoro alto da cozinha"
-                  >
-                    <BellRing className="w-3.5 h-3.5" />
-                    <span className="hidden sm:inline">Som Alto</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={toggleAutoFollowTab}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 border ${
-                      autoFollowTab 
-                        ? 'bg-brand-gold/15 text-brand-gold border-brand-gold/40 hover:bg-brand-gold/25' 
-                        : 'bg-dark-850 text-slate-400 border-dark-750 hover:bg-dark-800'
-                    }`}
-                    title="Quando ativado, a tela abre automaticamente a aba do novo status do pedido sempre que você avançar ou mudar seu status"
-                  >
-                    <RefreshCw className={`w-3.5 h-3.5 ${autoFollowTab ? 'text-brand-gold' : 'text-slate-400'}`} />
-                    <span>Auto-Aba: <strong>{autoFollowTab ? 'ON' : 'OFF'}</strong></span>
-                  </button>
-
-                  <div className="relative w-full sm:w-64 sm:ml-auto">
-                    <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                    <input
-                      type="text"
-                      placeholder="Buscar por Nº, Nome ou Bairro..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-dark-950 border border-dark-750 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-brand-gold"
-                    />
-                  </div>
-                </div>
-
-              </div>
-            </div>
-
-            {/* Orders Feed */}
-            <div className="space-y-4">
-
-              {/* Status Change Toast Banner */}
-              {statusChangeToast && (
-                <div className="p-3 rounded-2xl bg-brand-gold/15 border border-brand-gold/40 text-brand-gold text-xs font-bold flex items-center justify-between gap-3 animate-fade-in shadow-lg">
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-brand-gold animate-bounce" />
-                    <span>
-                      Pedido <strong>#{statusChangeToast.orderId}</strong> movido para a aba <strong>{statusChangeToast.tabLabel}</strong>!
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setStatusChangeToast(null)}
-                    className="text-slate-400 hover:text-white p-1 rounded-lg cursor-pointer"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              )}
-              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400 px-1">
-                <span>Mostrando <strong>{filteredOrders.length}</strong> pedidos</span>
-                <div className="flex items-center gap-3">
-                  {orders.length > 0 && onClearAllOrders && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (window.confirm("⚠️ ATENÇÃO: Deseja realmente excluir permanentemente TODOS os pedidos do banco de dados e do painel?")) {
-                          onClearAllOrders();
-                        }
-                      }}
-                      className="px-2.5 py-1 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-colors"
-                      title="Excluir permanentemente todos os pedidos"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                      <span>Limpar Todos</span>
-                    </button>
-                  )}
-                  <span className="flex items-center gap-1 text-[11px] text-brand-gold">
-                    <RefreshCw className="w-3 h-3 animate-spin-slow" />
-                    Sincronização em tempo real ativa
-                  </span>
-                </div>
-              </div>
-
-              {filteredOrders.length === 0 ? (
-                <div className="p-12 rounded-3xl bg-dark-900 border border-dark-800 text-center space-y-2">
-                  <Package className="w-12 h-12 text-slate-600 mx-auto" />
-                  <div className="text-sm font-bold text-slate-300">Nenhum pedido encontrado nesta seção.</div>
-                  <p className="text-xs text-slate-500">Mude os filtros acima ou crie um novo pedido no PDV de Balcão!</p>
-                  <button
-                    onClick={() => setActiveAdminTab('pdv')}
-                    className="mt-2 px-4 py-2 rounded-xl bg-brand-gold hover:bg-amber-400 text-dark-950 font-black text-xs inline-flex items-center gap-1.5 cursor-pointer shadow-glow-gold"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>Criar Pedido no PDV</span>
-                  </button>
-                </div>
-              ) : (
-                <div className={`
-                  ${kdsGridCols === '1' ? 'grid grid-cols-1 gap-3.5 max-w-2xl mx-auto' : ''}
-                  ${kdsGridCols === '2' ? 'grid grid-cols-1 md:grid-cols-2 gap-4' : ''}
-                  ${kdsGridCols === '3' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3' : ''}
-                  ${kdsGridCols === '4' ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5' : ''}
-                `}>
-                  {filteredOrders.map((order) => {
+  // Cartão de pedido da cozinha (usado na grade e nas colunas do quadro)
+  const renderKdsOrderCard = (order) => {
                     // Em 3 ou 4 colunas o cartão é estreito: empilha cabeçalho e pagamento para nada sair da borda
-                    const isNarrowCard = kdsGridCols === '3' || kdsGridCols === '4';
+                    const isNarrowCard = kdsGridCols === '3' || kdsGridCols === '4' || kdsGridCols === 'kanban';
                     const elapsedMin = getElapsedMinutes(order.createdAt);
                     const isDelayed = isOrderDelayed(order);
                     const currentStatus = normalizeOrderStatus(order);
@@ -5363,8 +4473,771 @@ export function AdminDashboard({
 
                       </div>
                     );
-                  })}
+  };
+
+  // Cartão compacto do quadro (estilo Ola Click): o essencial + botão da próxima etapa
+  const getNextKanbanAction = (order) => {
+    const st = normalizeOrderStatus(order);
+    const isDelivery = order.deliveryType === 'delivery';
+    if (st === 'RECEBIDO_COZINHA') return { status: 'EM_PREPARO', label: 'Aceitar e preparar', cls: 'bg-brand-gold text-dark-950' };
+    if (st === 'EM_PREPARO') return isDelivery
+      ? { status: 'SAIU_ENTREGA', label: 'Saiu p/ entrega', cls: 'bg-blue-500 text-white' }
+      : { status: 'PRONTO_BALCAO', label: 'Pronto p/ retirar', cls: 'bg-blue-500 text-white' };
+    if (st === 'PRONTO_BALCAO' || st === 'SAIU_ENTREGA') return { status: 'CONCLUIDO', label: 'Concluir', cls: 'bg-emerald-500 text-dark-950' };
+    return null;
+  };
+
+  // Solta o pedido numa coluna do quadro e muda a etapa dele
+  const handleKanbanDrop = (colId, orderId) => {
+    setKanbanDragOverCol(null);
+    setKanbanDragOrderId(null);
+    const order = (scopedOrders || []).find(o => o.orderId === orderId);
+    if (!order) return;
+    const current = normalizeOrderStatus(order);
+    if (current === 'CANCELADO') return;
+    let target = null;
+    if (colId === 'novos') target = 'RECEBIDO_COZINHA';
+    else if (colId === 'preparo') target = 'EM_PREPARO';
+    else if (colId === 'prontos') target = order.deliveryType === 'delivery' ? 'SAIU_ENTREGA' : 'PRONTO_BALCAO';
+    else if (colId === 'concluidos') target = 'CONCLUIDO';
+    else if (colId === 'cancelados') { setCancelModalOrder(order); return; }
+    if (!target || target === current) return;
+    if (colId === 'prontos' && (current === 'PRONTO_BALCAO' || current === 'SAIU_ENTREGA')) return;
+    handleUpdateStatusAndTab(order, target);
+  };
+
+  const renderKanbanCompactCard = (order) => {
+    const st = normalizeOrderStatus(order);
+    const mins = getElapsedMinutes(order.createdAt);
+    const isDone = st === 'CONCLUIDO' || st === 'CANCELADO';
+    const timeCls = isDone ? 'bg-dark-800 text-slate-400'
+      : mins >= 35 ? 'bg-red-500/20 text-red-300'
+      : mins >= 20 ? 'bg-amber-500/20 text-amber-300'
+      : 'bg-emerald-500/15 text-emerald-300';
+    const isPaid = order.paymentStatus === 'PAGO_APROVADO';
+    const items = Array.isArray(order.items) ? order.items : [];
+    const itemsCount = items.reduce((a, i) => a + (Number(i.quantity) || 1), 0);
+    const next = getNextKanbanAction(order);
+    const isDelivery = order.deliveryType === 'delivery';
+    const fromSite = order.source !== 'PDV_BALCAO';
+    const isHighlighted = highlightedOrderId === order.orderId;
+
+    return (
+      <div
+        role="button"
+        tabIndex={0}
+        draggable={st !== 'CANCELADO'}
+        onDragStart={(e) => {
+          e.dataTransfer.effectAllowed = 'move';
+          try { e.dataTransfer.setData('text/plain', order.orderId); } catch (err) {}
+          setKanbanDragOrderId(order.orderId);
+        }}
+        onDragEnd={() => { setKanbanDragOrderId(null); setKanbanDragOverCol(null); }}
+        onClick={() => setKanbanDetailOrderId(order.orderId)}
+        onKeyDown={(e) => { if (e.key === 'Enter') setKanbanDetailOrderId(order.orderId); }}
+        className={`rounded-xl bg-dark-900 border p-3 cursor-grab active:cursor-grabbing select-none transition-all hover:border-brand-gold/60 ${kanbanDragOrderId === order.orderId ? 'opacity-40 scale-[0.98]' : ''} ${
+          isHighlighted ? 'border-brand-gold ring-2 ring-brand-gold/40' : st === 'RECEBIDO_COZINHA' ? 'border-amber-500/40' : 'border-white/[0.07]'
+        } ${st === 'CANCELADO' ? 'opacity-60' : ''}`}
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-lg font-black text-white">#{formatOrderNumber(order)}</span>
+          <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ${isDelivery ? 'bg-blue-500/15 text-blue-300' : 'bg-dark-800 text-slate-300'}`}>
+            {isDelivery ? 'Delivery' : 'Retirada'}
+          </span>
+          {!fromSite && <span className="px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-brand-gold/15 text-brand-goldLight">PDV</span>}
+          <span className={`ml-auto px-1.5 py-0.5 rounded-md text-[11px] font-bold flex items-center gap-1 ${timeCls}`}>
+            <Clock className="w-3 h-3" /> {mins < 60 ? `${mins} min` : `${Math.floor(mins / 60)}h${String(mins % 60).padStart(2, '0')}`}
+          </span>
+        </div>
+
+        <p className="mt-1.5 text-sm font-semibold text-slate-100 truncate">{order.customerName || 'Cliente'}</p>
+        <p className="text-xs text-slate-400 truncate">
+          {isDelivery ? `${order.district || order.deliveryAddress?.district || ''}${order.address || order.deliveryAddress?.street ? ' • ' + (order.address || order.deliveryAddress?.street) : ''}` : 'Retirar no balcão'}
+        </p>
+
+        <ul className="mt-2 space-y-0.5 text-xs text-slate-300">
+          {items.slice(0, 3).map((it, idx) => (
+            <li key={it.id || idx} className="truncate"><span className="font-bold text-white">{it.quantity || 1}x</span> {it.name}</li>
+          ))}
+          {items.length > 3 && <li className="text-slate-500">+ {items.length - 3} itens</li>}
+        </ul>
+        {(order.orderNotes || order.notes) && (
+          <p className="mt-1.5 text-[11px] text-amber-300 line-clamp-2">Obs: {order.orderNotes || order.notes}</p>
+        )}
+
+        <div className="mt-2.5 flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-sm font-black text-white">R$ {(Number(order.total) || 0).toFixed(2).replace('.', ',')}</p>
+            <p className={`text-[11px] font-semibold ${isPaid ? 'text-emerald-400' : 'text-amber-400'}`}>
+              {isPaid ? 'Pago' : 'A cobrar'} • {itemsCount} {itemsCount === 1 ? 'item' : 'itens'}
+            </p>
+          </div>
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); handlePrintOrder(order); }}
+              className="w-9 h-9 rounded-lg bg-dark-800 text-slate-300 hover:text-white flex items-center justify-center cursor-pointer"
+              title="Imprimir comanda"
+            >
+              <Printer className="w-4 h-4" />
+            </button>
+            {next && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); handleUpdateStatusAndTab(order, next.status); }}
+                className={`h-9 px-3 rounded-lg text-xs font-black whitespace-nowrap cursor-pointer ${next.cls}`}
+              >
+                {next.label}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Itens do menu lateral do painel (mesmas regras de acesso das abas antigas)
+  const isAriquemesBuffet = currentBranch?.id === 'ariquemes' && (currentUser?.role === ROLES.SUPER_ADMIN || currentUser?.branchId === 'ariquemes');
+  const isKitchenRole = currentUser?.role === ROLES.KITCHEN;
+  const adminNavItems = [
+    { id: 'kds', label: 'Pedidos', icon: ChefHat, group: 'Operação', badge: activeOrdersList.length, badgeTone: delayedCount > 0 ? 'alert' : undefined },
+    !isKitchenRole && { id: 'pdv', label: 'Novo pedido (balcão)', shortLabel: 'Novo', icon: Plus, group: 'Operação', badge: pdvCart.length || null },
+    { id: 'cash', label: 'Caixa do dia', icon: Lock, group: 'Operação', onClick: () => setIsCashClosingModalOpen(true) },
+    !isKitchenRole && { id: 'menu', label: 'Cardápio', icon: Utensils, group: 'Loja', badge: scopedProductsList.length },
+    !isKitchenRole && { id: 'settings', label: 'Configurações', shortLabel: 'Ajustes', icon: Settings2, group: 'Loja' },
+    !isKitchenRole && { id: 'qrcode', label: 'QR Code e link', icon: QrCode, group: 'Loja' },
+    !isKitchenRole && { id: 'whatsapp', label: 'WhatsApp', icon: MessageSquare, group: 'Integrações' },
+    currentUser?.role === ROLES.SUPER_ADMIN && { id: 'master-overview', label: 'Faturamento', icon: BarChart3, group: 'Gestão' },
+    currentUser?.role === ROLES.BRANCH_ADMIN && { id: 'branch-overview', label: 'Desempenho', icon: BarChart3, group: 'Gestão' },
+    currentUser?.role === ROLES.SUPER_ADMIN && { id: 'branches', label: 'Filiais', icon: Building2, group: 'Gestão', badge: branchesList.length },
+    currentUser?.role === ROLES.SUPER_ADMIN && { id: 'users', label: 'Usuários', icon: Users, group: 'Gestão' },
+    isAriquemesBuffet && { id: 'buffet', label: 'Buffet: pratos', icon: Utensils, group: 'Buffet', badge: unavailableBuffetIds.length ? `${unavailableBuffetIds.length} pausados` : null, badgeTone: 'alert' },
+    isAriquemesBuffet && { id: 'gallery', label: 'Buffet: galeria', icon: Camera, group: 'Buffet' },
+    onSwitchToBuffet && currentBranch?.id === 'ariquemes' && { id: 'buffet-site', label: 'Vitrine do buffet', icon: Sparkles, group: 'Buffet', onClick: onSwitchToBuffet }
+  ].filter(Boolean);
+  const adminMobileNavItems = adminNavItems
+    .filter(it => ['kds', 'pdv', 'menu', 'settings'].includes(it.id))
+    .map(it => (it.id === 'menu' ? { ...it, badge: null } : it));
+
+  return (
+    <div className="min-h-screen bg-dark-950 text-slate-100 flex flex-col font-sans lg:pl-64 pb-20 lg:pb-0">
+      
+      {/* Real-time Order Alert Banner */}
+      {newOrderAlert && (
+        <div className="bg-gradient-to-r from-emerald-600 via-emerald-500 to-emerald-600 text-dark-950 font-black px-4 py-3 flex items-center justify-between shadow-2xl animate-bounce-subtle z-50 sticky top-0">
+          <div className="flex items-center gap-2 text-xs sm:text-sm">
+            <BellRing className="w-5 h-5 animate-pulse" />
+            <span>NOVO PEDIDO CHEGOU NA COZINHA! #{formatOrderNumber(newOrderAlert)} - {newOrderAlert.customerName} (R$ {(newOrderAlert.total || 0).toFixed(2).replace('.', ',')})</span>
+          </div>
+          <button
+            onClick={() => setNewOrderAlert(null)}
+            className="text-xs bg-dark-950 text-white px-2.5 py-1 rounded-lg cursor-pointer"
+          >
+            Dispensar
+          </button>
+        </div>
+      )}
+
+      {/* Moldura do painel: menu lateral, barra superior e menu inferior (estilo Ola Click) */}
+      <AdminShell
+        items={adminNavItems}
+        mobileItems={adminMobileNavItems}
+        activeId={activeAdminTab}
+        onSelect={(id) => {
+          if (id === 'menu') setMenuSubTab('products');
+          setActiveAdminTab(id);
+          try { window.scrollTo({ top: 0 }); } catch (e) {}
+        }}
+        title={ADMIN_TAB_TITLES[activeAdminTab] || 'Painel'}
+        subtitle={`${currentBranch?.displayName || currentBranch?.name || 'El Shadday'} • ${ROLE_LABELS[currentUser?.role] || 'Painel de Gestão'}`}
+        userName={currentUser?.name}
+        roleLabel={currentUser?.role === ROLES.SUPER_ADMIN ? 'Painel Master' : (currentBranch?.displayName || currentBranch?.name || 'Painel')}
+        isStoreOpen={restaurantSettings.isOpen !== false}
+        onToggleStore={handleQuickToggleStoreStatus}
+        isAudioUnlocked={isAudioUnlocked}
+        onToggleAudio={handleUnlockAndTestAudio}
+        onBackToSite={onBackToSite}
+        onLogout={onLogout}
+        topExtra={currentUser?.role === ROLES.SUPER_ADMIN ? (
+          <div className="hidden md:flex items-center gap-1.5 bg-dark-900 px-3 py-2 rounded-full border border-white/10">
+            <Store className="w-3.5 h-3.5 text-brand-gold" />
+            <select
+              value={masterBranchFilter}
+              onChange={(e) => setMasterBranchFilter(e.target.value)}
+              className="bg-transparent text-xs font-bold text-white focus:outline-none cursor-pointer"
+            >
+              <option value="all" className="bg-dark-900 text-white">Todas as filiais</option>
+              {branchesList.map(b => (
+                <option key={b.id} value={b.id} className="bg-dark-900 text-white">{b.name}</option>
+              ))}
+            </select>
+          </div>
+        ) : null}
+      >
+
+      {/* Main Container */}
+      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-5 space-y-6">
+        
+        {/* VIEW 0A: MASTER FINANCIAL & PROFIT VIEW */}
+        {activeAdminTab === 'master-overview' && currentUser?.role === ROLES.SUPER_ADMIN && (
+          <MasterFinancialView
+            orders={orders}
+            branches={branchesList}
+            onNavigateToBranchMenu={(bId) => {
+              setMasterBranchFilter(bId);
+              setActiveAdminTab('menu');
+            }}
+            onNavigateToBranchKitchen={(bId) => {
+              setMasterBranchFilter(bId);
+              setActiveAdminTab('kds');
+            }}
+          />
+        )}
+
+        {/* VIEW 0B: BRANCH OVERVIEW (FOR BRANCH ADMIN) */}
+        {activeAdminTab === 'branch-overview' && currentUser?.role === ROLES.BRANCH_ADMIN && (
+          <MasterFinancialView
+            orders={orders.filter(o => (o.branchId || 'ariquemes') === (currentUser?.branchId || 'ariquemes'))}
+            branches={branchesList.filter(b => b.id === (currentUser?.branchId || 'ariquemes'))}
+            onNavigateToBranchMenu={() => setActiveAdminTab('menu')}
+            onNavigateToBranchKitchen={() => setActiveAdminTab('kds')}
+          />
+        )}
+
+        {/* VIEW 0C: BRANCHES MANAGEMENT (SUPER ADMIN) */}
+        {activeAdminTab === 'branches' && currentUser?.role === ROLES.SUPER_ADMIN && (
+          <BranchManagementView
+            branches={branchesList}
+            onRefreshBranches={() => setBranchesList(getStoredBranches())}
+            onNavigateToBranchMenu={(bId) => {
+              setMasterBranchFilter(bId);
+              setActiveAdminTab('menu');
+            }}
+            onNavigateToBranchKitchen={(bId) => {
+              setMasterBranchFilter(bId);
+              setActiveAdminTab('kds');
+            }}
+          />
+        )}
+
+        {/* VIEW 0D: USERS MANAGEMENT (SUPER ADMIN) */}
+        {activeAdminTab === 'users' && currentUser?.role === ROLES.SUPER_ADMIN && (
+          <UserManagementView
+            branches={branchesList}
+            currentUser={currentUser}
+            onRefreshUsers={() => {}}
+          />
+        )}
+        
+        {/* ============================================================== */}
+        {/* VIEW 1: KITCHEN DISPLAY SYSTEM (KDS) & ORDERS FEED             */}
+        {/* ============================================================== */}
+        {activeAdminTab === 'kds' && (
+          <div className="space-y-5 animate-fade-in">
+
+            {/* Operational Status Strip (Compact, Clean & Fast) */}
+            <div className="flex flex-wrap items-center justify-between gap-3 p-3 sm:p-4 rounded-2xl bg-dark-900 border border-dark-800 shadow-md">
+              
+              {/* Order Flow Counts */}
+              <div className="flex items-center gap-2 flex-wrap text-xs">
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-dark-950 border border-dark-800">
+                  <span className="text-slate-400">Total na Fila:</span>
+                  <span className="font-black text-white">{activeOrdersList.length}</span>
                 </div>
+                
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400">
+                  <span>Pendentes:</span>
+                  <span className="font-bold">{pendingCount}</span>
+                </div>
+                
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-gold/10 border border-brand-gold/30 text-brand-gold">
+                  <span>No Forno:</span>
+                  <span className="font-bold">{inPrepCount}</span>
+                </div>
+                
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-400">
+                  <span>Em Entrega:</span>
+                  <span className="font-bold">{inDeliveryCount}</span>
+                </div>
+
+                {delayedCount > 0 && (
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-500/15 border border-red-500/40 text-red-400 font-bold animate-pulse">
+                    <AlertTriangle className="w-3.5 h-3.5" />
+                    <span>Atrasados (+35m): {delayedCount}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* WhatsApp Quick Status & Auto-Notify & Buffet Pause Shortcut */}
+              <div className="flex flex-wrap items-center gap-2 min-w-0 [&>*]:whitespace-nowrap">
+                {currentBranch?.id === 'ariquemes' && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveAdminTab('buffet')}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-brand-gold text-xs font-bold transition-colors cursor-pointer"
+                    title="Acessar controle de pratos que acabaram no Buffet"
+                  >
+                    <Utensils className="w-3.5 h-3.5" />
+                    <span>Buffet: Pausar Pratos</span>
+                    {unavailableBuffetIds.length > 0 && (
+                      <span className="px-1.5 py-0.2 rounded-full bg-rose-500 text-white font-black text-[10px]">
+                        {unavailableBuffetIds.length} pausados
+                      </span>
+                    )}
+                  </button>
+                )}
+                {currentUser?.role !== ROLES.KITCHEN ? (
+                  <button
+                    type="button"
+                    onClick={() => setActiveAdminTab('whatsapp')}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-400 text-xs font-semibold transition-colors cursor-pointer"
+                    title="Clique para gerenciar a conexão do WhatsApp desta filial"
+                  >
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <span>WhatsApp: <strong>{currentBranch?.phoneFormatted || '(69) 99222-8682'}</strong></span>
+                  </button>
+                ) : (
+                  <div
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-semibold select-none"
+                    title="WhatsApp da filial ativo para envio de status"
+                  >
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <span>WhatsApp: <strong>{currentBranch?.phoneFormatted || '(69) 99222-8682'}</strong></span>
+                  </div>
+                )}
+
+                {currentUser?.role !== ROLES.KITCHEN ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const nextState = !whatsAppSettings.autoNotify;
+                      const updated = { ...whatsAppSettings, autoNotify: nextState };
+                      setWhatsAppSettings(updated);
+                      saveWhatsAppSettings(updated);
+                    }}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      whatsAppSettings.autoNotify
+                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                        : 'bg-dark-800 text-slate-400 border border-dark-750'
+                    }`}
+                    title="Ativar ou pausar envio automático de mensagens no WhatsApp do cliente"
+                  >
+                    {whatsAppSettings.autoNotify ? '🔔 Avisos: ON' : '🔕 Avisos: OFF'}
+                  </button>
+                ) : (
+                  <div
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold select-none ${
+                      whatsAppSettings.autoNotify
+                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                        : 'bg-dark-800 text-slate-400 border border-dark-750'
+                    }`}
+                    title="Avisos automáticos de status via WhatsApp"
+                  >
+                    {whatsAppSettings.autoNotify ? '🔔 Avisos: ON' : '🔕 Avisos: OFF'}
+                  </div>
+                )}
+
+                {/* Fechar Caixa Button */}
+                <button
+                  type="button"
+                  onClick={() => setIsCashClosingModalOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-dark-950 hover:bg-dark-850 border border-brand-gold/40 text-xs font-bold transition-all cursor-pointer shadow-sm"
+                  title="Controle de Caixa: Ver resumo do turno atual ou fechar o caixa"
+                >
+                  <Lock className="w-3.5 h-3.5 text-brand-gold" />
+                  <span className="text-slate-300">Caixa: <strong className="text-brand-gold">R$ {currentShiftTotals.grossRevenue.toFixed(2).replace('.', ',')}</strong></span>
+                  <span className="text-[10px] bg-brand-gold/15 text-amber-300 px-1.5 py-0.5 rounded font-black border border-brand-gold/30">
+                    Fechar
+                  </span>
+                </button>
+              </div>
+
+            </div>
+
+            {/* Filter Bar & Search */}
+            <div className="p-3.5 sm:p-4 rounded-2xl bg-dark-900 border border-dark-800 space-y-3">
+              <div className="flex flex-col gap-3">
+
+                {/* Filter buttons (linha inteira, com barrinha para deslizar e setas) */}
+                <div className="flex items-center gap-1.5 w-full min-w-0">
+                <button
+                  type="button"
+                  onClick={() => scrollKdsFilters('left')}
+                  className="flex-shrink-0 p-1.5 rounded-lg bg-dark-850 hover:bg-dark-800 text-brand-gold border border-brand-gold/30 cursor-pointer transition-all active:scale-90"
+                  title="Deslizar filtros para a esquerda"
+                >
+                  <ChevronLeft className="w-4 h-4 stroke-[2.5]" />
+                </button>
+                <div
+                  ref={kdsFiltersScrollRef}
+                  onWheel={(e) => {
+                    const el = kdsFiltersScrollRef.current;
+                    if (el && e.deltaY !== 0 && Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+                      el.scrollLeft += e.deltaY;
+                    }
+                  }}
+                  className="admin-tabs-scrollbar flex items-center gap-1.5 flex-1 min-w-0 pb-2 pt-0.5 select-none"
+                >
+                  <button
+                    onClick={() => setSelectedFilter('todos')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex-shrink-0 ${
+                      selectedFilter === 'todos' 
+                        ? 'bg-brand-gold text-dark-950 font-black' 
+                        : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
+                    }`}
+                  >
+                    Ativos ({activeOrdersList.length})
+                  </button>
+
+                  <button
+                    onClick={() => setSelectedFilter('atrasados')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex-shrink-0 flex items-center gap-1 ${
+                      selectedFilter === 'atrasados' 
+                        ? 'bg-red-500 text-white font-black' 
+                        : 'bg-red-500/15 hover:bg-red-500/25 text-red-400 border border-red-500/30'
+                    }`}
+                  >
+                    <AlertTriangle className="w-3.5 h-3.5" />
+                    <span>Em Atraso ({delayedCount})</span>
+                  </button>
+
+                  <button
+                    onClick={() => setSelectedFilter('pendentes')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex-shrink-0 ${
+                      selectedFilter === 'pendentes' 
+                        ? 'bg-amber-500 text-dark-950 font-black' 
+                        : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
+                    }`}
+                  >
+                    Pendentes ({pendingCount})
+                  </button>
+
+                  <button
+                    onClick={() => setSelectedFilter('preparo')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex-shrink-0 ${
+                      selectedFilter === 'preparo' 
+                        ? 'bg-brand-gold text-dark-950 font-black' 
+                        : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
+                    }`}
+                  >
+                    No Forno ({inPrepCount})
+                  </button>
+
+                  {readyBalcaoCount > 0 && (
+                    <button
+                      onClick={() => setSelectedFilter('pronto_balcao')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex-shrink-0 flex items-center gap-1 ${
+                        selectedFilter === 'pronto_balcao' 
+                          ? 'bg-purple-500 text-white font-black' 
+                          : 'bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 border border-purple-500/30'
+                      }`}
+                    >
+                      <Store className="w-3.5 h-3.5" />
+                      <span>Pronto Balcão ({readyBalcaoCount})</span>
+                    </button>
+                  )}
+
+                  <button
+                    onClick={() => setSelectedFilter('entrega')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex-shrink-0 ${
+                      selectedFilter === 'entrega' 
+                        ? 'bg-blue-500 text-white font-black' 
+                        : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
+                    }`}
+                  >
+                    Saiu p/ Entrega ({inDeliveryCount})
+                  </button>
+
+                  <button
+                    onClick={() => setSelectedFilter('concluidos')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex-shrink-0 ${
+                      selectedFilter === 'concluidos' 
+                        ? 'bg-emerald-500 text-dark-950 font-black' 
+                        : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
+                    }`}
+                  >
+                    Prontos / Entregues ({completedCount})
+                  </button>
+
+                  <button
+                    onClick={() => setSelectedFilter('cancelados')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex-shrink-0 flex items-center gap-1 ${
+                      selectedFilter === 'cancelados' 
+                        ? 'bg-red-700 text-white font-black' 
+                        : 'bg-red-950/40 text-red-400 hover:bg-red-950/70 border border-red-800/40'
+                    }`}
+                  >
+                    <XCircle className="w-3.5 h-3.5" />
+                    <span>Cancelados ({cancelledCount})</span>
+                  </button>
+
+                  {scopedOrders.some(o => o.shiftClosedAt || o.isArchived) && (
+                    <button
+                      type="button"
+                      onClick={() => setShowArchivedKdsOrders(!showArchivedKdsOrders)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex-shrink-0 flex items-center gap-1 border ${
+                        showArchivedKdsOrders 
+                          ? 'bg-purple-600 text-white font-black shadow-sm' 
+                          : 'bg-dark-850 hover:bg-dark-800 text-purple-300 border-purple-500/30'
+                      }`}
+                      title="Clique para ver os pedidos dos caixas anteriores que já foram fechados"
+                    >
+                      <span>📦 {showArchivedKdsOrders ? 'Ocultar Caixas Fechados' : 'Ver Caixas Fechados'}</span>
+                    </button>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => scrollKdsFilters('right')}
+                  className="flex-shrink-0 p-1.5 rounded-lg bg-dark-850 hover:bg-dark-800 text-brand-gold border border-brand-gold/30 cursor-pointer transition-all active:scale-90"
+                  title="Deslizar filtros para a direita (ver mais opções)"
+                >
+                  <ChevronRight className="w-4 h-4 stroke-[2.5]" />
+                </button>
+                </div>
+
+                {/* Right controls: Grid Layout, Compact Mode, Sound Tester, Auto-Aba & Search */}
+                <div className="flex flex-wrap items-center gap-2 w-full">
+                  {/* Grid Layout Scheme Selector */}
+                  <div className="flex items-center gap-1 p-0.5 rounded-xl bg-dark-950 border border-dark-750" title="Mudar o esquema da grade de pedidos na tela">
+                    <span className="text-[10px] text-slate-500 font-bold px-1.5 uppercase tracking-wider hidden lg:inline">Ver como:</span>
+                    <button
+                      type="button"
+                      onClick={() => handleSetKdsGridCols('kanban')}
+                      className={`px-2 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        kdsGridCols === 'kanban'
+                          ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
+                          : 'text-slate-400 hover:text-white hover:bg-dark-800'
+                      }`}
+                      title="Quadro com colunas por etapa (Novos, Em preparo, Prontos)"
+                    >
+                      Quadro
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSetKdsGridCols('2')}
+                      className={`px-2 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        kdsGridCols === '2'
+                          ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
+                          : 'text-slate-400 hover:text-white hover:bg-dark-800'
+                      }`}
+                      title="2 Colunas (Padrão Grande)"
+                    >
+                      2 Col
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSetKdsGridCols('3')}
+                      className={`px-2 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        kdsGridCols === '3'
+                          ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
+                          : 'text-slate-400 hover:text-white hover:bg-dark-800'
+                      }`}
+                      title="3 Colunas (Recomendado - Mais pedidos visíveis na tela)"
+                    >
+                      3 Col
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSetKdsGridCols('4')}
+                      className={`px-2 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        kdsGridCols === '4'
+                          ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
+                          : 'text-slate-400 hover:text-white hover:bg-dark-800'
+                      }`}
+                      title="4 Colunas (Mural Compacto - Máxima visão para dias de pico)"
+                    >
+                      4 Col
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSetKdsGridCols('1')}
+                      className={`px-2 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        kdsGridCols === '1'
+                          ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
+                          : 'text-slate-400 hover:text-white hover:bg-dark-800'
+                      }`}
+                      title="1 Coluna (Lista corrida)"
+                    >
+                      1 Col
+                    </button>
+                  </div>
+
+                  {/* Compact Mode Toggle */}
+                  <button
+                    type="button"
+                    onClick={handleToggleKdsCompactMode}
+                    className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 border ${
+                      kdsCompactMode
+                        ? 'bg-brand-gold/20 text-brand-gold border-brand-gold/50'
+                        : 'bg-dark-850 text-slate-400 border-dark-750 hover:bg-dark-800'
+                    }`}
+                    title="Diminui o tamanho e o espaçamento dos cartões para caber ainda mais pedidos na tela"
+                  >
+                    <span>🗜️ {kdsCompactMode ? 'Compacto: ON' : 'Compacto: OFF'}</span>
+                  </button>
+
+                  {/* Sound Test / Volume Button */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsAudioUnlocked(true);
+                      playChime(true);
+                    }}
+                    className="px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/40"
+                    title="Testar o alarme sonoro alto da cozinha"
+                  >
+                    <BellRing className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Som Alto</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={toggleAutoFollowTab}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 border ${
+                      autoFollowTab 
+                        ? 'bg-brand-gold/15 text-brand-gold border-brand-gold/40 hover:bg-brand-gold/25' 
+                        : 'bg-dark-850 text-slate-400 border-dark-750 hover:bg-dark-800'
+                    }`}
+                    title="Quando ativado, a tela abre automaticamente a aba do novo status do pedido sempre que você avançar ou mudar seu status"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${autoFollowTab ? 'text-brand-gold' : 'text-slate-400'}`} />
+                    <span>Auto-Aba: <strong>{autoFollowTab ? 'ON' : 'OFF'}</strong></span>
+                  </button>
+
+                  <div className="relative w-full sm:w-64 sm:ml-auto">
+                    <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type="text"
+                      placeholder="Buscar por Nº, Nome ou Bairro..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-dark-950 border border-dark-750 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-brand-gold"
+                    />
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+            {/* Orders Feed */}
+            <div className="space-y-4">
+
+              {/* Status Change Toast Banner */}
+              {statusChangeToast && (
+                <div className="p-3 rounded-2xl bg-brand-gold/15 border border-brand-gold/40 text-brand-gold text-xs font-bold flex items-center justify-between gap-3 animate-fade-in shadow-lg">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-brand-gold animate-bounce" />
+                    <span>
+                      Pedido <strong>#{statusChangeToast.orderId}</strong> movido para a aba <strong>{statusChangeToast.tabLabel}</strong>!
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setStatusChangeToast(null)}
+                    className="text-slate-400 hover:text-white p-1 rounded-lg cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400 px-1">
+                <span>Mostrando <strong>{filteredOrders.length}</strong> pedidos</span>
+                <div className="flex items-center gap-3">
+                  {orders.length > 0 && onClearAllOrders && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (window.confirm("⚠️ ATENÇÃO: Deseja realmente excluir permanentemente TODOS os pedidos do banco de dados e do painel?")) {
+                          onClearAllOrders();
+                        }
+                      }}
+                      className="px-2.5 py-1 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                      title="Excluir permanentemente todos os pedidos"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      <span>Limpar Todos</span>
+                    </button>
+                  )}
+                  <span className="flex items-center gap-1 text-[11px] text-brand-gold">
+                    <RefreshCw className="w-3 h-3 animate-spin-slow" />
+                    Sincronização em tempo real ativa
+                  </span>
+                </div>
+              </div>
+
+              {filteredOrders.length === 0 && kdsGridCols !== 'kanban' ? (
+                <div className="p-12 rounded-3xl bg-dark-900 border border-dark-800 text-center space-y-2">
+                  <Package className="w-12 h-12 text-slate-600 mx-auto" />
+                  <div className="text-sm font-bold text-slate-300">Nenhum pedido encontrado nesta seção.</div>
+                  <p className="text-xs text-slate-500">Mude os filtros acima ou crie um novo pedido no PDV de Balcão!</p>
+                  <button
+                    onClick={() => setActiveAdminTab('pdv')}
+                    className="mt-2 px-4 py-2 rounded-xl bg-brand-gold hover:bg-amber-400 text-dark-950 font-black text-xs inline-flex items-center gap-1.5 cursor-pointer shadow-glow-gold"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Criar Pedido no PDV</span>
+                  </button>
+                </div>
+              ) : (
+                kdsGridCols === 'kanban' ? (
+                  <div>
+                  <p className="hidden md:block mb-2 text-xs text-slate-500">Dica: arraste os cartões com o mouse de uma coluna para outra para mudar a etapa do pedido.</p>
+                  <div className="flex gap-3 overflow-x-auto pb-3 -mx-1 px-1 snap-x">
+                    {KDS_KANBAN_COLUMNS
+                      .map(col => ({ ...col, list: filteredOrders.filter(o => col.statuses.includes(normalizeOrderStatus(o))) }))
+                      .filter(col => (col.always && selectedFilter === 'todos') || col.list.length > 0)
+                      .map(col => (
+                        <section
+                          key={col.id}
+                          onDragOver={(e) => {
+                            if (!kanbanDragOrderId) return;
+                            e.preventDefault();
+                            e.dataTransfer.dropEffect = 'move';
+                            if (kanbanDragOverCol !== col.id) setKanbanDragOverCol(col.id);
+                          }}
+                          onDragLeave={(e) => {
+                            if (!e.currentTarget.contains(e.relatedTarget)) setKanbanDragOverCol(prev => (prev === col.id ? null : prev));
+                          }}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            let id = kanbanDragOrderId;
+                            try { id = e.dataTransfer.getData('text/plain') || id; } catch (err) {}
+                            handleKanbanDrop(col.id, id);
+                          }}
+                          className={`snap-start flex-shrink-0 w-[85vw] sm:w-[320px] lg:flex-1 lg:min-w-[250px] rounded-2xl border flex flex-col max-h-[calc(100vh-200px)] transition-colors ${
+                            kanbanDragOverCol === col.id
+                              ? 'bg-brand-gold/10 border-brand-gold border-dashed'
+                              : kanbanDragOrderId ? 'bg-dark-950/60 border-white/15 border-dashed' : 'bg-dark-950/60 border-white/5'
+                          }`}
+                        >
+                          <header className={`flex items-center justify-between px-3.5 py-3 border-b border-white/5 rounded-t-2xl ${col.headerCls}`}>
+                            <span className="font-bold text-sm">{col.title}</span>
+                            <span className="min-w-[1.75rem] px-2 py-0.5 rounded-full bg-dark-950/60 text-xs font-black text-center">{col.list.length}</span>
+                          </header>
+                          <div className="flex-1 overflow-y-auto p-2.5 space-y-2.5">
+                            {col.list.length === 0 ? (
+                              <p className="py-8 text-center text-xs text-slate-500">{kanbanDragOrderId ? 'Solte aqui' : (col.dropHint || 'Nenhum pedido aqui')}</p>
+                            ) : col.list.map(order => (
+                              <React.Fragment key={order.orderId}>{renderKanbanCompactCard(order)}</React.Fragment>
+                            ))}
+                          </div>
+                        </section>
+                      ))}
+                  </div>
+                  </div>
+                ) : (
+                <div className={`
+                  ${kdsGridCols === '1' ? 'grid grid-cols-1 gap-3.5 max-w-2xl mx-auto' : ''}
+                  ${kdsGridCols === '2' ? 'grid grid-cols-1 md:grid-cols-2 gap-4' : ''}
+                  ${kdsGridCols === '3' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3' : ''}
+                  ${kdsGridCols === '4' ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5' : ''}
+                `}>
+                  {filteredOrders.map(order => (
+                    <React.Fragment key={order.orderId}>{renderKdsOrderCard(order)}</React.Fragment>
+                  ))}
+                </div>
+                )
               )}
 
             </div>
@@ -5378,85 +5251,48 @@ export function AdminDashboard({
         {activeAdminTab === 'pdv' && currentUser?.role !== ROLES.KITCHEN && (
           <div className="space-y-6 animate-fade-in">
             
-            {/* PDV Header Banner & Sub-Tabs */}
-            <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-dark-900 via-dark-850 to-dark-900 border border-brand-gold/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xl">
-              <div>
-                <div className="flex items-center gap-2">
-                  <Store className="w-5 h-5 text-brand-gold" />
-                  <h2 className="text-base sm:text-lg font-black text-white">
-                    Ponto de Venda (PDV) • Atendimento Rápido
-                  </h2>
-                </div>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Lance pedidos do balcão ou dê baixa imediata para controle de atendimento da loja.
-                </p>
-              </div>
-
-              {/* Sub-Tabs Switcher */}
-              <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-                <div className="flex items-center bg-dark-950 p-1 rounded-2xl border border-dark-800 shadow-inner">
-                  <button
-                    type="button"
-                    onClick={() => setPdvSubTab('novo')}
-                    className={`px-3 sm:px-3.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer ${
-                      pdvSubTab === 'novo'
-                        ? 'bg-gradient-to-r from-brand-gold to-amber-400 text-dark-950 shadow-glow-gold'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    <ShoppingBag className="w-3.5 h-3.5" />
-                    <span>Novo Lançamento</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setPdvSubTab('baixa')}
-                    className={`px-3 sm:px-3.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer relative ${
-                      pdvSubTab === 'baixa'
-                        ? 'bg-gradient-to-r from-brand-gold to-amber-400 text-dark-950 shadow-glow-gold'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    <ClipboardList className="w-3.5 h-3.5" />
-                    <span>Controle / Dar Baixa</span>
-                    {openPdvOrdersCount > 0 && (
-                      <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
-                        pdvSubTab === 'baixa'
-                          ? 'bg-dark-950 text-brand-gold'
-                          : 'bg-brand-gold text-dark-950 animate-pulse'
-                      }`}>
-                        {openPdvOrdersCount}
-                      </span>
-                    )}
-                  </button>
-                </div>
-
+            {/* Abas do PDV (estilo Ola Click) */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex items-center p-1 rounded-xl bg-dark-900 border border-white/5">
                 <button
                   type="button"
-                  onClick={() => {
-                    setIsCustomerDirectoryOpen(true);
-                    setCustomerDirectorySearch('');
-                  }}
-                  className="px-3 py-1.5 rounded-xl bg-dark-950 hover:bg-dark-800 text-brand-gold border border-brand-gold/30 text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm cursor-pointer ml-auto sm:ml-0"
-                  title="Ver clientes cadastrados a partir dos pedidos"
+                  onClick={() => setPdvSubTab('novo')}
+                  className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 cursor-pointer ${
+                    pdvSubTab === 'novo' ? 'bg-brand-gold text-dark-950' : 'text-slate-300 hover:text-white'
+                  }`}
                 >
-                  <Users className="w-3.5 h-3.5" />
-                  <span>Cadastros ({getAllCustomers().length})</span>
+                  <Plus className="w-4 h-4" /> Novo pedido
                 </button>
-
-                {pdvSubTab === 'novo' && pdvCart.length > 0 && (
-                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-dark-950 border border-dark-800">
-                    <span className="text-xs text-slate-400">Total:</span>
-                    <span className="text-sm font-black text-brand-gold">
-                      R$ {pdvCartTotal.toFixed(2).replace('.', ',')}
+                <button
+                  type="button"
+                  onClick={() => setPdvSubTab('baixa')}
+                  className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 cursor-pointer ${
+                    pdvSubTab === 'baixa' ? 'bg-brand-gold text-dark-950' : 'text-slate-300 hover:text-white'
+                  }`}
+                >
+                  <ClipboardList className="w-4 h-4" /> Dar baixa
+                  {openPdvOrdersCount > 0 && (
+                    <span className={`min-w-[1.4rem] px-1.5 rounded-full text-[11px] font-black ${pdvSubTab === 'baixa' ? 'bg-dark-950 text-brand-gold' : 'bg-red-500 text-white'}`}>
+                      {openPdvOrdersCount}
                     </span>
-                  </div>
-                )}
+                  )}
+                </button>
               </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsCustomerDirectoryOpen(true);
+                  setCustomerDirectorySearch('');
+                }}
+                className="ml-auto px-3 py-2 rounded-xl bg-dark-900 border border-white/10 text-slate-200 text-sm font-semibold flex items-center gap-2 cursor-pointer"
+                title="Ver clientes cadastrados a partir dos pedidos"
+              >
+                <Users className="w-4 h-4 text-brand-gold" /> Clientes ({getAllCustomers().length})
+              </button>
             </div>
 
             {/* Validation Banner if any */}
-            {pdvValidationError && (
+            {pdvValidationError && pdvSubTab !== 'novo' && (
               <div className="p-3.5 rounded-2xl bg-red-500/20 border border-red-500/40 text-red-300 text-xs font-bold flex items-center justify-between gap-2 animate-bounce-subtle">
                 <div className="flex items-center gap-2">
                   <AlertCircle className="w-4 h-4 flex-shrink-0" />
@@ -5471,939 +5307,493 @@ export function AdminDashboard({
               </div>
             )}
 
-            {/* PDV Main Layout Grid (Sub-Tab: Novo Lançamento) */}
+            {/* PDV estilo Ola Click: catálogo em grade à esquerda, comanda fixa à direita */}
             {pdvSubTab === 'novo' && (
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-              
-              {/* LEFT: PRODUCTS CATALOG (7 cols) */}
-              <div className="lg:col-span-7 space-y-4">
-                
-                {/* Search & Category Filter */}
-                <div className="p-3.5 rounded-2xl bg-dark-900 border border-dark-800 space-y-3">
-                  <div className="relative">
-                    <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                    <input
-                      type="text"
-                      placeholder="Buscar produto por nome ou ingrediente..."
-                      value={pdvSearch}
-                      onChange={(e) => setPdvSearch(e.target.value)}
-                      className="w-full pl-9 pr-3 py-2 rounded-xl bg-dark-950 border border-dark-750 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-brand-gold"
-                    />
-                  </div>
+              <div className="lg:flex lg:gap-4 lg:items-start">
 
-                  {/* Category Pills with Horizontal Scroll Controls (Arrows + Wheel + Dragbar) */}
-                  <div className="relative flex items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => scrollPdvCategories('left')}
-                      className="p-1.5 sm:p-2 rounded-xl bg-dark-950 hover:bg-dark-800 text-slate-300 hover:text-brand-gold border border-dark-750 transition-colors flex-shrink-0 cursor-pointer shadow-sm"
-                      title="Rolar categorias para esquerda"
-                    >
-                      <ChevronLeft className="w-4 h-4" />
-                    </button>
-
-                    <div 
+                {/* ===== CATÁLOGO ===== */}
+                <section className="flex-1 min-w-0 rounded-2xl bg-dark-900/60 border border-white/5 overflow-hidden">
+                  <div className="p-3 border-b border-white/5 space-y-3">
+                    <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-dark-950 border border-white/10 focus-within:border-brand-gold">
+                      <Search className="w-4 h-4 text-slate-400" />
+                      <input
+                        type="text"
+                        placeholder="Buscar produto"
+                        value={pdvSearch}
+                        onChange={(e) => setPdvSearch(e.target.value)}
+                        className="flex-1 bg-transparent text-sm text-white placeholder-slate-500 focus:outline-none"
+                      />
+                      {pdvSearch && (
+                        <button type="button" onClick={() => setPdvSearch('')} className="text-slate-500 hover:text-white cursor-pointer" aria-label="Limpar busca">
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                    <div
                       ref={pdvCategoryScrollRef}
                       onWheel={handlePdvCategoryWheel}
-                      className="flex items-center gap-1.5 overflow-x-auto pb-1.5 pt-0.5 admin-tabs-scrollbar scroll-smooth flex-1"
+                      className="flex gap-1 overflow-x-auto no-scrollbar border-b border-white/5 -mb-3"
                     >
-                      <button
-                        type="button"
-                        onClick={() => setPdvCategory('todos')}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex-shrink-0 ${
-                          pdvCategory === 'todos'
-                            ? 'bg-brand-gold text-dark-950 font-black shadow-glow-gold'
-                            : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
-                        }`}
-                      >
-                        Todos
-                      </button>
-                      {deliveryCategories.map(cat => (
-                        <button
-                          key={cat.id}
-                          type="button"
-                          onClick={() => setPdvCategory(cat.id)}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex-shrink-0 ${
-                            pdvCategory === cat.id
-                              ? 'bg-brand-gold text-dark-950 font-black shadow-glow-gold'
-                              : 'bg-dark-850 hover:bg-dark-800 text-slate-300 border border-dark-750'
-                          }`}
-                        >
-                          {cat.name}
-                        </button>
-                      ))}
+                      {[{ id: 'todos', name: 'Todos' }, ...deliveryCategories].map(cat => {
+                        const count = cat.id === 'todos'
+                          ? productsList.filter(p => p.isAvailable !== false).length
+                          : productsList.filter(p => p.isAvailable !== false && p.categoryId === cat.id).length;
+                        if (cat.id !== 'todos' && count === 0) return null;
+                        return (
+                          <button
+                            key={cat.id}
+                            type="button"
+                            onClick={() => setPdvCategory(cat.id)}
+                            className={`flex-shrink-0 px-3 py-2.5 text-sm font-semibold whitespace-nowrap border-b-2 transition-colors cursor-pointer ${
+                              pdvCategory === cat.id ? 'border-brand-gold text-brand-gold' : 'border-transparent text-slate-400 hover:text-white'
+                            }`}
+                          >
+                            {cat.name} <span className="text-xs opacity-60">{count}</span>
+                          </button>
+                        );
+                      })}
                     </div>
-
-                    <button
-                      type="button"
-                      onClick={() => scrollPdvCategories('right')}
-                      className="p-1.5 sm:p-2 rounded-xl bg-dark-950 hover:bg-dark-800 text-slate-300 hover:text-brand-gold border border-dark-750 transition-colors flex-shrink-0 cursor-pointer shadow-sm"
-                      title="Rolar categorias para direita (Bebidas, Caldos, etc.)"
-                    >
-                      <ChevronRight className="w-4 h-4" />
-                    </button>
                   </div>
-                </div>
 
-                {/* Products Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[600px] overflow-y-auto pr-1">
-                  {/* Standalone Sauce Quick Add */}
-                  <div className="sm:col-span-2 p-3 rounded-2xl bg-gradient-to-r from-dark-900 via-amber-950/20 to-dark-900 border border-amber-500/40 flex items-center justify-between gap-3 shadow-md">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-10 h-10 rounded-xl bg-amber-400/20 text-amber-300 flex items-center justify-center text-xl flex-shrink-0 border border-amber-400/30">
-                        🍯
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h4 className="text-xs font-bold text-white">{extraSauceConfig.name || 'Molho Especial da Casa'} (Potinho Avulso)</h4>
-                          <span className="text-xs font-black text-brand-gold font-mono">
-                            R$ {Number(extraSauceConfig.price || 0).toFixed(2).replace('.', ',')}
-                          </span>
-                        </div>
-                        <p className="text-[10px] text-slate-400">Adicione potinhos avulsos ao pedido ou configure no Cardápio</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 shrink-0">
-                      {pdvCart.find(i => i.isStandaloneSauce) && (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-brand-gold text-dark-950 font-black">
-                          {pdvCart.find(i => i.isStandaloneSauce).quantity}x na comanda
-                        </span>
-                      )}
+                  <div className="p-3 pb-24 lg:pb-3 grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2.5 lg:max-h-[calc(100vh-230px)] lg:overflow-y-auto">
+                    {/* Potinho de molho avulso */}
+                    {extraSauceConfig?.active !== false && (pdvCategory === 'todos' || pdvCategory === 'bebidas') && !pdvSearch.trim() && (
                       <button
                         type="button"
                         onClick={handleAddStandaloneSauceToPDV}
-                        className="px-3 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-dark-950 font-black text-xs transition-colors flex items-center gap-1 cursor-pointer shadow-sm"
+                        className="relative text-left rounded-xl bg-dark-900 border border-amber-500/30 hover:border-amber-400 overflow-hidden flex flex-col cursor-pointer"
                       >
-                        <Plus className="w-3.5 h-3.5 stroke-[3]" />
-                        <span>+ Potinho</span>
+                        <div className="aspect-[4/3] bg-amber-500/10 flex items-center justify-center text-4xl">🍯</div>
+                        <div className="p-2.5 flex-1 flex flex-col">
+                          <p className="text-[13px] font-semibold text-white leading-snug line-clamp-2">Potinho de {extraSauceConfig.name || 'molho'}</p>
+                          <p className="mt-auto pt-1 text-sm font-bold text-brand-gold">R$ {Number(extraSauceConfig.price || 0).toFixed(2).replace('.', ',')}</p>
+                        </div>
+                        {pdvCart.find(i => i.isStandaloneSauce) && (
+                          <span className="absolute top-2 right-2 min-w-[1.6rem] h-6 px-1.5 rounded-full bg-brand-gold text-dark-950 text-xs font-black flex items-center justify-center">
+                            {pdvCart.find(i => i.isStandaloneSauce).quantity}
+                          </span>
+                        )}
                       </button>
-                    </div>
-                  </div>
+                    )}
 
-                  {pdvFilteredProducts.map(prod => {
-                    const inCart = pdvCart.find(i => i.id === prod.id);
+                    {pdvFilteredProducts.length === 0 && (
+                      <p className="col-span-full py-10 text-center text-sm text-slate-500">Nenhum produto encontrado.</p>
+                    )}
 
-                    return (
-                      <div
-                        key={prod.id}
-                        onClick={() => handlePDVProductClick(prod)}
-                        className={`p-2.5 rounded-2xl border transition-all cursor-pointer select-none flex items-center justify-between gap-2.5 ${
-                          inCart
-                            ? 'bg-brand-gold/10 border-brand-gold/60 shadow-sm'
-                            : 'bg-dark-900 hover:bg-dark-850 border-dark-800'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          {prod.image && (
-                            <div className="w-11 h-11 rounded-xl overflow-hidden bg-dark-950 flex-shrink-0 border border-dark-800">
-                              <img src={prod.image} alt={prod.name} className="w-full h-full object-cover" loading="lazy" />
-                            </div>
-                          )}
-                          <div className="min-w-0">
-                            <h4 className="text-xs font-bold text-white truncate">{prod.name}</h4>
-                            <div className="text-xs font-black text-brand-gold mt-0.5">
-                              R$ {(prod.price || 0).toFixed(2).replace('.', ',')}
+                    {pdvFilteredProducts.map(prod => {
+                      const inCart = pdvCart.find(i => i.id === prod.id);
+                      const needsOptions = isPizzaProduct(prod) || isBoxProduct(prod) || isComboProduct(prod) || isAcaiProduct(prod);
+                      return (
+                        <button
+                          key={prod.id}
+                          type="button"
+                          onClick={() => handlePDVProductClick(prod)}
+                          className={`relative text-left rounded-xl bg-dark-900 border overflow-hidden flex flex-col transition-colors cursor-pointer active:scale-[0.98] ${
+                            inCart ? 'border-brand-gold' : 'border-white/[0.06] hover:border-brand-gold/50'
+                          }`}
+                        >
+                          <div className="aspect-[4/3] bg-dark-950">
+                            {prod.image ? (
+                              <img src={prod.image} alt="" loading="lazy" className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center"><Utensils className="w-8 h-8 text-brand-gold/30" /></div>
+                            )}
+                          </div>
+                          <div className="p-2.5 flex-1 flex flex-col">
+                            <p className="text-[13px] font-semibold text-white leading-snug line-clamp-2">{prod.name}</p>
+                            <div className="mt-auto pt-1">
+                              {needsOptions && <span className="block text-[10px] leading-none text-slate-400">a partir de</span>}
+                              <span className="text-sm font-bold text-brand-gold whitespace-nowrap">R$ {(prod.price || 0).toFixed(2).replace('.', ',')}</span>
                             </div>
                           </div>
-                        </div>
-
-                        {/* Action Button */}
-                        <div className="flex items-center gap-1 flex-shrink-0">
-                          {isPizzaProduct(prod) ? (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setPdvPizzaToCustomize(prod);
-                              }}
-                              className="px-2.5 py-1.5 rounded-xl bg-brand-gold/15 hover:bg-brand-gold hover:text-dark-950 text-brand-gold font-bold text-xs transition-colors flex items-center gap-1 border border-brand-gold/40 cursor-pointer"
-                              title="Escolher Sabores da Pizza"
-                            >
-                              <Pizza className="w-3.5 h-3.5" />
-                              <span>Sabores</span>
-                            </button>
-                          ) : isBoxProduct(prod) ? (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setPdvBoxToCustomize(prod);
-                              }}
-                              className="px-2.5 py-1.5 rounded-xl bg-brand-gold/15 hover:bg-brand-gold hover:text-dark-950 text-brand-gold font-bold text-xs transition-colors flex items-center gap-1 border border-brand-gold/40 cursor-pointer"
-                              title="Montar Caixa de Esfirras"
-                            >
-                              <Package className="w-3.5 h-3.5" />
-                              <span>Montar</span>
-                            </button>
-                          ) : isAcaiProduct(prod) ? (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setPdvAcaiToCustomize(prod);
-                              }}
-                              className="px-2.5 py-1.5 rounded-xl bg-purple-500/15 hover:bg-purple-500 hover:text-white text-purple-300 font-bold text-xs transition-colors flex items-center gap-1 border border-purple-500/40 cursor-pointer"
-                              title="Escolher Adicionais do Açaí"
-                            >
-                              <Sparkles className="w-3.5 h-3.5" />
-                              <span>Adicionais</span>
-                            </button>
-                          ) : isComboProduct(prod) ? (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setPdvComboToCustomize(prod);
-                              }}
-                              className="px-2.5 py-1.5 rounded-xl bg-brand-gold/15 hover:bg-brand-gold hover:text-dark-950 text-brand-gold font-bold text-xs transition-colors flex items-center gap-1 border border-brand-gold/40 cursor-pointer"
-                              title="Personalizar Combo"
-                            >
-                              <Star className="w-3.5 h-3.5" />
-                              <span>Combo</span>
-                            </button>
-                          ) : inCart ? (
-                            <div className="flex items-center gap-1 bg-dark-950 px-2 py-1 rounded-xl border border-dark-750">
-                              <span className="text-xs font-black text-brand-gold">
-                                {inCart.quantity}x
-                              </span>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleAddProductToPDV(prod, 1);
-                                }}
-                                className="w-5 h-5 rounded bg-brand-gold hover:bg-amber-400 text-dark-950 flex items-center justify-center font-bold text-xs cursor-pointer"
-                              >
-                                +
-                              </button>
-                            </div>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleAddProductToPDV(prod, 1);
-                              }}
-                              className="px-2.5 py-1.5 rounded-xl bg-dark-800 hover:bg-brand-gold hover:text-dark-950 text-slate-300 font-bold text-xs transition-colors flex items-center gap-1 border border-dark-700 cursor-pointer"
-                            >
-                              <Plus className="w-3.5 h-3.5 stroke-[3]" />
-                              <span>Incluir</span>
-                            </button>
+                          {inCart && (
+                            <span className="absolute top-2 right-2 min-w-[1.6rem] h-6 px-1.5 rounded-full bg-brand-gold text-dark-950 text-xs font-black flex items-center justify-center">
+                              {inCart.quantity}
+                            </span>
                           )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
 
-              </div>
+                {/* Botão "Ver comanda" no celular */}
+                {pdvCart.length > 0 && !pdvTicketOpen && (
+                  <button
+                    type="button"
+                    onClick={() => setPdvTicketOpen(true)}
+                    className="lg:hidden fixed left-3 right-3 bottom-[76px] z-30 h-14 px-4 rounded-2xl bg-brand-gold text-dark-950 font-bold flex items-center justify-between shadow-glow-gold cursor-pointer"
+                  >
+                    <span className="flex items-center gap-2">
+                      <span className="min-w-[1.6rem] h-6 px-1.5 rounded-lg bg-dark-950 text-brand-gold text-xs font-black flex items-center justify-center">
+                        {pdvCart.reduce((a, i) => a + i.quantity, 0)}
+                      </span>
+                      Ver comanda
+                    </span>
+                    <span className="font-black">R$ {pdvCartTotal.toFixed(2).replace('.', ',')}</span>
+                  </button>
+                )}
 
-              {/* RIGHT: ORDER SUMMARY & DISPATCH (5 cols) */}
-              <div className="lg:col-span-5 space-y-4">
-                
-                <div className="p-4 rounded-3xl bg-dark-900 border border-dark-800 space-y-4 shadow-xl">
-                  
-                  {/* Cart Items Title */}
-                  <div className="flex items-center justify-between border-b border-dark-800 pb-2.5">
+                {/* ===== COMANDA ===== */}
+                <aside
+                  className={`${pdvTicketOpen ? 'fixed inset-0 z-[75] flex' : 'hidden'} lg:z-auto lg:flex lg:sticky lg:top-[76px] w-full lg:w-[380px] xl:w-[400px] flex-shrink-0 flex-col bg-dark-900 lg:rounded-2xl lg:border lg:border-white/10 lg:h-[calc(100vh-150px)] overflow-hidden`}
+                >
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
                     <div className="flex items-center gap-2">
-                      <ShoppingBag className="w-4 h-4 text-brand-gold" />
-                      <h3 className="text-sm font-black text-white">Comanda do Pedido</h3>
+                      <button type="button" onClick={() => setPdvTicketOpen(false)} className="lg:hidden w-9 h-9 rounded-full bg-dark-800 text-slate-200 flex items-center justify-center cursor-pointer" aria-label="Voltar ao catálogo">
+                        <ArrowLeft className="w-5 h-5" />
+                      </button>
+                      <h3 className="text-base font-bold text-white">Comanda</h3>
                     </div>
-                    {pdvCart.length > 0 && (
+                    {(pdvCart.length > 0 || pdvCustomerName) && (
                       <button
                         type="button"
                         onClick={() => {
+                          if (!window.confirm('Limpar a comanda inteira?')) return;
                           setPdvCart([]);
                           setPdvDiscount('');
                           setPdvServiceName('');
                           setPdvServiceFee('');
+                          setPdvCustomerName('');
+                          setPdvCustomerPhone('');
+                          setPdvAddress('');
+                          setPdvNumber('');
+                          setPdvReference('');
+                          setPdvOrderNotes('');
+                          setPdvCashChange('');
+                          setActiveAutoCompletedCustomer(null);
                         }}
-                        className="text-[11px] text-red-400 hover:underline cursor-pointer"
+                        className="text-xs font-semibold text-red-300 hover:text-red-200 flex items-center gap-1 cursor-pointer"
                       >
-                        Limpar Itens
+                        <Trash2 className="w-3.5 h-3.5" /> Limpar
                       </button>
                     )}
                   </div>
 
-                  {/* Items list */}
-                  <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                    {pdvCart.length === 0 ? (
-                      <div className="text-center py-6 text-slate-500 text-xs">
-                        Clique nos produtos ao lado para montar o pedido.
-                      </div>
-                    ) : (
-                      pdvCart.map(item => (
-                        <div key={item.id} className="p-2 rounded-xl bg-dark-950 border border-dark-800 flex items-center justify-between gap-2">
-                          <div className="min-w-0 flex-1">
-                            <div className="text-xs font-bold text-white truncate">{item.name}</div>
-                            {item.description && (
-                              <div className="text-[10px] text-slate-400 line-clamp-2 leading-tight mt-0.5">{item.description}</div>
-                            )}
-                            <div className="text-[11px] text-brand-gold">
-                              R$ {(item.price * item.quantity).toFixed(2).replace('.', ',')}
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-1.5 flex-shrink-0">
-                            <button
-                              type="button"
-                              onClick={() => handleUpdatePDVItemQty(item.id, -1)}
-                              className="w-6 h-6 rounded-lg bg-dark-800 hover:bg-dark-700 text-white flex items-center justify-center text-xs cursor-pointer"
-                            >
-                              <Minus className="w-3 h-3" />
-                            </button>
-                            <span className="w-5 text-center text-xs font-black text-white">
-                              {item.quantity}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => handleUpdatePDVItemQty(item.id, 1)}
-                              className="w-6 h-6 rounded-lg bg-brand-gold hover:bg-amber-400 text-dark-950 flex items-center justify-center text-xs font-bold cursor-pointer"
-                            >
-                              <Plus className="w-3 h-3 stroke-[3]" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleRemovePDVItem(item.id)}
-                              className="w-6 h-6 rounded-lg text-slate-500 hover:text-red-400 flex items-center justify-center text-xs ml-1 cursor-pointer"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-
-                  {/* Quick Add Extra Sauce to Order */}
-                  <div className="pt-1">
-                    <button
-                      type="button"
-                      onClick={handleAddStandaloneSauceToPDV}
-                      className="w-full py-2 px-3 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/35 text-amber-300 hover:text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-                    >
-                      <span>🍯 + Incluir Potinho de Molho Extra (+ R$ {Number(extraSauceConfig.price || 0).toFixed(2).replace('.', ',')})</span>
-                    </button>
-                  </div>
-
-                  {/* Customer Information Form */}
-                  <div className="border-t border-dark-800 pt-3 space-y-3">
-                    <div className="text-xs font-bold text-slate-300 uppercase tracking-wider">
-                      Dados do Cliente:
-                    </div>
-
-                    <div className="relative">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        <div className="relative">
-                          <div className="flex items-center justify-between mb-0.5">
-                            <label className="text-[10px] text-slate-400 block">Nome do Cliente *</label>
-                            <span className="text-[9px] text-brand-gold font-medium flex items-center gap-0.5">
-                              <Sparkles className="w-2.5 h-2.5" /> Auto-completar
-                            </span>
-                          </div>
-                          <div className="relative">
-                            <input
-                              type="text"
-                              placeholder="Digite o nome..."
-                              value={pdvCustomerName}
-                              onChange={handleCustomerNameChange}
-                              onFocus={() => {
-                                if (pdvCustomerName.trim().length >= 2) {
-                                  const matches = searchCustomers(pdvCustomerName);
-                                  setCustomerSuggestions(matches);
-                                  setIsCustomerSuggestionsOpen(matches.length > 0);
-                                }
-                              }}
-                              className="w-full px-3 py-1.5 rounded-xl bg-dark-950 border border-dark-750 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-brand-gold pr-7"
-                            />
-                            {pdvCustomerName && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setPdvCustomerName('');
-                                  setCustomerSuggestions([]);
-                                  setIsCustomerSuggestionsOpen(false);
-                                  setActiveAutoCompletedCustomer(null);
-                                }}
-                                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
-                              >
-                                <X className="w-3 h-3" />
-                              </button>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="relative">
-                          <div className="flex items-center justify-between mb-0.5">
-                            <label className="text-[10px] text-slate-400 block">WhatsApp / Celular</label>
-                            <span className="text-[9px] text-slate-500">Busca por número</span>
-                          </div>
-                          <div className="relative">
-                            <input
-                              type="text"
-                              placeholder="(69) 99999-9999"
-                              value={pdvCustomerPhone}
-                              onChange={handleCustomerPhoneChange}
-                              onFocus={() => {
-                                if (pdvCustomerPhone.trim().length >= 2) {
-                                  const matches = searchCustomers(pdvCustomerPhone);
-                                  setCustomerSuggestions(matches);
-                                  setIsCustomerSuggestionsOpen(matches.length > 0);
-                                }
-                              }}
-                              className="w-full px-3 py-1.5 rounded-xl bg-dark-950 border border-dark-750 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-brand-gold pr-7"
-                            />
-                            {pdvCustomerPhone && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setPdvCustomerPhone('');
-                                  setCustomerSuggestions([]);
-                                  setIsCustomerSuggestionsOpen(false);
-                                  setActiveAutoCompletedCustomer(null);
-                                }}
-                                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
-                              >
-                                <X className="w-3 h-3" />
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Dropdown de Sugestões de Clientes Cadastrados */}
-                      {isCustomerSuggestionsOpen && customerSuggestions.length > 0 && (
-                        <div className="relative z-50">
-                          <div 
-                            className="fixed inset-0" 
-                            onClick={() => setIsCustomerSuggestionsOpen(false)} 
-                          />
-                          <div className="absolute top-1 left-0 right-0 bg-dark-900 border border-brand-gold/50 rounded-xl shadow-2xl overflow-hidden z-50 divide-y divide-dark-800">
-                            <div className="p-2 bg-dark-950 flex items-center justify-between text-[11px] text-slate-400">
-                              <span className="font-bold text-white flex items-center gap-1.5">
-                                <Users className="w-3.5 h-3.5 text-brand-gold" />
-                                Clientes Encontrados ({customerSuggestions.length})
-                              </span>
-                              <span className="text-[10px] text-brand-gold">Clique para preencher tudo</span>
-                            </div>
-                            <div className="max-h-56 overflow-y-auto">
-                              {customerSuggestions.map((cust) => (
-                                <button
-                                  key={cust.id || cust.key}
-                                  type="button"
-                                  onClick={() => handleSelectCustomer(cust)}
-                                  className="w-full p-2.5 text-left hover:bg-brand-gold/10 transition-colors flex items-center justify-between gap-2 group cursor-pointer"
-                                >
-                                  <div className="flex items-center gap-2.5 min-w-0">
-                                    <div className="w-7 h-7 rounded-full bg-brand-gold/20 text-brand-gold font-black text-xs flex items-center justify-center shrink-0 border border-brand-gold/30">
-                                      {(cust.name || 'C').charAt(0).toUpperCase()}
-                                    </div>
-                                    <div className="min-w-0">
-                                      <div className="flex items-center gap-1.5">
-                                        <span className="font-bold text-xs text-white group-hover:text-brand-gold transition-colors truncate">
-                                          {cust.name}
-                                        </span>
-                                        <span className="px-1.5 py-0.2 rounded-full bg-dark-800 text-brand-gold text-[9px] font-bold border border-brand-gold/20 shrink-0">
-                                          {cust.ordersCount || 1} {(cust.ordersCount || 1) === 1 ? 'pedido' : 'pedidos'}
-                                        </span>
-                                      </div>
-                                      <div className="text-[11px] text-slate-400 flex items-center gap-2 truncate">
-                                        {cust.phoneFormatted || cust.phone ? (
-                                          <span className="text-slate-300 font-mono text-[10px]">
-                                            {cust.phoneFormatted || cust.phone}
-                                          </span>
-                                        ) : null}
-                                        {(cust.street || cust.address) ? (
-                                          <span>• 📍 {cust.district || ''} - {cust.street || cust.address}{cust.number ? `, Nº ${cust.number}` : ''}</span>
-                                        ) : (
-                                          <span>• 🛍️ Preferência Balcão</span>
-                                        )}
-                                      </div>
-                                    </div>
-                                  </div>
-                                  <span className="inline-block px-2 py-0.5 rounded bg-brand-gold/20 text-brand-gold text-[10px] font-bold group-hover:bg-brand-gold group-hover:text-dark-950 transition-colors shrink-0">
-                                    Preencher ↵
-                                  </span>
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Badge de Cliente Vinculado */}
-                      {activeAutoCompletedCustomer && (
-                        <div className="mt-2 p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                            <span className="truncate">
-                              Perfil vinculado: <b>{activeAutoCompletedCustomer.name}</b> • {activeAutoCompletedCustomer.ordersCount || 1} pedidos anteriores
-                            </span>
-                          </div>
+                  <div className="flex-1 overflow-y-auto">
+                    {/* Tipo de pedido */}
+                    <div className="px-4 pt-3">
+                      <div className="grid grid-cols-2 p-1 rounded-xl bg-dark-950 border border-white/5">
+                        {[
+                          { id: 'balcao', label: 'Balcão / Retirada', icon: Store },
+                          { id: 'delivery', label: 'Delivery', icon: Bike }
+                        ].map(t => (
                           <button
+                            key={t.id}
                             type="button"
-                            onClick={() => {
-                              setActiveAutoCompletedCustomer(null);
-                              setPdvCustomerName('');
-                              setPdvCustomerPhone('');
-                              setPdvAddress('');
-                              setPdvNumber('');
-                              setPdvReference('');
-                            }}
-                            className="text-[10px] text-slate-400 hover:text-white underline shrink-0 cursor-pointer"
+                            onClick={() => setPdvDeliveryType(t.id)}
+                            className={`py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-1.5 cursor-pointer ${
+                              pdvDeliveryType === t.id ? 'bg-brand-gold text-dark-950' : 'text-slate-400'
+                            }`}
                           >
-                            Limpar
+                            <t.icon className="w-4 h-4" /> {t.label}
                           </button>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Delivery Type Selector */}
-                    <div>
-                      <label className="text-[10px] text-slate-400 block mb-1">Tipo de Pedido:</label>
-                      <div className="grid grid-cols-2 gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setPdvDeliveryType('balcao')}
-                          className={`py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                            pdvDeliveryType === 'balcao'
-                              ? 'bg-brand-gold text-dark-950 font-black shadow-sm'
-                              : 'bg-dark-950 text-slate-400 border border-dark-800'
-                          }`}
-                        >
-                          <Store className="w-3.5 h-3.5" />
-                          <span>Balcão (Retirada)</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setPdvDeliveryType('delivery')}
-                          className={`py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                            pdvDeliveryType === 'delivery'
-                              ? 'bg-blue-500 text-white font-black shadow-sm'
-                              : 'bg-dark-950 text-slate-400 border border-dark-800'
-                          }`}
-                        >
-                          <Bike className="w-3.5 h-3.5" />
-                          <span>Delivery (Entrega)</span>
-                        </button>
+                        ))}
                       </div>
                     </div>
 
-                    {/* If Delivery: District & Address */}
-                    {pdvDeliveryType === 'delivery' && (
-                      <div className="space-y-2 p-2.5 rounded-xl bg-dark-950 border border-dark-800">
-                        <div>
-                          <div className="flex items-center justify-between mb-0.5">
-                            <label className="text-[10px] text-slate-400">Bairro em Ariquemes:</label>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setActiveAdminTab('settings');
-                                setSettingsSubTab('delivery-fees');
-                              }}
-                              className="text-[10px] text-brand-gold hover:underline flex items-center gap-0.5"
-                            >
-                              ⚙️ Editar Taxas
-                            </button>
+                    {/* Cliente */}
+                    <div className="px-4 pt-3 relative">
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">Cliente</p>
+                      <div className="grid grid-cols-5 gap-2">
+                        <input
+                          type="text"
+                          placeholder="Nome *"
+                          value={pdvCustomerName}
+                          onChange={handleCustomerNameChange}
+                          onFocus={() => {
+                            if (pdvCustomerName.trim().length >= 2) {
+                              const matches = searchCustomers(pdvCustomerName);
+                              setCustomerSuggestions(matches);
+                              setIsCustomerSuggestionsOpen(matches.length > 0);
+                            }
+                          }}
+                          className="col-span-3 px-3 py-2.5 rounded-xl bg-dark-950 border border-white/10 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-brand-gold"
+                        />
+                        <input
+                          type="tel"
+                          placeholder="Telefone"
+                          value={pdvCustomerPhone}
+                          onChange={handleCustomerPhoneChange}
+                          onFocus={() => {
+                            if (pdvCustomerPhone.trim().length >= 2) {
+                              const matches = searchCustomers(pdvCustomerPhone);
+                              setCustomerSuggestions(matches);
+                              setIsCustomerSuggestionsOpen(matches.length > 0);
+                            }
+                          }}
+                          className="col-span-2 px-3 py-2.5 rounded-xl bg-dark-950 border border-white/10 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-brand-gold"
+                        />
+                      </div>
+
+                      {isCustomerSuggestionsOpen && customerSuggestions.length > 0 && (
+                        <>
+                          <div className="fixed inset-0 z-40" onClick={() => setIsCustomerSuggestionsOpen(false)} />
+                          <div className="absolute left-4 right-4 mt-1 z-50 rounded-xl bg-dark-850 border border-brand-gold/40 shadow-2xl max-h-60 overflow-y-auto divide-y divide-white/5">
+                            {customerSuggestions.map(cust => (
+                              <button
+                                key={cust.id || cust.key}
+                                type="button"
+                                onClick={() => handleSelectCustomer(cust)}
+                                className="w-full p-2.5 text-left hover:bg-brand-gold/10 flex items-center gap-2.5 cursor-pointer"
+                              >
+                                <span className="w-8 h-8 rounded-full bg-brand-gold/20 text-brand-gold font-black text-xs flex items-center justify-center flex-shrink-0">
+                                  {(cust.name || 'C').charAt(0).toUpperCase()}
+                                </span>
+                                <span className="min-w-0 flex-1">
+                                  <span className="block text-sm font-semibold text-white truncate">{cust.name}</span>
+                                  <span className="block text-xs text-slate-400 truncate">
+                                    {cust.phoneFormatted || cust.phone || 'sem telefone'}
+                                    {(cust.street || cust.address) ? ` • ${cust.district || ''} ${cust.street || cust.address}` : ''}
+                                  </span>
+                                </span>
+                                <span className="text-[11px] text-slate-500 flex-shrink-0">{cust.ordersCount || 1} ped.</span>
+                              </button>
+                            ))}
                           </div>
+                        </>
+                      )}
+
+                      {activeAutoCompletedCustomer && (
+                        <p className="mt-1.5 text-xs text-emerald-300 flex items-center gap-1.5">
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Cliente cadastrado • {activeAutoCompletedCustomer.ordersCount || 1} pedidos anteriores
+                        </p>
+                      )}
+
+                      {pdvDeliveryType === 'delivery' && (
+                        <div className="mt-2 space-y-2">
                           <select
                             value={pdvDistrict.id}
                             onChange={(e) => {
                               const found = districtsList.find(d => d.id === e.target.value);
                               if (found) setPdvDistrict(found);
                             }}
-                            className="w-full px-2.5 py-1.5 rounded-xl bg-dark-900 border border-dark-750 text-white text-xs focus:outline-none focus:border-brand-gold"
+                            className="w-full px-3 py-2.5 rounded-xl bg-dark-950 border border-white/10 text-sm text-white focus:outline-none focus:border-brand-gold"
                           >
                             {districtsList.map(d => (
                               <option key={d.id} value={d.id} disabled={d.isAvailable === false}>
-                                {d.name} {d.isAvailable === false ? '(Pausado / Esgotado)' : `(+ R$ ${(Number(d.price) || 0).toFixed(2).replace('.', ',')})`}
+                                {d.name} {d.isAvailable === false ? '(pausado)' : `— entrega R$ ${(Number(d.price) || 0).toFixed(2).replace('.', ',')}`}
                               </option>
                             ))}
                           </select>
-                        </div>
-
-                        <div className="grid grid-cols-3 gap-2">
-                          <div className="col-span-2">
-                            <label className="text-[10px] text-slate-400 block mb-0.5">Rua / Endereço *</label>
-                            <input
-                              type="text"
-                              placeholder="Ex: Rua das Flores"
-                              value={pdvAddress}
-                              onChange={(e) => setPdvAddress(e.target.value)}
-                              className="w-full px-2.5 py-1.5 rounded-xl bg-dark-900 border border-dark-750 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-brand-gold"
-                            />
+                          <div className="grid grid-cols-4 gap-2">
+                            <input type="text" placeholder="Rua / endereço *" value={pdvAddress} onChange={(e) => setPdvAddress(e.target.value)} className="col-span-3 px-3 py-2.5 rounded-xl bg-dark-950 border border-white/10 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-brand-gold" />
+                            <input type="text" placeholder="Nº" value={pdvNumber} onChange={(e) => setPdvNumber(e.target.value)} className="px-3 py-2.5 rounded-xl bg-dark-950 border border-white/10 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-brand-gold" />
                           </div>
-                          <div>
-                            <label className="text-[10px] text-slate-400 block mb-0.5">Nº</label>
-                            <input
-                              type="text"
-                              placeholder="123"
-                              value={pdvNumber}
-                              onChange={(e) => setPdvNumber(e.target.value)}
-                              className="w-full px-2.5 py-1.5 rounded-xl bg-dark-900 border border-dark-750 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-brand-gold"
-                            />
-                          </div>
+                          <input type="text" placeholder="Ponto de referência" value={pdvReference} onChange={(e) => setPdvReference(e.target.value)} className="w-full px-3 py-2.5 rounded-xl bg-dark-950 border border-white/10 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-brand-gold" />
                         </div>
+                      )}
+                    </div>
 
-                        <div>
-                          <label className="text-[10px] text-slate-400 block mb-0.5">Ponto de Referência</label>
-                          <input
-                            type="text"
-                            placeholder="Ex: Próximo à padaria"
-                            value={pdvReference}
-                            onChange={(e) => setPdvReference(e.target.value)}
-                            className="w-full px-2.5 py-1.5 rounded-xl bg-dark-900 border border-dark-750 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-brand-gold"
-                          />
+                    {/* Itens */}
+                    <div className="px-4 pt-4">
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">Itens</p>
+                      {pdvCart.length === 0 ? (
+                        <div className="py-8 rounded-xl border border-dashed border-white/10 text-center text-sm text-slate-500">
+                          Toque nos produtos para adicionar
                         </div>
-                      </div>
-                    )}
+                      ) : (
+                        <div className="divide-y divide-white/5 rounded-xl bg-dark-950 border border-white/5">
+                          {pdvCart.map(item => (
+                            <div key={item.id} className="p-2.5 flex items-start gap-2.5">
+                              <div className="flex items-center rounded-lg bg-dark-800 flex-shrink-0">
+                                <button type="button" onClick={() => handleUpdatePDVItemQty(item.id, -1)} className="w-7 h-8 flex items-center justify-center text-slate-200 cursor-pointer" aria-label="Diminuir">
+                                  <Minus className="w-3.5 h-3.5" />
+                                </button>
+                                <span className="w-5 text-center text-sm font-bold text-white">{item.quantity}</span>
+                                <button type="button" onClick={() => handleUpdatePDVItemQty(item.id, 1)} className="w-7 h-8 flex items-center justify-center text-slate-200 cursor-pointer" aria-label="Aumentar">
+                                  <Plus className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-semibold text-white leading-snug">{item.name}</p>
+                                {item.description && <p className="text-xs text-slate-400 leading-snug line-clamp-3 mt-0.5">{item.description}</p>}
+                              </div>
+                              <div className="text-right flex-shrink-0">
+                                <p className="text-sm font-bold text-white">R$ {(item.price * item.quantity).toFixed(2).replace('.', ',')}</p>
+                                <button type="button" onClick={() => handleRemovePDVItem(item.id)} className="mt-1 text-slate-500 hover:text-red-400 cursor-pointer" aria-label="Remover item">
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
 
-                    {/* Payment & Status */}
-                    <div className="space-y-2">
-                      <label className="text-[10px] text-slate-400 block">Forma de Pagamento:</label>
-                      <div className="grid grid-cols-4 gap-1 text-[11px]">
+                    {/* Extras recolhíveis: observação, desconto, serviço */}
+                    <div className="px-4 pt-3 space-y-1.5">
+                      {[
+                        { id: 'obs', label: 'Observação para a cozinha', icon: MessageSquare, value: pdvOrderNotes ? pdvOrderNotes : '' },
+                        { id: 'desc', label: 'Desconto', icon: Tag, value: pdvDiscountAmount > 0 ? `- R$ ${pdvDiscountAmount.toFixed(2).replace('.', ',')}` : '' },
+                        { id: 'serv', label: 'Serviço / taxa extra', icon: Wrench, value: pdvServiceAmount > 0 ? `+ R$ ${pdvServiceAmount.toFixed(2).replace('.', ',')}` : '' }
+                      ].map(ex => (
+                        <div key={ex.id} className="rounded-xl bg-dark-950 border border-white/5">
+                          <button
+                            type="button"
+                            onClick={() => setPdvExtrasOpen(prev => (prev === ex.id ? '' : ex.id))}
+                            className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-slate-300 cursor-pointer"
+                          >
+                            <ex.icon className="w-4 h-4 text-brand-gold" />
+                            <span className="flex-1 text-left">{ex.label}</span>
+                            {ex.value && <span className="text-xs font-semibold text-brand-goldLight truncate max-w-[45%]">{ex.value}</span>}
+                            <ChevronRight className={`w-4 h-4 text-slate-500 transition-transform ${pdvExtrasOpen === ex.id ? 'rotate-90' : ''}`} />
+                          </button>
+                          {pdvExtrasOpen === ex.id && (
+                            <div className="px-3 pb-3">
+                              {ex.id === 'obs' && (
+                                <textarea
+                                  rows={2}
+                                  placeholder="Ex.: sem cebola, massa bem assada..."
+                                  value={pdvOrderNotes}
+                                  onChange={(e) => setPdvOrderNotes(e.target.value)}
+                                  className="w-full px-3 py-2 rounded-lg bg-dark-900 border border-white/10 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-brand-gold"
+                                />
+                              )}
+                              {ex.id === 'desc' && (
+                                <div className="flex items-center gap-1.5">
+                                  <input
+                                    type="text"
+                                    inputMode="decimal"
+                                    placeholder="R$ 0,00"
+                                    value={pdvDiscount}
+                                    onChange={(e) => setPdvDiscount(e.target.value)}
+                                    className="w-24 px-3 py-2 rounded-lg bg-dark-900 border border-white/10 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                                  />
+                                  {[2, 5, 10].map(v => (
+                                    <button key={v} type="button" onClick={() => setPdvDiscount(String(v))} className="px-2.5 py-2 rounded-lg bg-dark-900 border border-white/10 text-xs font-bold text-emerald-300 cursor-pointer">R$ {v}</button>
+                                  ))}
+                                  {pdvDiscount && <button type="button" onClick={() => setPdvDiscount('')} className="ml-auto text-xs text-slate-400 cursor-pointer">Tirar</button>}
+                                </div>
+                              )}
+                              {ex.id === 'serv' && (
+                                <div className="space-y-1.5">
+                                  <div className="flex gap-1.5">
+                                    <input type="text" placeholder="O que foi (ex.: embalagem)" value={pdvServiceName} onChange={(e) => setPdvServiceName(e.target.value)} className="flex-1 min-w-0 px-3 py-2 rounded-lg bg-dark-900 border border-white/10 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-400" />
+                                    <input type="text" inputMode="decimal" placeholder="R$ 0,00" value={pdvServiceFee} onChange={(e) => setPdvServiceFee(e.target.value)} className="w-24 px-3 py-2 rounded-lg bg-dark-900 border border-white/10 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-400" />
+                                  </div>
+                                  <div className="flex gap-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => { setPdvServiceName('10% Garçom'); setPdvServiceFee((pdvCartSubtotal * 0.1).toFixed(2).replace('.', ',')); }}
+                                      className="px-2.5 py-1.5 rounded-lg bg-dark-900 border border-white/10 text-xs font-bold text-amber-300 cursor-pointer"
+                                    >
+                                      10% garçom
+                                    </button>
+                                    {(pdvServiceName || pdvServiceFee) && (
+                                      <button type="button" onClick={() => { setPdvServiceName(''); setPdvServiceFee(''); }} className="ml-auto text-xs text-slate-400 cursor-pointer">Tirar</button>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Pagamento */}
+                    <div className="px-4 pt-4 pb-4">
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">Pagamento</p>
+                      <div className="grid grid-cols-4 gap-1.5">
                         {[
-                          { id: 'pix', label: 'PIX' },
-                          { id: 'dinheiro', label: 'Dinheiro' },
-                          { id: 'debito', label: 'Débito' },
-                          { id: 'credito', label: 'Crédito' }
+                          { id: 'pix', label: 'Pix', icon: QrCode },
+                          { id: 'dinheiro', label: 'Dinheiro', icon: Banknote },
+                          { id: 'debito', label: 'Débito', icon: CreditCard },
+                          { id: 'credito', label: 'Crédito', icon: CreditCard }
                         ].map(p => (
                           <button
                             key={p.id}
                             type="button"
                             onClick={() => setPdvPaymentMethod(p.id)}
-                            className={`py-1.5 rounded-lg font-bold border transition-all cursor-pointer ${
-                              pdvPaymentMethod === p.id
-                                ? 'bg-brand-gold text-dark-950 border-brand-gold'
-                                : 'bg-dark-950 text-slate-400 border-dark-800'
+                            className={`py-2.5 rounded-xl border text-xs font-bold flex flex-col items-center gap-1 cursor-pointer ${
+                              pdvPaymentMethod === p.id ? 'bg-brand-gold/15 border-brand-gold text-brand-goldLight' : 'bg-dark-950 border-white/10 text-slate-400'
                             }`}
                           >
-                            {p.label}
+                            <p.icon className="w-4 h-4" /> {p.label}
                           </button>
                         ))}
                       </div>
-
                       {pdvPaymentMethod === 'dinheiro' && (
-                        <div className="pt-1">
-                          <label className="text-[10px] text-slate-400 block mb-0.5">Troco para quanto?</label>
-                          <input
-                            type="text"
-                            placeholder="Ex: 50,00 ou deixe em branco se não precisa"
-                            value={pdvCashChange}
-                            onChange={(e) => setPdvCashChange(e.target.value)}
-                            className="w-full px-2.5 py-1.5 rounded-xl bg-dark-950 border border-dark-750 text-white text-xs focus:outline-none focus:border-brand-gold"
-                          />
-                        </div>
-                      )}
-
-                      {(pdvPaymentMethod === 'debito' || pdvPaymentMethod === 'credito') && (
-                        <div className="pt-1 space-y-1.5">
-                          {restaurantSettings.cardMachineNoticeActive !== false && restaurantSettings.cardMachineNotice && (
-                            <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-300 flex items-start gap-1.5">
-                              <AlertCircle className="w-3.5 h-3.5 text-amber-400 flex-shrink-0 mt-0.5" />
-                              <span className="leading-tight">{restaurantSettings.cardMachineNotice}</span>
-                            </div>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setActiveAdminTab('menu');
-                              setMenuSubTab('card-fee');
-                            }}
-                            className="text-[11px] font-bold text-amber-400 hover:text-amber-300 underline flex items-center gap-1 cursor-pointer"
-                          >
-                            <CreditCard className="w-3 h-3" />
-                            <span>Configurar / Alterar Valores da Taxa da Maquininha ⚙️</span>
-                          </button>
-                        </div>
-                      )}
-
-                      {/* Payment Status Checkbox */}
-                      <label className="flex items-center gap-2 pt-1 cursor-pointer select-none">
                         <input
-                          type="checkbox"
-                          checked={pdvIsPaid}
-                          onChange={(e) => setPdvIsPaid(e.target.checked)}
-                          className="w-4 h-4 rounded text-emerald-500 accent-emerald-500 cursor-pointer"
+                          type="text"
+                          inputMode="decimal"
+                          placeholder="Troco para quanto? (deixe vazio se não precisa)"
+                          value={pdvCashChange}
+                          onChange={(e) => setPdvCashChange(e.target.value)}
+                          className="mt-2 w-full px-3 py-2.5 rounded-xl bg-dark-950 border border-white/10 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-brand-gold"
                         />
-                        <span className={`text-xs font-bold ${pdvIsPaid ? 'text-emerald-400' : 'text-amber-400'}`}>
-                          {pdvIsPaid ? '✅ Pedido Já Pago no Balcão' : '⚠️ A Cobrar na Entrega/Balcão'}
+                      )}
+                      {(pdvPaymentMethod === 'debito' || pdvPaymentMethod === 'credito') && restaurantSettings.cardMachineNoticeActive !== false && restaurantSettings.cardMachineNotice && (
+                        <p className="mt-2 text-xs text-amber-300">{restaurantSettings.cardMachineNotice}</p>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setPdvIsPaid(v => !v)}
+                        className="mt-2 w-full flex items-center justify-between px-3 py-2.5 rounded-xl bg-dark-950 border border-white/10 cursor-pointer"
+                        role="switch"
+                        aria-checked={pdvIsPaid}
+                      >
+                        <span className={`text-sm font-semibold ${pdvIsPaid ? 'text-emerald-300' : 'text-amber-300'}`}>
+                          {pdvIsPaid ? 'Já está pago' : 'Cobrar na entrega / retirada'}
                         </span>
-                      </label>
+                        <span className={`relative w-10 h-6 rounded-full ${pdvIsPaid ? 'bg-emerald-500' : 'bg-dark-700'}`}>
+                          <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all ${pdvIsPaid ? 'left-[18px]' : 'left-0.5'}`} />
+                        </span>
+                      </button>
                     </div>
-
-                    {/* Kitchen Observations */}
-                    <div>
-                      <label className="text-[10px] text-slate-400 block mb-0.5">Observações para a Cozinha:</label>
-                      <input
-                        type="text"
-                        placeholder="Ex: Sem cebola, massa bem crocante..."
-                        value={pdvOrderNotes}
-                        onChange={(e) => setPdvOrderNotes(e.target.value)}
-                        className="w-full px-2.5 py-1.5 rounded-xl bg-dark-950 border border-dark-750 text-white text-xs focus:outline-none focus:border-brand-gold"
-                      />
-                    </div>
-
-                    {/* Desconto no Balcão em Reais (R$) */}
-                    <div className="p-2.5 rounded-2xl bg-dark-950 border border-dark-800 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <label className="text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
-                          <Tag className="w-3.5 h-3.5 text-emerald-400" />
-                          <span>Desconto no Balcão (em Reais):</span>
-                        </label>
-                        {pdvDiscountAmount > 0 && (
-                          <span className="text-[10px] font-black text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
-                            - R$ {pdvDiscountAmount.toFixed(2).replace('.', ',')}
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <div className="relative flex-1">
-                          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-black text-emerald-400">
-                            R$
-                          </span>
-                          <input
-                            type="text"
-                            inputMode="decimal"
-                            placeholder="0,00"
-                            value={pdvDiscount}
-                            onChange={(e) => setPdvDiscount(e.target.value)}
-                            className="w-full pl-8 pr-7 py-1.5 rounded-xl bg-dark-900 border border-dark-750 text-white text-xs font-bold placeholder-slate-600 focus:outline-none focus:border-emerald-500 transition-colors"
-                          />
-                          {pdvDiscount && (
-                            <button
-                              type="button"
-                              onClick={() => setPdvDiscount('')}
-                              className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white cursor-pointer"
-                              title="Limpar desconto"
-                            >
-                              <X className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                        </div>
-
-                        {/* Quick preset buttons for common discounts */}
-                        <div className="flex items-center gap-1">
-                          {[2, 5, 10, 15].map(preset => (
-                            <button
-                              key={preset}
-                              type="button"
-                              onClick={() => setPdvDiscount(String(preset))}
-                              className={`px-2 py-1.5 rounded-lg text-[10px] font-black border transition-all cursor-pointer ${
-                                pdvDiscountAmount === preset
-                                  ? 'bg-emerald-500 text-dark-950 border-emerald-400 shadow-sm'
-                                  : 'bg-dark-900 hover:bg-dark-850 text-emerald-400 border-dark-750 hover:border-emerald-500/40'
-                              }`}
-                              title={`Aplicar R$ ${preset},00 de desconto`}
-                            >
-                              R${preset}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Serviços / Taxa Adicional no Balcão */}
-                    <div className="p-2.5 rounded-2xl bg-dark-950 border border-dark-800 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <label className="text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
-                          <Wrench className="w-3.5 h-3.5 text-amber-400" />
-                          <span>Serviços / Adicional (O que foi e Valor):</span>
-                        </label>
-                        {pdvServiceAmount > 0 && (
-                          <span className="text-[10px] font-black text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
-                            + R$ {pdvServiceAmount.toFixed(2).replace('.', ',')}
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                          {/* O que foi o serviço */}
-                          <div className="sm:col-span-2 relative">
-                            <input
-                              type="text"
-                              placeholder="O que foi o serviço? (ex: Garçom, Embalagem...)"
-                              value={pdvServiceName}
-                              onChange={(e) => setPdvServiceName(e.target.value)}
-                              className="w-full px-2.5 py-1.5 rounded-xl bg-dark-900 border border-dark-750 text-white text-xs placeholder-slate-600 focus:outline-none focus:border-amber-400 transition-colors"
-                            />
-                            {pdvServiceName && (
-                              <button
-                                type="button"
-                                onClick={() => setPdvServiceName('')}
-                                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white cursor-pointer"
-                                title="Limpar descrição"
-                              >
-                                <X className="w-3.5 h-3.5" />
-                              </button>
-                            )}
-                          </div>
-
-                          {/* Valor do serviço em R$ */}
-                          <div className="relative">
-                            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-black text-amber-400">
-                              R$
-                            </span>
-                            <input
-                              type="text"
-                              inputMode="decimal"
-                              placeholder="0,00"
-                              value={pdvServiceFee}
-                              onChange={(e) => setPdvServiceFee(e.target.value)}
-                              className="w-full pl-8 pr-7 py-1.5 rounded-xl bg-dark-900 border border-dark-750 text-white text-xs font-bold placeholder-slate-600 focus:outline-none focus:border-amber-400 transition-colors"
-                            />
-                            {pdvServiceFee && (
-                              <button
-                                type="button"
-                                onClick={() => setPdvServiceFee('')}
-                                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white cursor-pointer"
-                                title="Limpar valor"
-                              >
-                                <X className="w-3.5 h-3.5" />
-                              </button>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Presets rápidos */}
-                        <div className="flex items-center gap-1 flex-wrap pt-0.5">
-                          <span className="text-[10px] text-slate-500 mr-0.5">Sugestões:</span>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setPdvServiceName('10% Garçom');
-                              const tenPct = (pdvCartSubtotal * 0.1).toFixed(2).replace('.', ',');
-                              setPdvServiceFee(tenPct);
-                            }}
-                            className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-dark-900 hover:bg-dark-850 text-amber-400 border border-dark-750 hover:border-amber-500/40 transition-all cursor-pointer"
-                            title="Calcular 10% de atendimento sobre os itens"
-                          >
-                            10% Garçom
-                          </button>
-                          {[5, 10, 15].map(preset => (
-                            <button
-                              key={preset}
-                              type="button"
-                              onClick={() => {
-                                if (!pdvServiceName.trim()) setPdvServiceName('Taxa de Serviço');
-                                setPdvServiceFee(String(preset));
-                              }}
-                              className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-all cursor-pointer ${
-                                pdvServiceAmount === preset
-                                  ? 'bg-amber-500 text-dark-950 border-amber-400 shadow-sm'
-                                  : 'bg-dark-900 hover:bg-dark-850 text-amber-400 border-dark-750 hover:border-amber-500/40'
-                              }`}
-                              title={`Aplicar R$ ${preset},00 de serviço`}
-                            >
-                              R${preset}
-                            </button>
-                          ))}
-                          {(pdvServiceName || pdvServiceFee) && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setPdvServiceName('');
-                                setPdvServiceFee('');
-                              }}
-                              className="px-1.5 py-0.5 rounded-lg text-[10px] text-slate-400 hover:text-red-400 transition-colors ml-auto cursor-pointer"
-                              title="Limpar serviço"
-                            >
-                              Limpar
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
                   </div>
 
-                  {/* Summary Totals & Launch Button */}
-                  <div className="border-t border-dark-800 pt-3 space-y-2">
-                    <div className="flex justify-between text-xs text-slate-400">
-                      <span>Subtotal Itens:</span>
-                      <span>R$ {pdvCartSubtotal.toFixed(2).replace('.', ',')}</span>
+                  {/* Rodapé: totais + botões */}
+                  <div className="border-t border-white/10 bg-dark-950 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] space-y-1">
+                    <div className="flex justify-between text-sm text-slate-400">
+                      <span>Subtotal</span><span>R$ {pdvCartSubtotal.toFixed(2).replace('.', ',')}</span>
                     </div>
-
                     {pdvDeliveryType === 'delivery' && (
-                      <div className="flex justify-between text-xs text-slate-400">
-                        <span>Taxa de Entrega ({pdvDistrict.name}):</span>
-                        <span>R$ {pdvDeliveryFee.toFixed(2).replace('.', ',')}</span>
+                      <div className="flex justify-between text-sm text-slate-400">
+                        <span>Entrega ({pdvDistrict.name})</span><span>R$ {pdvDeliveryFee.toFixed(2).replace('.', ',')}</span>
                       </div>
                     )}
-
                     {pdvServiceAmount > 0 && (
-                      <div className="flex justify-between text-xs font-bold text-amber-400 animate-fade-in">
-                        <span className="flex items-center gap-1">
-                          <Wrench className="w-3 h-3" /> {pdvServiceName.trim() ? `Serviço (${pdvServiceName.trim()}):` : 'Serviço:'}
-                        </span>
-                        <span>+ R$ {pdvServiceAmount.toFixed(2).replace('.', ',')}</span>
+                      <div className="flex justify-between text-sm text-amber-300">
+                        <span>{pdvServiceName.trim() || 'Serviço'}</span><span>+ R$ {pdvServiceAmount.toFixed(2).replace('.', ',')}</span>
                       </div>
                     )}
-
                     {pdvDiscountAmount > 0 && (
-                      <div className="flex justify-between text-xs font-bold text-emerald-400 animate-fade-in">
-                        <span className="flex items-center gap-1">
-                          <Tag className="w-3 h-3" /> Desconto Balcão:
-                        </span>
-                        <span>- R$ {pdvDiscountAmount.toFixed(2).replace('.', ',')}</span>
+                      <div className="flex justify-between text-sm text-emerald-300">
+                        <span>Desconto</span><span>- R$ {pdvDiscountAmount.toFixed(2).replace('.', ',')}</span>
                       </div>
                     )}
-
-                    <div className="flex justify-between text-sm font-black text-white pt-1 border-t border-dark-850">
-                      <span>Total a Pagar:</span>
-                      <div className="text-right">
-                        {pdvDiscountAmount > 0 && (
-                          <span className="text-[11px] text-slate-500 line-through mr-2 font-normal">
-                            R$ {(pdvCartSubtotal + pdvDeliveryFee + pdvServiceAmount).toFixed(2).replace('.', ',')}
-                          </span>
-                        )}
-                        <span className="text-xl font-black text-brand-gold">
-                          R$ {pdvCartTotal.toFixed(2).replace('.', ',')}
-                        </span>
-                      </div>
+                    <div className="flex justify-between items-baseline pt-1">
+                      <span className="text-base font-bold text-white">Total</span>
+                      <span className="text-2xl font-black text-brand-gold">R$ {pdvCartTotal.toFixed(2).replace('.', ',')}</span>
                     </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+                    {pdvValidationError && (
+                      <p className="text-sm font-semibold text-red-300 flex items-center gap-1.5"><AlertCircle className="w-4 h-4" /> {pdvValidationError}</p>
+                    )}
+                    <div className="grid grid-cols-5 gap-2 pt-2">
                       <button
                         type="button"
-                        onClick={() => handleLaunchPDVOrder(false)}
-                        disabled={pdvCart.length === 0}
-                        className={`w-full py-3 rounded-2xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md ${
-                          pdvCart.length > 0
-                            ? 'bg-dark-800 hover:bg-dark-750 text-white border border-dark-700 hover:border-brand-gold/40 active:scale-98'
-                            : 'bg-dark-800 text-slate-500 cursor-not-allowed'
-                        }`}
-                        title="Envia o pedido para a fila de produção da cozinha (KDS)"
+                        onClick={async () => { await handleLaunchPDVOrder(true); }}
+                        disabled={pdvCart.length === 0 || isLaunchingPdv}
+                        className="col-span-2 h-12 rounded-xl border border-white/15 bg-dark-900 text-slate-200 text-[13px] font-bold leading-tight disabled:opacity-40 cursor-pointer"
+                        title="Registra a venda como já entregue e paga (não vai para a cozinha)"
                       >
-                        <Flame className="w-4 h-4 text-brand-gold" />
-                        <span>Fila Cozinha</span>
+                        Venda direta
                       </button>
-
                       <button
                         type="button"
-                        onClick={() => handleLaunchPDVOrder(true)}
-                        disabled={pdvCart.length === 0}
-                        className={`w-full py-3 rounded-2xl font-black text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg ${
-                          pdvCart.length > 0
-                            ? 'bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-500 hover:scale-[1.02] text-dark-950 shadow-glow-emerald active:scale-98'
-                            : 'bg-dark-800 text-slate-500 cursor-not-allowed'
-                        }`}
-                        title="Registra a venda e dá baixa imediata como concluído e pago no balcão"
+                        onClick={async () => { await handleLaunchPDVOrder(false); }}
+                        disabled={pdvCart.length === 0 || isLaunchingPdv}
+                        className="col-span-3 h-12 rounded-xl bg-brand-gold text-dark-950 text-sm font-black flex items-center justify-center gap-2 disabled:opacity-40 cursor-pointer"
+                        title="Envia o pedido para a fila da cozinha"
                       >
-                        <CheckCircle2 className="w-4 h-4" />
-                        <span>Lançar & Baixa Imediata</span>
+                        <ChefHat className="w-4 h-4" /> {isLaunchingPdv ? 'Enviando...' : 'Enviar p/ cozinha'}
                       </button>
                     </div>
                   </div>
-
-                </div>
-
+                </aside>
               </div>
-
-            </div>
             )}
 
             {/* SUB-VIEW 2: CONTROLE / DAR BAIXA NOS PEDIDOS */}
@@ -6943,17 +6333,7 @@ export function AdminDashboard({
                           <span>+ Novo Sabor de Pizza</span>
                         </button>
 
-                        {pizzaFlavors.some(f => Boolean(f.image)) && (
-                          <button
-                            type="button"
-                            onClick={handleClearAllFlavorPhotos}
-                            className="px-3 py-2 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 hover:text-white text-xs font-semibold border border-amber-500/40 flex items-center gap-1.5 transition-colors cursor-pointer"
-                            title="Remover as fotos de todos os sabores de pizza"
-                          >
-                            <ImageOff className="w-3.5 h-3.5 text-amber-400" />
-                            <span>Limpar Fotos dos Sabores</span>
-                          </button>
-                        )}
+                        {/* Botão "Limpar fotos de todos os sabores" removido: apagava tudo com um clique */}
 
                         {pizzaFlavors.length > 0 && (
                           <button
@@ -10776,6 +10156,29 @@ export function AdminDashboard({
         )}
 
       </main>
+      </AdminShell>
+
+      {/* Painel lateral com o pedido completo (aberto ao tocar num cartão do quadro) */}
+      {kanbanDetailOrderId && (() => {
+        const detailOrder = (scopedOrders || []).find(o => o.orderId === kanbanDetailOrderId);
+        if (!detailOrder) return null;
+        return (
+          <div className="fixed inset-0 z-[45] flex justify-end" role="dialog" aria-modal="true">
+            <div className="absolute inset-0 bg-black/60" onClick={() => setKanbanDetailOrderId(null)} />
+            <div className="relative w-full sm:max-w-xl lg:max-w-2xl h-full bg-dark-950 border-l border-white/10 flex flex-col animate-fade-in">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
+                <h3 className="text-xl font-black text-white">Pedido #{formatOrderNumber(detailOrder)}</h3>
+                <button type="button" onClick={() => setKanbanDetailOrderId(null)} className="w-9 h-9 rounded-full bg-dark-800 text-slate-200 flex items-center justify-center cursor-pointer" aria-label="Fechar">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-3 sm:p-4">
+                <div className="kds-detail-zoom">{renderKdsOrderCard(detailOrder)}</div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ============================================================== */}
       {/* MODAL 1: WHATSAPP DIRECT MESSAGING MODAL                       */}

@@ -1216,6 +1216,64 @@ export function normalizeProductsList(prods) {
   });
 }
 
+// Foto automática do sabor (fotos sem fundo em /public/flavors), escolhida pelo nome.
+// Usada quando o sabor ficou sem foto no cadastro (ex.: fotos apagadas sem querer).
+const FLAVOR_PHOTO_RULES = [
+  [['calabresa', 'catupiry'], 'calabresa-catupiry'],
+  [['calabresa', 'picad'], 'calabresa-picadinha'],
+  [['calabresa', 'ervilha'], 'calabresa-picadinha'],
+  [['calabresa'], 'calabresa'],
+  [['baiana'], 'baiana-apimentada'],
+  [['lombo', 'abacaxi'], 'lombo-abacaxi'],
+  [['lombo'], 'lombo-portuguesa'],
+  [['portuguesa'], 'lombo-portuguesa'],
+  [['strogonoff'], 'strogonoff-frango'],
+  [['estrogonofe'], 'strogonoff-frango'],
+  [['frango', 'cheddar'], 'frango-cheddar'],
+  [['frango', 'milho'], 'frango-milho'],
+  [['frango'], 'frango-catupiry'],
+  [['carne seca'], 'carne-seca'],
+  [['hot', 'dog'], 'hot-dog'],
+  [['romanesca'], 'romanesca'],
+  [['bacon'], 'bacon-crocante'],
+  [['vegetariana'], 'vegetariana'],
+  [['palmito'], 'vegetariana'],
+  [['grega'], 'milho'],
+  [['milho'], 'milho'],
+  [['queijos'], 'dois-queijos'],
+  [['mucarela'], 'mucarela'],
+  [['mussarela'], 'mucarela'],
+  [['muzzarela'], 'mucarela'],
+  [['marguerita'], 'mucarela'],
+  [['margherita'], 'mucarela'],
+  [['brigadeiro'], 'brigadeiro-gourmet'],
+  [['prestigio'], 'prestigio-gourmet'],
+  [['confete'], 'confete-mm'],
+  [['m&m'], 'confete-mm'],
+  [['romeu'], 'romeu-julieta'],
+  [['goiabada'], 'romeu-julieta'],
+  [['banana', 'canela'], 'banana-canela'],
+  [['banana'], 'banana-nevada'],
+  [['chocolate', 'morango'], 'chocolate-morango'],
+  [['morango'], 'chocolate-morango'],
+  [['chocolate branco'], 'chocolate-branco'],
+  [['doce de leite'], 'doce-leite-pacoca'],
+  [['pacoca'], 'doce-leite-pacoca'],
+  [['chocolate'], 'brigadeiro-gourmet']
+];
+
+export function getAutoFlavorImage(flavor) {
+  if (!flavor) return '';
+  const text = `${flavor.name || ''} ${flavor.id || ''}`
+    .toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '');
+  for (const [words, file] of FLAVOR_PHOTO_RULES) {
+    if (words.every(w => text.includes(w))) return `/flavors/${file}.png`;
+  }
+  // Sem regra: usa uma foto genérica da categoria
+  return flavor.category === 'doces' ? '/flavors/brigadeiro-gourmet.png' : '/flavors/mucarela.png';
+}
+
 export function normalizePizzaFlavors(flavors) {
   if (!Array.isArray(flavors)) return INITIAL_PIZZA_FLAVORS;
   if (flavors.length === 0) return [];
@@ -1232,7 +1290,7 @@ export function normalizePizzaFlavors(flavors) {
         prices: found?.prices ? { ...found.prices } : { ...DEFAULT_PIZZA_BASE_PRICES },
         category: found ? found.category : 'salgadas',
         description: found ? found.description : '',
-        image: found?.image || '',
+        image: found?.image || getAutoFlavorImage({ name: item }),
         isAvailable: true
       };
     }
@@ -1249,6 +1307,11 @@ export function normalizePizzaFlavors(flavors) {
       itemImage = '';
     } else if (found?.image) {
       itemImage = found.image;
+    }
+    // Sem foto e sem ninguém ter removido de propósito: volta a foto do sabor
+    const imageRemoved = item.imageRemoved === true;
+    if (!itemImage && !imageRemoved) {
+      itemImage = getAutoFlavorImage({ name: itemName || found?.name, id, category: item.category || found?.category });
     }
 
     // Normalização dos preços por tamanho
@@ -1290,6 +1353,7 @@ export function normalizePizzaFlavors(flavors) {
       category: item.category || found?.category || 'salgadas',
       description: item.description || found?.description || '',
       image: itemImage,
+      imageRemoved,
       isAvailable: item.isAvailable !== false
     };
   }).filter(Boolean);

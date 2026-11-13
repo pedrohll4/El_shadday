@@ -42,6 +42,8 @@ import { DeliveryCartDrawer } from './components/DeliveryCartDrawer';
 import { OrderSuccessModal } from './components/OrderSuccessModal';
 import { BuffetSection } from './components/BuffetSection';
 import { Footer } from './components/Footer';
+import { StoreFront, getProductKind } from './components/storefront/StoreFront';
+import { MyOrdersSheet } from './components/storefront/MyOrdersSheet';
 import { BuffetApp } from './buffet/BuffetApp';
 // Painel admin (12 mil linhas) só é baixado por quem abre o admin, não por cada cliente
 const AdminDashboard = lazy(() => import('./components/AdminDashboard').then(m => ({ default: m.AdminDashboard })));
@@ -52,6 +54,7 @@ import {
   dispatchOrderDelete,
   dispatchClearAllOrders,
   fetchCloudOrdersHistory, 
+  fetchRecentlyChangedOrders,
   subscribeToKitchenEvents,
   applyLocalShiftClosings
 } from './services/ordersSyncService';
@@ -247,6 +250,8 @@ export default function App() {
       const params = new URLSearchParams(window.location.search);
       if (params.get('filial') || params.get('branch')) return false; // Scanned direct QR Code
       const hasChosen = localStorage.getItem('el_shadday_has_seen_branch_modal');
+      const openCount = getStoredBranches().filter(b => b && b.status !== 'construction' && b.status !== 'closed').length;
+      if (openCount <= 1) return false; // Só uma loja aberta: vai direto para o cardápio
       return !hasChosen; // Open on first visit
     } catch (e) {
       return true;
@@ -602,8 +607,56 @@ export default function App() {
     };
     window.addEventListener('cash_register_closed', handleCashClosed);
 
+    // Junta pedidos vindos do banco com os da tela (novos entram, alterados atualizam)
+    const mergeCloudOrders = (cloudList) => {
+      if (!Array.isArray(cloudList) || cloudList.length === 0) return;
+      setAllOrders(prev => {
+        const map = new Map();
+        prev.forEach(o => { if (o?.orderId) map.set(o.orderId, o); });
+        let changed = false;
+        cloudList.forEach(o => {
+          if (!o?.orderId) return;
+          const local = map.get(o.orderId);
+          if (!local) {
+            map.set(o.orderId, o);
+            changed = true;
+            try { recordCustomerFromOrder(o); } catch (e) {}
+            return;
+          }
+          const localTs = new Date(local.updatedAt || 0).getTime();
+          const cloudTs = new Date(o.updatedAt || 0).getTime();
+          if (cloudTs > localTs || normalizeStatusForCompare(local) !== normalizeStatusForCompare(o)) {
+            if (cloudTs >= localTs) {
+              map.set(o.orderId, { ...local, ...o, shiftClosedAt: local.shiftClosedAt || o.shiftClosedAt, isArchived: local.isArchived || o.isArchived });
+              changed = true;
+            }
+          }
+        });
+        if (!changed) return prev;
+        const list = applyLocalShiftClosings(Array.from(map.values()));
+        list.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+        try { localStorage.setItem('el_shadday_all_orders', JSON.stringify(list)); } catch (e) {}
+        return list;
+      });
+    };
+    const normalizeStatusForCompare = (o) => String(o?.orderStatus || o?.status || '');
+
+    let resyncRunning = false;
+    const resyncRecent = async (full = false) => {
+      if (!isSupabaseConfigured || resyncRunning) return;
+      resyncRunning = true;
+      try {
+        const list = full ? await fetchCloudOrdersHistory() : await fetchRecentlyChangedOrders(3);
+        if (Array.isArray(list)) mergeCloudOrders(list);
+      } catch (e) {
+      } finally {
+        resyncRunning = false;
+      }
+    };
+
     // 2. Subscribe to instant real-time events (SSE Cloud + BroadcastChannel local)
     const unsubscribe = subscribeToKitchenEvents({
+      onReconnected: () => resyncRecent(true),
       onNewOrder: (newOrder) => {
         try {
           recordCustomerFromOrder(newOrder);
@@ -680,10 +733,26 @@ export default function App() {
       }, 5000);
     }
 
+    // 4. Rede de segurança (Supabase): confere pedidos novos a cada 15s e sempre que a
+    // tela volta a ficar ativa / a internet volta. Assim ninguém precisa dar F5.
+    let safetyInterval = null;
+    const onVisible = () => { if (document.visibilityState === 'visible') resyncRecent(true); };
+    const onOnline = () => resyncRecent(true);
+    if (isSupabaseConfigured) {
+      safetyInterval = setInterval(() => resyncRecent(false), 15000);
+      document.addEventListener('visibilitychange', onVisible);
+      window.addEventListener('focus', onVisible);
+      window.addEventListener('online', onOnline);
+    }
+
     return () => {
       unsubscribe();
       window.removeEventListener('cash_register_closed', handleCashClosed);
       if (interval) clearInterval(interval);
+      if (safetyInterval) clearInterval(safetyInterval);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
+      window.removeEventListener('online', onOnline);
     };
     // Recarrega e reassina os pedidos quando alguém da equipe entra/sai
     // (com o banco protegido, visitante não recebe pedidos)
@@ -720,9 +789,13 @@ export default function App() {
   const [isAcaiModalOpen, setIsAcaiModalOpen] = useState(false);
   const [selectedAcaiForCustomizer, setSelectedAcaiForCustomizer] = useState(null);
   const [isOrderSuccessOpen, setIsOrderSuccessOpen] = useState(false);
+  const [isMyOrdersOpen, setIsMyOrdersOpen] = useState(false);
+  const [myOrders, setMyOrders] = useState([]);
   const [completedOrderData, setCompletedOrderData] = useState(null);
 
   const menuSectionRef = useRef(null);
+
+  const hasMultipleOpenBranches = useMemo(() => branches.filter(b => b && b.status !== 'construction' && b.status !== 'closed').length > 1, [branches]);
 
   // Active branch object
   const activeBranch = useMemo(() => {
@@ -779,17 +852,17 @@ export default function App() {
   };
 
   const handleAddBoxToCart = (customBox) => {
-    setCartItems(prev => [...prev, { ...customBox, quantity: 1 }]);
+    setCartItems(prev => [...prev, { quantity: 1, ...customBox }]);
     setIsCartOpen(true);
   };
 
   const handleAddPizzaToCart = (customPizza) => {
-    setCartItems(prev => [...prev, { ...customPizza, quantity: 1 }]);
+    setCartItems(prev => [...prev, { quantity: 1, ...customPizza }]);
     setIsCartOpen(true);
   };
 
   const handleAddComboToCart = (customCombo) => {
-    setCartItems(prev => [...prev, { ...customCombo, quantity: 1 }]);
+    setCartItems(prev => [...prev, { quantity: 1, ...customCombo }]);
     setIsCartOpen(true);
   };
 
@@ -889,7 +962,7 @@ export default function App() {
 
   const handleUpdateOrderStatus = async (orderId, newStatus) => {
     setAllOrders(prev => {
-      const updated = prev.map(o => o.orderId === orderId ? { ...o, orderStatus: newStatus } : o);
+      const updated = prev.map(o => o.orderId === orderId ? { ...o, orderStatus: newStatus, updatedAt: new Date().toISOString() } : o);
       try {
         localStorage.setItem('el_shadday_all_orders', JSON.stringify(updated));
       } catch (e) {}
@@ -905,7 +978,7 @@ export default function App() {
 
   const handleUpdatePaymentStatus = async (orderId, newPaymentStatus) => {
     setAllOrders(prev => {
-      const updated = prev.map(o => o.orderId === orderId ? { ...o, paymentStatus: newPaymentStatus } : o);
+      const updated = prev.map(o => o.orderId === orderId ? { ...o, paymentStatus: newPaymentStatus, updatedAt: new Date().toISOString() } : o);
       try {
         localStorage.setItem('el_shadday_all_orders', JSON.stringify(updated));
       } catch (e) {}
@@ -926,6 +999,7 @@ export default function App() {
           return {
             ...o,
             ...paymentUpdates,
+            updatedAt: new Date().toISOString(),
             paymentMethod: paymentUpdates.paymentMethod !== undefined ? paymentUpdates.paymentMethod : o.paymentMethod,
             paymentStatus: paymentUpdates.paymentStatus !== undefined ? paymentUpdates.paymentStatus : o.paymentStatus,
             changeFor: paymentUpdates.changeFor !== undefined ? paymentUpdates.changeFor : o.changeFor,
@@ -950,7 +1024,7 @@ export default function App() {
   // Edição de itens/valores do pedido pela Cozinha (admin/balconista)
   const handleUpdateOrderDetails = async (orderId, updates) => {
     setAllOrders(prev => {
-      const updated = prev.map(o => (o.orderId === orderId ? { ...o, ...updates } : o));
+      const updated = prev.map(o => (o.orderId === orderId ? { ...o, ...updates, updatedAt: new Date().toISOString() } : o));
       try {
         localStorage.setItem('el_shadday_all_orders', JSON.stringify(updated));
       } catch (e) {}
@@ -967,7 +1041,8 @@ export default function App() {
   const handleCancelOrder = async (orderId, reason = '') => {
     setAllOrders(prev => {
       const updated = prev.map(o => o.orderId === orderId ? { 
-        ...o, 
+        ...o,
+        updatedAt: new Date().toISOString(), 
         orderStatus: 'CANCELADO', 
         cancelReason: reason || 'Cancelado pelo operador da cozinha',
         cancelledAt: new Date().toISOString()
@@ -1258,251 +1333,70 @@ export default function App() {
     );
   }
 
-  // VIEW 3: MAIN DELIVERY EXPERIENCE
+  // VIEW 3: MAIN DELIVERY EXPERIENCE (vitrine estilo app: capa, categorias, lista e menu inferior)
+  const openProduct = (product) => {
+    const kind = getProductKind(product);
+    if (!storeIsOpen && !kind.isCustomizable) {
+      setIsStoreClosedModalOpen(true);
+      return;
+    }
+    if (kind.isBox) {
+      setSelectedBoxForBuilder(product);
+      setIsBoxBuilderOpen(true);
+    } else if (kind.isPizza) {
+      setSelectedPizzaForCustomizer(product);
+      setIsPizzaCustomizerOpen(true);
+    } else if (kind.isCombo) {
+      setSelectedComboForCustomizer(product);
+      setIsComboCustomizerOpen(true);
+    } else if (kind.isAcai) {
+      setSelectedAcaiForCustomizer(product);
+      setIsAcaiModalOpen(true);
+    } else {
+      handleAddToCart(product);
+    }
+  };
+
   return (
-    <div className={`min-h-screen bg-dark-950 text-slate-100 flex flex-col font-sans selection:bg-brand-gold selection:text-dark-950 w-full max-w-full overflow-x-hidden ${totalCartCount > 0 ? 'pb-24 sm:pb-0' : ''}`}>
-      
-      {/* 1. Header with Branch, Cart and Kitchen Controls */}
-      <Header
-        cartCount={totalCartCount}
-        cartTotal={totalCartValue}
-        onOpenCart={() => setIsCartOpen(true)}
-        activeBranch={activeBranch}
-        onOpenBranchModal={() => setIsBranchModalOpen(true)}
-        onScrollToBuffet={handleOpenBuffetSubpage}
-        onOpenAdmin={handleOpenAdminTrigger}
-        currentUser={currentUser}
-        isStoreOpen={storeIsOpen}
-        openingHours={currentOpeningHours}
-      />
+    <div className="min-h-screen bg-dark-950 text-slate-100 flex flex-col font-sans selection:bg-brand-gold selection:text-dark-950 w-full max-w-full overflow-x-clip">
 
-      {/* 1.1 Top Promotional Announcement Banner */}
-      {promoSettings.bannerActive && promoSettings.bannerText && (
-        <div className="bg-gradient-to-r from-amber-600 via-brand-gold to-amber-500 text-dark-950 font-black text-xs sm:text-sm py-2 px-4 text-center shadow-md flex items-center justify-center gap-2">
-          <Sparkles className="w-4 h-4 fill-dark-950 text-dark-950" />
-          <span>{promoSettings.bannerText}</span>
-          {promoSettings.couponActive && promoSettings.couponCode && (
-            <span className="hidden sm:inline-block ml-2 px-2 py-0.5 rounded-full bg-dark-950 text-brand-gold text-[10px] font-mono tracking-wider font-extrabold uppercase">
-              Cupom: {promoSettings.couponCode} ({promoSettings.couponDiscountPercent}% OFF)
-            </span>
-          )}
-        </div>
-      )}
-
-      {/* 2. Restaurant Profile & iFood Header (Cover, Avatar, Ratings, Delivery Switcher) */}
-      <RestaurantStoreHeader
+      <StoreFront
         activeBranch={activeBranch}
-        onOpenBranchModal={() => setIsBranchModalOpen(true)}
-        deliveryMode={deliveryMode}
-        onToggleDeliveryMode={setDeliveryMode}
-        onScrollToCategory={handleSelectCategory}
-        onOpenBuffet={handleOpenBuffetSubpage}
+        restaurantInfo={restaurantInfo}
+        promoSettings={promoSettings}
+        categories={Array.isArray(categories) && categories.length > 0 ? categories : CATEGORIES}
+        products={branchProducts}
+        cartItems={cartItems}
+        totalCartCount={totalCartCount}
+        totalCartValue={totalCartValue}
         isStoreOpen={storeIsOpen}
         openingHours={currentOpeningHours}
         closedMessage={currentClosedMessage}
-      />
-
-      {/* 2.05 Estabelecimento Fechado Alert Strip */}
-      {!storeIsOpen && (
-        <div className="bg-red-950/90 border-y border-red-500/40 py-2.5 px-4 text-center animate-fade-in shadow-inner">
-          <div className="max-w-7xl mx-auto flex items-center justify-center gap-2 text-xs text-red-200 flex-wrap">
-            <span className="w-2.5 h-2.5 rounded-full bg-red-400 animate-ping"></span>
-            <span className="font-black text-red-300 uppercase tracking-wider">Estabelecimento Fechado no Momento:</span>
-            <span>Novos pedidos online pausados. Horário de funcionamento: <strong className="text-white">{currentOpeningHours}</strong></span>
-          </div>
-        </div>
-      )}
-
-      {/* 2.1 Promotions & Highlights Shelf */}
-      <PromotionsShelf
-        products={branchProducts}
-        onOpenBoxBuilder={(prod) => {
-          setSelectedBoxForBuilder(prod);
-          setIsBoxBuilderOpen(true);
+        deliveryMode={deliveryMode}
+        onChangeDeliveryMode={setDeliveryMode}
+        activeCategory={activeCategory}
+        onSelectCategory={handleSelectCategory}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        searchResults={searchResults}
+        onOpenProduct={openProduct}
+        onIncrement={(product, cartItem) => {
+          if (!storeIsOpen) { setIsStoreClosedModalOpen(true); return; }
+          if (cartItem) handleUpdateQuantity(cartItem.id, 1); else handleAddToCart(product);
         }}
-        onOpenPizzaCustomizer={(prod) => {
-          setSelectedPizzaForCustomizer(prod);
-          setIsPizzaCustomizerOpen(true);
+        onDecrement={(cartItem) => cartItem && handleUpdateQuantity(cartItem.id, -1)}
+        onOpenCart={() => setIsCartOpen(true)}
+        onOpenOrders={() => {
+          try { setMyOrders(JSON.parse(localStorage.getItem('el_shadday_orders_history') || '[]')); } catch (e) {}
+          setIsMyOrdersOpen(true);
         }}
-        onOpenComboCustomizer={(prod) => {
-          setSelectedComboForCustomizer(prod);
-          setIsComboCustomizerOpen(true);
-        }}
-        onAddToCart={handleAddToCart}
-        isStoreOpen={storeIsOpen}
-        onBlockedByClosed={() => setIsStoreClosedModalOpen(true)}
-      />
-
-      {/* 3. Category Navigation & Search */}
-      <div ref={menuSectionRef} id="menu-section">
-        <CategoryNav
-          activeCategory={activeCategory}
-          onSelectCategory={handleSelectCategory}
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-          onScrollToBuffet={handleOpenBuffetSubpage}
-          categories={categories}
-          products={branchProducts}
-          showBuffet={selectedBranchId === 'ariquemes'}
-        />
-      </div>
-
-      {/* 4. Menu Grid & Desktop Sidebar Layout (iFood Standard) */}
-      <main className="flex-1 max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-6 w-full">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          
-          {/* Left Column: Menu Items & Categories (8 columns on desktop) */}
-          <div className="lg:col-span-8 space-y-8 min-w-0">
-            
-            {/* SEARCH MODE: When user typed something */}
-            {searchQuery.trim() ? (
-              <section className="py-2">
-                <div className="mb-5 border-b border-dark-800 pb-3 flex items-center justify-between">
-                  <div>
-                    <h3 className="text-lg sm:text-xl font-display font-extrabold text-white flex items-center gap-2">
-                      <Search className="w-5 h-5 text-brand-gold" />
-                      <span>Resultados para "{searchQuery}"</span>
-                    </h3>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      {searchResults.length} {searchResults.length === 1 ? 'item encontrado' : 'itens encontrados'}
-                    </p>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => setSearchQuery('')}
-                    className="text-xs font-bold text-brand-gold hover:underline cursor-pointer"
-                  >
-                    Limpar Busca
-                  </button>
-                </div>
-
-                {searchResults.length === 0 ? (
-                  <div className="text-center py-16 bg-dark-900/50 rounded-3xl border border-dark-800">
-                    <p className="text-sm text-slate-400">Nenhum item encontrado para esta busca.</p>
-                    <button
-                      onClick={() => setSearchQuery('')}
-                      className="mt-3 px-4 py-2 rounded-xl bg-brand-gold text-dark-950 font-bold text-xs hover:bg-amber-400 transition-colors cursor-pointer"
-                    >
-                      Ver Todo o Cardápio
-                    </button>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
-                    {searchResults.map((product) => {
-                      const inCart = cartItems.find(item => item.id === product.id);
-                      return (
-                        <ProductCard
-                          key={product.id}
-                          product={product}
-                          cartQuantity={inCart ? inCart.quantity : 0}
-                          cartItem={inCart}
-                          onAddToCart={handleAddToCart}
-                          onUpdateQuantity={handleUpdateQuantity}
-                          onOpenBoxBuilder={(prod) => {
-                            setSelectedBoxForBuilder(prod);
-                            setIsBoxBuilderOpen(true);
-                          }}
-                          onOpenPizzaCustomizer={(prod) => {
-                            setSelectedPizzaForCustomizer(prod);
-                            setIsPizzaCustomizerOpen(true);
-                          }}
-                          onOpenComboCustomizer={(prod) => {
-                            setSelectedComboForCustomizer(prod);
-                            setIsComboCustomizerOpen(true);
-                          }}
-                          onOpenAcaiCustomizer={(prod) => {
-                            setSelectedAcaiForCustomizer(prod);
-                            setIsAcaiModalOpen(true);
-                          }}
-                          isStoreOpen={storeIsOpen}
-                          onBlockedByClosed={() => setIsStoreClosedModalOpen(true)}
-                        />
-                      );
-                    })}
-                  </div>
-                )}
-              </section>
-            ) : (
-              /* CONTINUOUS FLOW MODE: All categories displayed in configured sequence! */
-              (Array.isArray(categories) && categories.length > 0 ? categories : CATEGORIES)
-                .filter(cat => cat.visible !== false)
-                .map((cat) => {
-                  const categoryProducts = branchProducts.filter(p => p.categoryId === cat.id && p.isAvailable !== false);
-                  if (categoryProducts.length === 0) return null;
-
-                return (
-                  <section 
-                    key={cat.id} 
-                    id={`section-${cat.id}`} 
-                    className="scroll-mt-36 pt-2 pb-6 border-b border-dark-800/80 last:border-b-0"
-                  >
-                    {/* Category Header */}
-                    <div className="mb-4 flex flex-col sm:flex-row sm:items-baseline justify-between gap-1 border-b border-dark-800/60 pb-2.5">
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="text-lg sm:text-xl font-display font-extrabold text-white tracking-tight">
-                            {cat.name}
-                          </h3>
-                          {(() => {
-                            const displayTag = cat.id === 'pizzas'
-                              ? (categoryProducts.some(p => p.bordaGratis) ? 'Borda de Catupiry Grátis!' : null)
-                              : cat.tag;
-                            return displayTag ? (
-                              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-brand-gold/15 text-brand-goldLight border border-brand-gold/30">
-                                {displayTag}
-                              </span>
-                            ) : null;
-                          })()}
-                        </div>
-                        <p className="text-xs text-slate-400 mt-0.5">
-                          {categoryProducts.length} {categoryProducts.length === 1 ? 'delícia disponível' : 'delícias disponíveis'}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Products Grid for this category (2 columns on desktop/tablet, 1 col on mobile) */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
-                      {categoryProducts.map((product) => {
-                        const inCart = cartItems.find(item => item.id === product.id);
-                        return (
-                          <ProductCard
-                            key={product.id}
-                            product={product}
-                            cartQuantity={inCart ? inCart.quantity : 0}
-                            cartItem={inCart}
-                            onAddToCart={handleAddToCart}
-                            onUpdateQuantity={handleUpdateQuantity}
-                            onOpenBoxBuilder={(prod) => {
-                              setSelectedBoxForBuilder(prod);
-                              setIsBoxBuilderOpen(true);
-                            }}
-                            onOpenPizzaCustomizer={(prod) => {
-                              setSelectedPizzaForCustomizer(prod);
-                              setIsPizzaCustomizerOpen(true);
-                            }}
-                            onOpenComboCustomizer={(prod) => {
-                              setSelectedComboForCustomizer(prod);
-                              setIsComboCustomizerOpen(true);
-                            }}
-                            onOpenAcaiCustomizer={(prod) => {
-                              setSelectedAcaiForCustomizer(prod);
-                              setIsAcaiModalOpen(true);
-                            }}
-                            isStoreOpen={storeIsOpen}
-                            onBlockedByClosed={() => setIsStoreClosedModalOpen(true)}
-                          />
-                        );
-                      })}
-                    </div>
-                  </section>
-                );
-              })
-            )}
-
-          </div>
-
-          {/* Right Column: Desktop Sidebar Cart (4 columns on desktop, hidden on mobile) */}
+        ordersCount={0}
+        onOpenBranchModal={() => setIsBranchModalOpen(true)}
+        canChangeBranch={hasMultipleOpenBranches}
+        onOpenBuffet={handleOpenBuffetSubpage}
+        showBuffet={selectedBranchId === 'ariquemes'}
+        onOpenAdmin={handleOpenAdminTrigger}
+        desktopCart={
           <DesktopSidebarCart
             cartItems={cartItems}
             onAddToCart={handleAddToCart}
@@ -1516,75 +1410,19 @@ export default function App() {
             isStoreOpen={storeIsOpen}
             openingHours={currentOpeningHours}
           />
+        }
+      />
 
-        </div>
-      </main>
-
-      {/* 5. Buffet CTA Banner at the Bottom of Delivery (Exclusive to Ariquemes) */}
-      {selectedBranchId === 'ariquemes' && (
-        <section className="py-10 px-3 sm:px-6 bg-gradient-to-b from-dark-950 via-dark-900 to-dark-950 border-t border-dark-800">
-          <div className="max-w-4xl mx-auto rounded-3xl bg-dark-900/90 border border-brand-gold/30 p-5 sm:p-7 shadow-2xl relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-brand-gold/10 rounded-full blur-3xl pointer-events-none" />
-            
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-5 relative z-10">
-              <div className="text-center sm:text-left space-y-1.5">
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-brand-gold/15 text-brand-gold text-[10px] sm:text-[11px] font-black uppercase tracking-wider border border-brand-gold/30">
-                  <Sparkles className="w-3 h-3 text-brand-gold" />
-                  Buffet El Shadday • Ariquemes
-                </span>
-                <h3 className="font-serif text-lg sm:text-2xl font-bold text-white">
-                  Vai realizar um casamento, formatura ou festa?
-                </h3>
-                <p className="text-xs sm:text-sm text-slate-300 max-w-xl">
-                  Equipe completa, garçons uniformizados, prataria, rechauds e assados nobres na brasa inclusos.
-                </p>
-              </div>
-
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto flex-shrink-0">
-                <button
-                  type="button"
-                  onClick={handleOpenBuffetSubpage}
-                  className="px-5 py-3 rounded-xl bg-gradient-to-r from-brand-gold via-amber-400 to-brand-gold hover:brightness-110 active:scale-98 text-dark-950 font-black text-xs uppercase tracking-wider shadow-glow-gold transition-all cursor-pointer flex items-center justify-center gap-2 text-center"
-                >
-                  <span>🍽️ Montar Cardápio de Evento</span>
-                  <ArrowRight className="w-3.5 h-3.5 stroke-[3]" />
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleOpenBuffetSubpage}
-                  className="px-4 py-3 rounded-xl bg-dark-950 hover:bg-dark-850 text-slate-200 hover:text-white border border-dark-750 hover:border-brand-gold/40 font-bold text-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5 text-center"
-                >
-                  <span>👑 Ver Apresentação</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* 6. Footer */}
-      <Footer onOpenAdmin={handleOpenAdminTrigger} />
-
-      {/* 7. Floating Bottom Bar on Mobile when Cart has Items */}
-      {totalCartCount > 0 && !isCartOpen && (
-        <div className="fixed bottom-0 left-0 right-0 z-40 p-3 bg-dark-950/95 backdrop-blur-md border-t border-brand-gold/40 sm:hidden animate-fade-in shadow-2xl">
-          <button
-            type="button"
-            onClick={() => setIsCartOpen(true)}
-            className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-brand-gold via-amber-400 to-brand-gold text-dark-950 font-black text-sm flex items-center justify-between shadow-glow-gold active:scale-98 transition-transform cursor-pointer"
-          >
-            <div className="flex items-center gap-2">
-              <ShoppingBag className="w-5 h-5 text-dark-950" />
-              <span>Ver Pedido ({totalCartCount} {totalCartCount === 1 ? 'item' : 'itens'})</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <span>R$ {totalCartValue.toFixed(2).replace('.', ',')}</span>
-              <ChevronRight className="w-4 h-4 stroke-[3]" />
-            </div>
-          </button>
-        </div>
-      )}
+      <MyOrdersSheet
+        isOpen={isMyOrdersOpen}
+        onClose={() => setIsMyOrdersOpen(false)}
+        orders={myOrders}
+        liveOrders={allOrders}
+        onSelectOrder={(ord) => {
+          setCompletedOrderData(ord);
+          setIsOrderSuccessOpen(true);
+        }}
+      />
 
       {/* 8. Modals & Drawers */}
       
