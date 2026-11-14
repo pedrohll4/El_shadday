@@ -279,7 +279,9 @@ function formatOrderItems(items = []) {
 // Construtor das mensagens padrão
 export function buildOrderWhatsAppText({ order, statusType, reason = '' }) {
   const customerName = order.customer_name || order.customerName || 'Cliente';
-  const orderId = order.id || order.orderId || 'S/N';
+  const rawOrderId = String(order.id || order.orderId || 'S/N');
+  // IDs novos têm sufixo do turno ("01-k3x9ab"): mostra só o número
+  const orderId = /^\d{1,6}-/.test(rawOrderId) ? rawOrderId.split('-')[0] : rawOrderId;
   const branchName = order.branch_name || order.branchName || 'El Shadday Ariquemes';
   const isBalcao = (order.delivery_type === 'balcao' || order.deliveryType === 'balcao' || order.district === 'Balcão');
   const deliveryAddress = order.delivery_address?.address 

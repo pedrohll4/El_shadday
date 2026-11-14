@@ -124,9 +124,72 @@ export function getNextOrderNumber(existingOrders = []) {
  * Antes, cada celular contava sozinho a partir do #01 e um cliente novo
  * sobrescrevia o pedido de outro com o mesmo número.
  */
+// Sufixo do turno atual: deixa o ID no banco único mesmo quando a contagem
+// volta para #01 depois do fechamento de caixa (ex.: "01-k3x9ab").
+let currentShiftTag = '';
+
+// Número visível de um ID ("65" -> 65, "01-k3x9ab" -> 1)
+export function parseOrderSeq(id) {
+  const m = /^(?:ES-)?(\d{1,6})(?:-|$)/.exec(String(id || ''));
+  return m ? Number(m[1]) : NaN;
+}
+
+// Monta o ID do pedido para o número reservado (usa o sufixo do turno atual)
+export function buildOrderId(orderNumber) {
+  const padded = String(orderNumber).padStart(2, '0');
+  return currentShiftTag ? `${padded}-${currentShiftTag}` : padded;
+}
+
+/**
+ * Contagem diária: o número recomeça do #01 depois de cada fechamento de caixa
+ * (manual ou automático). Conta só os pedidos do turno aberto = criados depois
+ * do último fechamento e ainda sem shift_closed_at. Olha as últimas 12h
+ * (mesma janela que a chave pública enxerga), então cliente e equipe contam igual.
+ * Retorna null se o banco não tiver a coluna shift_closed_at (usa o modo antigo).
+ */
+async function nextShiftOrderNumber() {
+  const since = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
+  const { data, error } = await supabase
+    .from('orders')
+    .select('id, created_at, shift_closed_at')
+    .gt('created_at', since)
+    .order('created_at', { ascending: false })
+    .limit(1000);
+  if (error || !Array.isArray(data)) return null;
+
+  let lastClose = 0;
+  data.forEach(r => {
+    const t = r?.shift_closed_at ? Date.parse(r.shift_closed_at) : 0;
+    if (Number.isFinite(t) && t > lastClose) lastClose = t;
+  });
+
+  let maxNum = 0;
+  data.forEach(r => {
+    if (!r || r.shift_closed_at) return;
+    const created = Date.parse(r.created_at);
+    if (lastClose && Number.isFinite(created) && created <= lastClose) return;
+    const n = parseOrderSeq(r.id);
+    if (Number.isFinite(n) && n > maxNum) maxNum = n;
+  });
+
+  const d = new Date();
+  const tag = lastClose
+    ? Math.floor(lastClose / 1000).toString(36)
+    : `d${String(d.getFullYear()).slice(2)}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+  return { next: maxNum + 1, tag };
+}
+
 export async function reserveOrderNumber(existingOrders = []) {
   const localNext = getNextOrderNumber(existingOrders);
+  currentShiftTag = '';
   if (!isSupabaseConfigured || !supabase) return localNext;
+  try {
+    const shift = await nextShiftOrderNumber();
+    if (shift) {
+      currentShiftTag = shift.tag;
+      return shift.next;
+    }
+  } catch (e) {}
   try {
     const { data, error } = await supabase.rpc('next_order_number');
     if (!error && data !== null && data !== undefined && Number.isFinite(Number(data))) {
@@ -195,8 +258,7 @@ function mapSupabaseRowToOrder(row) {
 
   let orderNum = row.order_number || row.orderNumber || null;
   if (!orderNum) {
-    const clean = String(row.id || '').replace(/^ES-/, '');
-    const p = parseInt(clean, 10);
+    const p = parseOrderSeq(row.id);
     if (!isNaN(p) && p > 0 && p < 1000) {
       orderNum = p;
     }
@@ -336,11 +398,13 @@ export async function dispatchOrderToKitchen(orderData) {
       let { error } = await supabase.from('orders').insert(buildRow());
       for (let attempt = 0; error && error.code === '23505' && attempt < 3; attempt++) {
         const fresh = await reserveOrderNumber();
-        const freshId = String(fresh).padStart(2, '0');
-        console.warn(`⚠️ Número #${orderData.orderId} já existia no banco; pedido renumerado para #${freshId}`);
+        const freshDisplay = String(fresh).padStart(2, '0');
+        // 2ª tentativa em diante: sufixo aleatório garante ID único
+        const freshId = buildOrderId(fresh) + (attempt > 0 ? Math.random().toString(36).slice(2, 5) : '');
+        console.warn(`⚠️ Número #${orderData.orderId} já existia no banco; pedido renumerado para #${freshDisplay}`);
         orderData.orderId = freshId;
         orderData.orderNumber = fresh;
-        orderData.displayNumber = '#' + freshId;
+        orderData.displayNumber = '#' + freshDisplay;
         ({ error } = await supabase.from('orders').insert(buildRow()));
       }
       if (error) {

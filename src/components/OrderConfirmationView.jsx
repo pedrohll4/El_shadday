@@ -4,6 +4,7 @@ import {
   Check, ArrowLeft, Printer, ShieldCheck, Flame, Package, ExternalLink
 } from 'lucide-react';
 import { RESTAURANT_INFO } from '../data/menuData';
+import { formatOrderNumber } from '../services/ordersSyncService';
 
 export function OrderConfirmationView({ order, onBackToMenu }) {
   const [copiedSummary, setCopiedSummary] = useState(false);
@@ -12,7 +13,7 @@ export function OrderConfirmationView({ order, onBackToMenu }) {
 
   const handleSendToWhatsApp = () => {
     let message = `*✅ COMPROVANTE DE PEDIDO PAGO - EL SHADDAY*\n`;
-    message += `*Nº DO PEDIDO:* #${order.orderId}\n`;
+    message += `*Nº DO PEDIDO:* #${formatOrderNumber(order)}\n`;
     message += `--------------------------------------\n`;
     message += `👤 *Cliente:* ${order.customerName}\n`;
     message += `💳 *Status de Pagamento:* ${order.paymentStatus === 'PAGO_APROVADO' ? '✅ PAGO E APROVADO NO SITE' : 'PAGAMENTO NA ENTREGA'}\n`;
@@ -109,7 +110,7 @@ export function OrderConfirmationView({ order, onBackToMenu }) {
   };
 
   const handleCopySummary = () => {
-    const text = `Pedido #${order.orderId} - Total: R$ ${order.total.toFixed(2).replace('.', ',')} - Cliente: ${order.customerName}`;
+    const text = `Pedido #${formatOrderNumber(order)} - Total: R$ ${order.total.toFixed(2).replace('.', ',')} - Cliente: ${order.customerName}`;
     navigator.clipboard.writeText(text);
     setCopiedSummary(true);
     setTimeout(() => setCopiedSummary(false), 2000);
@@ -166,7 +167,7 @@ export function OrderConfirmationView({ order, onBackToMenu }) {
               Pagamento Processado com Sucesso
             </span>
             <h1 className="font-display font-black text-2xl sm:text-4xl text-white tracking-tight pt-2">
-              Pedido Confirmado #{order.orderId}
+              Pedido Confirmado #{formatOrderNumber(order)}
             </h1>
             <p className="text-xs sm:text-sm text-slate-400 max-w-md mx-auto">
               Muito obrigado, <strong>{order.customerName}</strong>! Seu pedido já foi registrado no nosso sistema e enviado para a linha de produção.

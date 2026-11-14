@@ -14,7 +14,7 @@ import {
   getCardMachineNoticeText,
   getStoredExtraSauceConfig
 } from '../data/menuData';
-import { dispatchOrderToKitchen, reserveOrderNumber } from '../services/ordersSyncService';
+import { dispatchOrderToKitchen, reserveOrderNumber, buildOrderId } from '../services/ordersSyncService';
 import { cleanPhoneNumber } from '../services/whatsappNotificationService';
 import { recordCustomerFromOrder } from '../services/customerService';
 import { STORE_ADDRESS, fixLegacyStoreAddress } from '../data/branchesData';
@@ -209,7 +209,8 @@ export function DeliveryCartDrawer({
     } finally {
       setIsSubmittingOrder(false);
     }
-    const orderId = String(orderNumber).padStart(2, '0');
+    const orderDisplay = String(orderNumber).padStart(2, '0');
+    const orderId = buildOrderId(orderNumber);
 
     // Format Items list for WhatsApp
     const itemsFormatted = cartItems.map((item, idx) => {
@@ -378,7 +379,7 @@ ${reference.trim() ? `📌 *Referência:* ${reference.trim()}\n` : ''}🛵 *Taxa
     const hasPixPayment = paymentMethod === 'pix' || (paymentMethod === 'misto' && (splitMethod1 === 'pix' || splitMethod2 === 'pix'));
     const whatsappMessage = 
 `🍕 *NOVO PEDIDO - EL SHADDAY DELIVERY*
-🆔 *Pedido:* #${orderId}
+🆔 *Pedido:* #${orderDisplay}
 📍 *Unidade:* ${branchDisplayName}
 ----------------------------------------
 👤 *Cliente:* ${customerName.trim()}
@@ -403,7 +404,7 @@ Pedido gerado via Cardápio Digital El Shadday.`;
     const orderData = {
       orderId,
       orderNumber,
-      displayNumber: '#' + orderId,
+      displayNumber: '#' + orderDisplay,
       branchId: activeBranch?.id || 'ariquemes',
       branchName: activeBranch?.displayName || activeBranch?.name || 'Unidade Ariquemes',
       createdAt: new Date().toISOString(),

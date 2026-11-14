@@ -100,7 +100,7 @@ import {
   openWhatsAppInstantLink
 } from '../services/whatsappNotificationService';
 import { isCloudBaileysActive, fetchEngineStatus } from '../services/whatsappBranchService';
-import { normalizeOrderStatus, reserveOrderNumber, formatOrderNumber } from '../services/ordersSyncService';
+import { normalizeOrderStatus, reserveOrderNumber, formatOrderNumber, buildOrderId } from '../services/ordersSyncService';
 import { 
   searchCustomers, 
   recordCustomerFromOrder, 
@@ -3652,7 +3652,8 @@ export function AdminDashboard({
     } finally {
       setIsLaunchingPdv(false);
     }
-    const orderId = String(orderNumber).padStart(2, '0');
+    const orderDisplay = String(orderNumber).padStart(2, '0');
+    const orderId = buildOrderId(orderNumber);
 
     let paymentMethodText = 'PIX';
     if (pdvPaymentMethod === 'dinheiro') {
@@ -3668,7 +3669,7 @@ export function AdminDashboard({
     const newOrder = {
       orderId,
       orderNumber,
-      displayNumber: '#' + orderId,
+      displayNumber: '#' + orderDisplay,
       branchId: currentBranch?.id || 'ariquemes',
       branchName: currentBranch?.displayName || currentBranch?.name || 'Unidade Ariquemes',
       createdAt: new Date().toISOString(),
@@ -3878,7 +3879,7 @@ export function AdminDashboard({
                                 <span className="font-display font-black text-xl text-brand-gold tracking-tight bg-dark-950 px-2.5 py-0.5 rounded-xl border border-brand-gold/40 shadow-sm">
                                   #{orderDisplayNumber}
                                 </span>
-                                {order.orderId && order.orderId !== orderDisplayNumber && (
+                                {order.orderId && !String(order.orderId).startsWith(orderDisplayNumber) && (
                                   <span className="text-[10px] text-slate-500 font-mono hidden sm:inline" title="Identificador único">
                                     ({order.orderId})
                                   </span>

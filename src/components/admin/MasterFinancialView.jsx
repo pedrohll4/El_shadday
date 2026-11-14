@@ -7,6 +7,7 @@ import {
   Printer, FileText, Download, X, Lock
 } from 'lucide-react';
 import { CashClosingModal } from '../CashClosingModal';
+import { formatOrderNumber } from '../../services/ordersSyncService';
 
 export function MasterFinancialView({ 
   orders = [], 
@@ -637,7 +638,7 @@ export function MasterFinancialView({
               return `
                 <tr style="${isCanc ? 'opacity: 0.6; background: #fff5f5;' : ''}">
                   <td>
-                    <div class="bold">#${escapeHtml(ord.orderId)}</div>
+                    <div class="bold">#${escapeHtml(formatOrderNumber(ord))}</div>
                     <div style="font-size: 8.5px; color: #64748b;">${dateStr} ${timeStr}</div>
                   </td>
                   <td class="bold">${escapeHtml(bName)}</td>
@@ -1269,7 +1270,7 @@ export function MasterFinancialView({
                     return (
                       <tr key={ord.orderId} className="hover:bg-dark-850/50 transition-colors">
                         <td className="py-2.5 pr-2 font-mono font-bold text-brand-gold">
-                          <div>#{ord.orderId}</div>
+                          <div>#{formatOrderNumber(ord)}</div>
                           <div className="text-[10px] text-slate-400 font-sans font-normal">
                             {ord.createdAt ? new Date(ord.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}
                           </div>
