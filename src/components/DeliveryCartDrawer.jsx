@@ -377,7 +377,7 @@ ${reference.trim() ? `📌 *Referência:* ${reference.trim()}\n` : ''}🛵 *Taxa
     // Full WhatsApp Message
     const branchDisplayName = activeBranch?.displayName || activeBranch?.name || 'Ariquemes - RO';
     const hasPixPayment = paymentMethod === 'pix' || (paymentMethod === 'misto' && (splitMethod1 === 'pix' || splitMethod2 === 'pix'));
-    const whatsappMessage = 
+    const buildWhatsappMessage = (orderDisplay) => 
 `🍕 *NOVO PEDIDO - EL SHADDAY DELIVERY*
 🆔 *Pedido:* #${orderDisplay}
 📍 *Unidade:* ${branchDisplayName}
@@ -398,8 +398,8 @@ ${hasPixPayment ? `\n⚠️ *COMPROVANTE DO PIX:* Segue em anexo nesta conversa!
 ----------------------------------------
 Pedido gerado via Cardápio Digital El Shadday.`;
 
-    const encoded = encodeURIComponent(whatsappMessage);
-    const whatsappUrl = `https://wa.me/${restaurantPhone}?text=${encoded}`;
+    const buildWhatsappUrl = (display) => `https://wa.me/${restaurantPhone}?text=${encodeURIComponent(buildWhatsappMessage(display))}`;
+    let whatsappUrl = buildWhatsappUrl(orderDisplay);
 
     const orderData = {
       orderId,
@@ -448,8 +448,25 @@ Pedido gerado via Cardápio Digital El Shadday.`;
       localStorage.setItem('el_shadday_orders_history', JSON.stringify([orderData, ...history]));
     } catch (e) {}
 
-    // Notify parent to open OrderSuccessModal and dispatch to Kitchen across all channels
-    onOrderFinished(orderData);
+    // Grava o pedido no banco ANTES de abrir o WhatsApp. Antes o WhatsApp abria na
+    // hora, o celular congelava/fechava a página e o pedido nunca chegava ao painel
+    // (só a mensagem do WhatsApp chegava). Espera no máximo 12s; se não der, o
+    // pedido fica guardado no aparelho e é reenviado sozinho depois.
+    setIsSubmittingOrder(true);
+    try {
+      await Promise.race([
+        Promise.resolve(onOrderFinished(orderData)),
+        new Promise(r => setTimeout(r, 12000))
+      ]);
+    } catch (e) {
+    } finally {
+      setIsSubmittingOrder(false);
+    }
+    if (orderData.orderId !== orderId) {
+      // O banco deu outro número (o anterior já estava em uso): mensagem com o número certo
+      whatsappUrl = buildWhatsappUrl(String(orderData.orderNumber).padStart(2, '0'));
+      orderData.whatsappUrl = whatsappUrl;
+    }
 
     // Open WhatsApp
     if (waWindow && !waWindow.closed) {

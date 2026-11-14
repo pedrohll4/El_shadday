@@ -341,16 +341,59 @@ export function applyLocalShiftClosings(orders = []) {
     });
     if (closedMap.size === 0) return orders;
     return orders.map(o => {
-      const c = o && !o.shiftClosedAt && closedMap.get(o.orderId);
-      return c ? { ...o, shiftClosedAt: c.at, shiftClosingId: c.id, isArchived: true } : o;
+      let c = o && !o.shiftClosedAt && closedMap.get(o.orderId);
+      // Pedido criado DEPOIS desse fechamento não pertence a ele (mesmo número
+      // reaproveitado) — antes ele sumia da tela como se o caixa estivesse fechado
+      if (c && o.createdAt && c.at && Date.parse(o.createdAt) > Date.parse(c.at)) c = null;
+      return c ?{ ...o, shiftClosedAt: c.at, shiftClosingId: c.id, isArchived: true } : o;
     });
   } catch (e) {
     return orders;
   }
 }
 
+// Fila de pedidos que ainda não chegaram ao banco (ex.: celular abriu o WhatsApp
+// e o navegador congelou a página antes de gravar). É reenviada depois.
+const PENDING_KEY = 'el_shadday_pending_orders_v1';
+const readPending = () => {
+  try {
+    const list = JSON.parse(localStorage.getItem(PENDING_KEY) || '[]');
+    return Array.isArray(list) ? list : [];
+  } catch (e) { return []; }
+};
+const writePending = (list) => {
+  try { localStorage.setItem(PENDING_KEY, JSON.stringify(list.slice(0, 20))); } catch (e) {}
+};
+const addPending = (order) => {
+  writePending([order, ...readPending().filter(o => o?.orderId !== order.orderId)]);
+};
+const removePending = (orderId) => {
+  writePending(readPending().filter(o => o?.orderId !== orderId));
+};
+
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+// O pedido com esse ID que já está no banco é este mesmo pedido? (a 1ª tentativa
+// pode ter gravado e só a resposta se perdeu; não pode virar pedido duplicado)
+async function isSameOrderAlreadySaved(row) {
+  try {
+    const { data } = await supabase
+      .from('orders')
+      .select('customer_name, customer_phone, total')
+      .eq('id', row.id)
+      .maybeSingle();
+    if (!data) return false;
+    return String(data.customer_phone || '') === String(row.customer_phone || '')
+      && String(data.customer_name || '') === String(row.customer_name || '')
+      && Math.abs(Number(data.total || 0) - Number(row.total || 0)) < 0.01;
+  } catch (e) {
+    return false;
+  }
+}
+
 /**
- * Send an order to the kitchen across all available channels
+ * Send an order to the kitchen across all available channels.
+ * Retorna true quando o pedido está gravado no banco.
  */
 export async function dispatchOrderToKitchen(orderData) {
   // 1. Broadcast locally to other tabs immediately
@@ -389,13 +432,32 @@ export async function dispatchOrderToKitchen(orderData) {
         payment_method: orderData.paymentMethod || '',
         change_for: changeVal,
         status: normalizeOrderStatus(orderData.orderStatus || orderData.status),
-        notes: orderData.notes || '',
-        created_at: orderData.createdAt || new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        notes: orderData.notes || ''
+        // created_at / updated_at: o banco preenche com a hora do servidor.
+        // Antes vinha do relógio do celular do cliente; relógio errado fazia o
+        // pedido cair fora da lista do painel.
       });
 
+      addPending(orderData);
+
+      // Falha de rede (sem código do Postgres) => tenta de novo algumas vezes
+      const tryInsert = async () => {
+        let res;
+        for (let n = 0; n < 4; n++) {
+          try {
+            res = await supabase.from('orders').insert(buildRow());
+          } catch (e) {
+            res = { error: { message: String(e?.message || e), code: '' } };
+          }
+          if (!res.error || res.error.code) return res;
+          await sleep(800 * (n + 1));
+        }
+        return res;
+      };
+
       // INSERT (nunca sobrescreve outro pedido). Se o número já existe, pega outro.
-      let { error } = await supabase.from('orders').insert(buildRow());
+      let { error } = await tryInsert();
+      if (error && error.code === '23505' && await isSameOrderAlreadySaved(buildRow())) error = null;
       for (let attempt = 0; error && error.code === '23505' && attempt < 3; attempt++) {
         const fresh = await reserveOrderNumber();
         const freshDisplay = String(fresh).padStart(2, '0');
@@ -405,12 +467,13 @@ export async function dispatchOrderToKitchen(orderData) {
         orderData.orderId = freshId;
         orderData.orderNumber = fresh;
         orderData.displayNumber = '#' + freshDisplay;
-        ({ error } = await supabase.from('orders').insert(buildRow()));
+        ({ error } = await tryInsert());
       }
       if (error) {
         console.warn('⚠️ Supabase order insert error:', error.message);
       } else {
         savedInSupabase = true;
+        removePending(orderData.orderId);
         console.log('✅ Pedido gravado no Supabase com sucesso:', orderData.orderId);
       }
     } catch (err) {
@@ -455,6 +518,34 @@ export async function dispatchOrderToKitchen(orderData) {
     });
   } catch (err) {
     // Expected on purely static environments
+  }
+
+  return savedInSupabase;
+}
+
+/**
+ * Reenvia pedidos que ficaram na fila deste aparelho sem chegar ao banco.
+ * Chamado ao abrir o site, ao voltar para a aba e quando a internet volta.
+ */
+let flushRunning = false;
+export async function flushPendingOrders() {
+  if (flushRunning || !isSupabaseConfigured || !supabase) return;
+  const pending = readPending();
+  if (pending.length === 0) return;
+  flushRunning = true;
+  try {
+    const maxAge = 6 * 60 * 60 * 1000;
+    for (const order of pending) {
+      if (!order?.orderId) continue;
+      const age = Date.now() - new Date(order.createdAt || 0).getTime();
+      if (!(age < maxAge)) { removePending(order.orderId); continue; }
+      const oldId = order.orderId;
+      const ok = await dispatchOrderToKitchen(order);
+      if (ok && oldId !== order.orderId) removePending(oldId);
+    }
+  } catch (e) {
+  } finally {
+    flushRunning = false;
   }
 }
 

@@ -49,7 +49,8 @@ import { BuffetApp } from './buffet/BuffetApp';
 const AdminDashboard = lazy(() => import('./components/AdminDashboard').then(m => ({ default: m.AdminDashboard })));
 import { AdminLoginModal } from './components/AdminLoginModal';
 import { 
-  dispatchOrderToKitchen, 
+  dispatchOrderToKitchen,
+  flushPendingOrders,
   dispatchOrderUpdateToKitchen, 
   dispatchOrderDelete,
   dispatchClearAllOrders,
@@ -912,12 +913,35 @@ export default function App() {
     });
 
     // Send to kitchen across all real-time channels (Cloud SSE + BroadcastChannel + API)
+    const oldId = orderData.orderId;
+    let saved = false;
     try {
-      await dispatchOrderToKitchen(orderData);
+      saved = await dispatchOrderToKitchen(orderData);
     } catch (e) {
       console.warn('Could not dispatch order to kitchen:', e);
     }
+    // Se o banco trocou o número (já existia), atualiza a tela do cliente
+    if (orderData.orderId !== oldId) {
+      setCompletedOrderData({ ...orderData });
+      setAllOrders(prev => prev.map(o => o.orderId === oldId ? { ...orderData } : o));
+    }
+    return saved;
   };
+
+  // Pedidos que ficaram presos neste aparelho sem chegar ao banco: reenvia
+  useEffect(() => {
+    const tryFlush = () => { flushPendingOrders().catch(() => {}); };
+    tryFlush();
+    const onVis = () => { if (document.visibilityState === 'visible') tryFlush(); };
+    document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('online', tryFlush);
+    const t = setInterval(tryFlush, 30000);
+    return () => {
+      document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('online', tryFlush);
+      clearInterval(t);
+    };
+  }, []);
 
   // Kitchen Admin Handlers
   const handleOpenAdminTrigger = () => {
